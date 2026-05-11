@@ -95,6 +95,15 @@
 - **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
 - **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
 
+### Operational & Observability Requirements
+
+- **OR-001**: System MUST [emit the logs, events, metrics, or error states needed to
+  diagnose failures for this feature].
+- **OR-002**: System MUST [document any setup, configuration, permissions, or runtime
+  assumptions required to operate and validate this feature].
+- **OR-003**: Verification MUST [identify automated coverage or define explicit manual
+  validation steps when automation is not practical].
+
 ### Key Entities *(include if feature involves data)*
 
 - **[Entity 1]**: [What it represents, key attributes without implementation]

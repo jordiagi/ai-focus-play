@@ -23,6 +23,7 @@
 **Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
 **Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
 **Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]  
+**Observability**: [logs, metrics, traces, error reporting, or NEEDS CLARIFICATION]  
 **Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
 **Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
 **Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
@@ -31,7 +32,14 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+- [ ] Scope traces to explicit user stories, requirements, or defect reports.
+- [ ] Each user story remains independently implementable and independently verifiable.
+- [ ] Verification approach is defined before implementation, including automated tests
+      or documented manual validation where automation is not practical.
+- [ ] Observability, operator impact, and quickstart/runtime documentation changes
+      are captured in the plan.
+- [ ] Added complexity, dependencies, migrations, or breaking changes are justified,
+      or none are introduced.
 
 ## Project Structure
 

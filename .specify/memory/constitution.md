@@ -1,50 +1,114 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report
+- Version change: N/A -> 1.0.0
+- Modified principles:
+  - Template Principle 1 -> I. Spec-Driven Changes
+  - Template Principle 2 -> II. Independently Verifiable User Value
+  - Template Principle 3 -> III. Verification Before Merge
+  - Template Principle 4 -> IV. Observability and Operability
+  - Template Principle 5 -> V. Minimal, Reversible Delivery
+- Added sections:
+  - Delivery Standards
+  - Workflow & Review
+- Removed sections: None
+- Templates requiring updates:
+  - ✅ updated: .specify/templates/plan-template.md
+  - ✅ updated: .specify/templates/spec-template.md
+  - ✅ updated: .specify/templates/tasks-template.md
+  - ⚠ pending: .specify/templates/commands/*.md (directory not present in this repository)
+- Follow-up TODOs: None
+-->
+# AI Focus Play Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Spec-Driven Changes
+Every non-trivial change MUST begin with current specification artifacts. Work MUST
+trace from `spec.md` to `plan.md` to `tasks.md`, and implementation MUST map back
+to explicit user stories, requirements, or defect reports. If scope changes during
+delivery, the governing artifacts MUST be updated before code continues.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+Rationale: This repository uses Spec Kit workflows. The artifacts are not optional
+notes; they are the control surface that keeps scope, intent, and implementation
+aligned.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### II. Independently Verifiable User Value
+Each user story MUST deliver a standalone slice of user value and MUST define an
+independent verification path. Plans and tasks MUST preserve this independence so
+teams can implement, validate, and if needed ship increments without depending on
+unfinished lower-priority stories.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+Rationale: Independent slices reduce coordination risk, keep MVP delivery honest,
+and make progress measurable.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### III. Verification Before Merge
+Every change MUST define its verification approach before implementation starts.
+Automated tests MUST be added or updated when behavior can regress in code.
+When automation is not feasible, the feature artifacts MUST record manual
+validation steps and the reason automation was not practical. Bug fixes MUST
+include a reproducible failure description and SHOULD add a regression guard when
+the failure can recur.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+Rationale: Verification is a design input, not a cleanup step. Making it explicit
+early prevents untestable features and weak handoffs.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### IV. Observability and Operability
+User-visible, stateful, or integration-affecting behavior MUST provide enough
+diagnostic signal to explain failures without local guesswork. That signal may
+include structured logs, clear error messages, state transition records, health
+checks, or other context-appropriate instrumentation. Any operator-facing setup,
+configuration, or runtime assumptions MUST be documented in the feature artifacts
+and validated in quickstart or equivalent usage steps.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+Rationale: Features that cannot be understood in operation are incomplete, even if
+they appear to work locally.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### V. Minimal, Reversible Delivery
+Changes MUST be as small as possible while still satisfying the approved scope.
+New dependencies, abstractions, data migrations, or breaking changes MUST be
+justified in the implementation plan's complexity tracking. Documentation,
+templates, and guidance affected by a change MUST be updated in the same unit of
+work so the repository remains internally consistent.
+
+Rationale: Small, reversible changes are easier to review, test, diagnose, and
+undo when assumptions fail.
+
+## Delivery Standards
+
+- Feature specifications MUST include measurable success criteria, explicit edge
+  cases, and any unresolved items marked as `NEEDS CLARIFICATION`.
+- Plans MUST record technical context, constitution gates, structure decisions,
+  and any complexity justification required by these principles.
+- Task lists MUST include exact file paths, preserve user-story grouping, and
+  include verification work for every story.
+- Quickstart or equivalent execution guidance MUST be updated whenever setup,
+  runtime behavior, or verification steps change.
+
+## Workflow & Review
+
+- Before implementation, the Constitution Check in `plan.md` MUST pass or record a
+  specific justified exception in Complexity Tracking.
+- During implementation, work MUST remain traceable to a story or requirement; do
+  not introduce speculative scope.
+- Before merge, reviewers MUST verify:
+  - verification evidence exists and matches the changed behavior,
+  - observability and operator impacts are addressed,
+  - docs/templates affected by the change were updated,
+  - any exceptions to this constitution are explicit and approved.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution supersedes conflicting local process notes for delivery work in
+this repository. Amendments MUST be made through an explicit constitution update
+that also updates dependent templates and guidance in the same change.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+Versioning policy for this constitution follows semantic versioning:
+- MAJOR: Removal or incompatible redefinition of a principle or governance rule.
+- MINOR: Addition of a principle or material expansion of binding guidance.
+- PATCH: Clarifications, wording improvements, or non-semantic refinements.
+
+Compliance review is mandatory at plan creation, task generation, code review, and
+before merge. Any unresolved constitution conflict blocks delivery until the
+artifacts or the constitution itself are amended explicitly.
+
+**Version**: 1.0.0 | **Ratified**: 2026-05-11 | **Last Amended**: 2026-05-11

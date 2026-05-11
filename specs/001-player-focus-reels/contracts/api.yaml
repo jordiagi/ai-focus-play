@@ -1,0 +1,414 @@
+openapi: 3.1.0
+info:
+  title: Player Focus Reels API
+  version: 0.1.0
+  description: >
+    HTTP contract for guided player-focused soccer reel generation, including
+    source intake, player confirmation, review, and export.
+servers:
+  - url: http://localhost:8000
+paths:
+  /projects:
+    post:
+      summary: Create a new analysis project
+      operationId: createProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+      responses:
+        '201':
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+  /projects/{projectId}:
+    get:
+      summary: Fetch project status and metadata
+      operationId: getProject
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+  /projects/{projectId}/source:
+    post:
+      summary: Attach an uploaded file reference or external link to a project
+      operationId: attachSource
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachSourceRequest'
+      responses:
+        '202':
+          description: Source ingestion started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+  /projects/{projectId}/match-window:
+    put:
+      summary: Set or revise the active match window
+      operationId: setMatchWindow
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchWindowRequest'
+      responses:
+        '200':
+          description: Match window saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+  /projects/{projectId}/target-player:
+    put:
+      summary: Define or revise the target player profile
+      operationId: setTargetPlayer
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TargetPlayerProfileInput'
+      responses:
+        '200':
+          description: Target player profile saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+  /projects/{projectId}/analysis:
+    post:
+      summary: Start or restart analysis for the selected match window and player profile
+      operationId: startAnalysis
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                processingMode:
+                  type: string
+                  enum: [local, remote]
+              required: [processingMode]
+      responses:
+        '202':
+          description: Analysis job started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+  /projects/{projectId}/detections:
+    get:
+      summary: List candidate target-player detections for review
+      operationId: listDetections
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - in: query
+          name: reviewState
+          schema:
+            type: string
+            enum: [auto_accepted, needs_review, approved, rejected]
+      responses:
+        '200':
+          description: Detection list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlayerDetection'
+                required: [items]
+  /projects/{projectId}/detections/{detectionId}/review:
+    post:
+      summary: Record a review decision for a detection
+      operationId: reviewDetection
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/DetectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewDecisionInput'
+      responses:
+        '200':
+          description: Review decision applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+  /projects/{projectId}/exports:
+    post:
+      summary: Request one or more reel exports
+      operationId: createExport
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExportRequest'
+      responses:
+        '202':
+          description: Export job started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FocusReelOutput'
+  /projects/{projectId}/exports/{outputId}:
+    get:
+      summary: Fetch export status
+      operationId: getExport
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/OutputId'
+      responses:
+        '200':
+          description: Export details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FocusReelOutput'
+components:
+  parameters:
+    ProjectId:
+      in: path
+      name: projectId
+      required: true
+      schema:
+        type: string
+    DetectionId:
+      in: path
+      name: detectionId
+      required: true
+      schema:
+        type: string
+    OutputId:
+      in: path
+      name: outputId
+      required: true
+      schema:
+        type: string
+  schemas:
+    CreateProjectRequest:
+      type: object
+      properties:
+        verificationThreshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.9
+      required: []
+    AttachSourceRequest:
+      type: object
+      properties:
+        sourceType:
+          type: string
+          enum: [upload, external_link]
+        sourceUri:
+          type: string
+        displayName:
+          type: string
+      required: [sourceType, sourceUri]
+    MatchWindowRequest:
+      type: object
+      properties:
+        startSeconds:
+          type: number
+          minimum: 0
+        endSeconds:
+          type: number
+          minimum: 0
+      required: [startSeconds, endSeconds]
+    TargetPlayerProfileInput:
+      type: object
+      properties:
+        teamSide:
+          type: string
+          enum: [home, away, unknown]
+        teamColorNotes:
+          type: string
+        jerseyNumber:
+          type: string
+        appearanceNotes:
+          type: string
+        referenceFrames:
+          type: array
+          items:
+            type: number
+      required: [teamSide]
+    ReviewDecisionInput:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [approve, reject, defer]
+        reviewerNote:
+          type: string
+      required: [decision]
+    CreateExportRequest:
+      type: object
+      properties:
+        outputProfile:
+          type: string
+          enum: [short_highlight, medium_best_plays]
+        overlayMode:
+          type: string
+          enum: [none, target_marker]
+      required: [outputProfile, overlayMode]
+    Project:
+      type: object
+      properties:
+        projectId:
+          type: string
+        status:
+          type: string
+        verificationThreshold:
+          type: number
+        verificationScore:
+          type: number
+        processingMode:
+          type: string
+          enum: [local, remote]
+        source:
+          $ref: '#/components/schemas/VideoSource'
+        targetPlayerProfile:
+          $ref: '#/components/schemas/TargetPlayerProfile'
+        matchWindow:
+          $ref: '#/components/schemas/MatchWindow'
+        progress:
+          $ref: '#/components/schemas/Progress'
+      required:
+        - projectId
+        - status
+        - verificationThreshold
+    VideoSource:
+      type: object
+      properties:
+        sourceId:
+          type: string
+        sourceType:
+          type: string
+        displayName:
+          type: string
+        durationSeconds:
+          type: number
+        accessStatus:
+          type: string
+        ingestStatus:
+          type: string
+      required: [sourceId, sourceType, accessStatus, ingestStatus]
+    TargetPlayerProfile:
+      type: object
+      properties:
+        targetPlayerProfileId:
+          type: string
+        teamSide:
+          type: string
+        teamColorNotes:
+          type: string
+        jerseyNumber:
+          type: string
+        appearanceNotes:
+          type: string
+        confirmationStatus:
+          type: string
+      required: [targetPlayerProfileId, teamSide, confirmationStatus]
+    MatchWindow:
+      type: object
+      properties:
+        startSeconds:
+          type: number
+        endSeconds:
+          type: number
+      required: [startSeconds, endSeconds]
+    Progress:
+      type: object
+      properties:
+        stage:
+          type: string
+        percent:
+          type: number
+          minimum: 0
+          maximum: 100
+        message:
+          type: string
+      required: [stage, percent]
+    PlayerDetection:
+      type: object
+      properties:
+        detectionId:
+          type: string
+        startTimeSeconds:
+          type: number
+        endTimeSeconds:
+          type: number
+        teamMatchConfidence:
+          type: number
+        identityConfidence:
+          type: number
+        reviewState:
+          type: string
+          enum: [auto_accepted, needs_review, approved, rejected]
+        visualCuesUsed:
+          type: array
+          items:
+            type: string
+      required:
+        - detectionId
+        - startTimeSeconds
+        - endTimeSeconds
+        - identityConfidence
+        - reviewState
+    FocusReelOutput:
+      type: object
+      properties:
+        outputId:
+          type: string
+        outputProfile:
+          type: string
+          enum: [short_highlight, medium_best_plays]
+        overlayMode:
+          type: string
+          enum: [none, target_marker]
+        exportStatus:
+          type: string
+          enum: [pending, rendering, ready, failed]
+        verificationStatus:
+          type: string
+          enum: [unverified, verified, blocked]
+        downloadUri:
+          type: string
+      required:
+        - outputId
+        - outputProfile
+        - overlayMode
+        - exportStatus
+        - verificationStatus
