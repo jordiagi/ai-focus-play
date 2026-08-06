@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vitest *)",
+      "Bash(npx vite *)",
+      "Bash(python3 -m pytest tests/unit/test_video_ingest_service.py -v)",
+      "Bash(.venv/bin/python *)",
+      "Bash(python3 -m pytest backend/tests/unit/test_jersey_recognition_service.py -v)",
+      "Bash(ollama list *)"
+    ]
+  }
+}

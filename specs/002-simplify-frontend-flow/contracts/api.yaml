@@ -1,0 +1,370 @@
+openapi: 3.1.0
+info:
+  title: Simplified Guided Video Workflow API
+  version: 0.2.0
+  description: >
+    Contract updates for a simplified soccer reel workflow covering local video
+    discovery, safe source selection, automatic match inference, player evidence
+    confirmation, and gated reel generation.
+servers:
+  - url: http://localhost:8000
+paths:
+  /sources/local:
+    get:
+      summary: List local videos discovered under the trusted video folder
+      operationId: listLocalVideoSources
+      responses:
+        '200':
+          description: Local video catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  video_root:
+                    type: string
+                    description: User-visible configured video folder label
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SourceCatalogItem'
+                required: [video_root, items]
+  /projects:
+    post:
+      summary: Create a guided reel project
+      operationId: createGuidedProject
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+      responses:
+        '201':
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuidedProject'
+  /projects/{projectId}:
+    get:
+      summary: Fetch project workflow state
+      operationId: getGuidedProject
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Current project state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuidedProject'
+  /projects/{projectId}/source:
+    post:
+      summary: Select a discovered local video, relative local path, or YouTube source
+      operationId: selectVideoSource
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SelectSourceRequest'
+      responses:
+        '202':
+          description: Source accepted and match inference started or completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuidedProject'
+        '400':
+          description: Source rejected with user-visible validation reason
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+  /projects/{projectId}/player-request:
+    post:
+      summary: Request candidate evidence for a target jersey number
+      operationId: requestPlayerEvidence
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TargetPlayerRequestInput'
+      responses:
+        '202':
+          description: Candidate evidence requested or ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuidedProject'
+        '409':
+          description: Project is not ready for player confirmation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+  /projects/{projectId}/player-candidates:
+    get:
+      summary: List uncropped candidate evidence for the requested player
+      operationId: listPlayerCandidates
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Candidate player evidence
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CandidatePlayerEvidence'
+                required: [items]
+  /projects/{projectId}/player-confirmation:
+    post:
+      summary: Confirm or reject a candidate player before extraction
+      operationId: confirmPlayerCandidate
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayerConfirmationRequest'
+      responses:
+        '200':
+          description: Confirmation decision applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuidedProject'
+        '409':
+          description: Candidate cannot unlock extraction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+  /projects/{projectId}/exports:
+    post:
+      summary: Request a reel output after confirmed player identity
+      operationId: createGuidedExport
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReelRequest'
+      responses:
+        '202':
+          description: Reel request accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReelRequest'
+        '409':
+          description: Player has not been confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+components:
+  parameters:
+    ProjectId:
+      in: path
+      name: projectId
+      required: true
+      schema:
+        type: string
+  schemas:
+    CreateProjectRequest:
+      type: object
+      properties:
+        verification_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.9
+    SourceCatalogItem:
+      type: object
+      properties:
+        catalog_id:
+          type: string
+        display_name:
+          type: string
+        relative_path:
+          type: string
+        duration_seconds:
+          type: number
+        file_size_bytes:
+          type: integer
+        last_modified_at:
+          type: string
+          format: date-time
+        details:
+          type: string
+      required: [catalog_id, display_name, relative_path, details]
+    SelectSourceRequest:
+      type: object
+      properties:
+        source_type:
+          type: string
+          enum: [discovered_local, relative_local_path, youtube]
+        source_reference:
+          type: string
+        display_name:
+          type: string
+      required: [source_type, source_reference]
+    InferredMatchPortion:
+      type: object
+      properties:
+        start_seconds:
+          type: number
+          minimum: 0
+        end_seconds:
+          type: number
+          minimum: 0
+        confidence:
+          type: string
+          enum: [high, medium, low]
+        summary:
+          type: string
+        uncertainty_reasons:
+          type: array
+          items:
+            type: string
+      required: [start_seconds, end_seconds, confidence, summary, uncertainty_reasons]
+    TargetPlayerRequestInput:
+      type: object
+      properties:
+        jersey_number:
+          type: string
+        optional_team_hint:
+          type: string
+      required: [jersey_number]
+    CandidatePlayerEvidence:
+      type: object
+      properties:
+        candidate_id:
+          type: string
+        jersey_number:
+          type: string
+        confidence:
+          type: number
+        frame_time_seconds:
+          type: number
+        uncropped_image_uri:
+          type: string
+        cue_summary:
+          type: string
+        visible_cues:
+          type: array
+          items:
+            type: string
+            enum: [jersey_number, jersey_color, body_shape, cleats, team_context]
+        review_state:
+          type: string
+          enum: [candidate, confirmed, rejected, insufficient]
+      required:
+        - candidate_id
+        - jersey_number
+        - frame_time_seconds
+        - uncropped_image_uri
+        - cue_summary
+        - visible_cues
+        - review_state
+    PlayerConfirmationRequest:
+      type: object
+      properties:
+        candidate_id:
+          type: string
+        decision:
+          type: string
+          enum: [confirm, reject, insufficient]
+      required: [candidate_id, decision]
+    PlayerIdentityProfile:
+      type: object
+      properties:
+        jersey_number:
+          type: string
+        jersey_color:
+          type: string
+        body_shape_summary:
+          type: string
+        cleat_summary:
+          type: string
+        confidence_status:
+          type: string
+          enum: [confirmed, review_needed]
+        confirmed_candidate_ids:
+          type: array
+          items:
+            type: string
+      required: [jersey_number, confidence_status, confirmed_candidate_ids]
+    CreateReelRequest:
+      type: object
+      properties:
+        output_profile:
+          type: string
+          enum: [short_highlight, medium_best_plays]
+        target_marker:
+          type: boolean
+          default: false
+      required: [output_profile]
+    ReelRequest:
+      type: object
+      properties:
+        reel_request_id:
+          type: string
+        output_profile:
+          type: string
+          enum: [short_highlight, medium_best_plays]
+        target_marker:
+          type: boolean
+        request_status:
+          type: string
+          enum: [pending, extracting, ready, failed]
+      required: [reel_request_id, output_profile, target_marker, request_status]
+    GuidedProject:
+      type: object
+      properties:
+        project_id:
+          type: string
+        workflow_step:
+          type: string
+          enum: [choose_source, confirm_player, generate_reels, complete]
+        status:
+          type: string
+        source:
+          $ref: '#/components/schemas/SelectSourceRequest'
+        inferred_match_portion:
+          $ref: '#/components/schemas/InferredMatchPortion'
+        player_identity_profile:
+          $ref: '#/components/schemas/PlayerIdentityProfile'
+        progress:
+          type: object
+          properties:
+            stage:
+              type: string
+            message:
+              type: string
+            percent:
+              type: number
+          required: [stage, message, percent]
+      required: [project_id, workflow_step, status, progress]
+    ValidationError:
+      type: object
+      properties:
+        detail:
+          type: string
+      required: [detail]

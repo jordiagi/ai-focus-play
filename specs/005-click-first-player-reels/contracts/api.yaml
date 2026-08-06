@@ -1,0 +1,221 @@
+# API Contract: Click-First Player Reels
+# Style: informal OpenAPI-like YAML, matching specs/003 conventions.
+# Base URL: http://localhost:8000 (existing FastAPI app).
+# Conventions:
+#   - All timestamps are seconds from video start (float).
+#   - All box coordinates are normalized [0,1] against ORIGINAL video dimensions:
+#     {x, y, w, h} with (x, y) = top-left.
+#   - Long operations return 202 with job references; the client polls GET /projects/{id}/jobs.
+#   - Errors: {"error": {"code": str, "message": str}} — message is plain language per FR-019.
+
+paths:
+
+  # ── Projects (kept from existing app; response shapes extended) ────────────
+
+  /projects:
+    post:
+      summary: Create a project
+      request: { name: string }
+      response 201: { project_id, name, status: "draft", created_at }
+    get:
+      summary: List projects
+      response 200: [ { project_id, name, status, source_id?, target_cluster_id?, updated_at } ]
+
+  /projects/{project_id}:
+    get:
+      summary: Project detail — the wizard's single source of truth for step gating
+      response 200:
+        project_id: string
+        name: string
+        status: draft | ingesting | analyzing | awaiting_target_selection | target_confirmed | ready_to_export
+        source: { source_id, original_filename, duration_s, fps, width, height, codec, proxy_status } | null
+        jersey_hint: string | null
+        target_cluster_id: string | null
+        analysis:                       # summarized from pipeline_jobs; progress is REAL (FR-010)
+          overall_status: not_started | running | complete | failed
+          stages:
+            - { stage: proxy,               status, progress_pct, progress_message }
+            - { stage: detect_track,        status, progress_pct, progress_message }
+            - { stage: embed_cluster,       status, progress_pct, progress_message }
+            - { stage: jersey_ocr,          status, progress_pct, progress_message }
+            - { stage: assemble_candidates, status, progress_pct, progress_message }
+    delete:
+      summary: Delete project, its rows, and its artifact directory
+      response 204: {}
+
+  /projects/{project_id}/jersey-hint:
+    put:
+      summary: Set/clear the optional jersey number hint (FR-006); never blocks anything
+      request: { jersey_hint: string | null }
+      response 200: { jersey_hint }
+
+  # ── Source & pipeline ──────────────────────────────────────────────────────
+
+  /projects/{project_id}/source:
+    post:
+      summary: Attach the match video (multipart upload OR local path), validate+probe
+               synchronously, then AUTO-QUEUE the analysis chain (FR-007)
+      request: multipart file  |  { file_path: string }
+      response 202:
+        source: { source_id, original_filename, duration_s, fps, width, height, codec }
+        jobs_queued: [ { job_id, stage } ]     # proxy → detect_track → embed_cluster → jersey_ocr → assemble_candidates
+      errors:
+        400 invalid_video: plain-language validation failure (unreadable, not a video, zero duration)
+
+  /projects/{project_id}/pipeline/run:
+    post:
+      summary: (Re-)queue analysis stages; used by Retry-after-failure and manual reruns
+      request: { stages?: [stage], force?: boolean } # default = all incomplete; force reruns succeeded stages
+      response 202: { jobs_queued: [ { job_id, stage } ] }
+
+  /projects/{project_id}/jobs:
+    get:
+      summary: Poll job status (frontend polls every 2 s while anything is queued/running)
+      response 200:
+        jobs:
+          - job_id: string
+            stage: proxy | detect_track | embed_cluster | jersey_ocr | assemble_candidates | sam2_refine | export
+            status: queued | running | succeeded | failed | cancelled
+            progress_pct: float          # derived from real work, e.g. processed_ts / duration
+            progress_message: string     # plain language, e.g. "Watching the match — 38 of 92 minutes"
+            error: string | null
+            created_at, started_at?, finished_at?
+
+  /jobs/{job_id}/cancel:
+    post:
+      summary: Cancel a queued/running job (SIGTERM to the stage subprocess; checkpoint preserved)
+      response 200: { job_id, status: "cancelled" }
+
+  # ── Frame viewer & clicks (new heart of the app) ──────────────────────────
+
+  /projects/{project_id}/frame:
+    get:
+      summary: One JPEG frame at time t, extracted from the 720p proxy and cached in frames/
+      query: { t: float }
+      response 200: image/jpeg
+      errors: { 409 proxy_not_ready: "We're still getting the video ready — try again in a moment." }
+
+  /projects/{project_id}/frame-detections:
+    get:
+      summary: Detection boxes near time t for overlay + client hover hints.
+               Returns [] (not an error) when detect_track hasn't reached t yet.
+      query: { t: float }
+      response 200:
+        ts_actual: float                 # timestamp of the sampled analysis frame actually used
+        analyzed: bool                   # false ⇒ detect_track hasn't covered t
+        boxes:
+          - { tracklet_id, cluster_id?, x, y, w, h, is_target: bool }
+
+  /projects/{project_id}/clicks:
+    post:
+      summary: Submit a click; backend hit-tests against detections within ±0.5 s (FR-002)
+      request: { t: float, x_norm: float, y_norm: float, label: positive | negative }
+      response 200 (one of):
+        # Instant path — detections exist and the click hits a box:
+        - { click_id, resolution: "tracklet", tracklet_id, cluster_id, box: {x,y,w,h} }
+        # Region analyzed, but click missed every box → queue bounded SAM 2 refinement (FR-012):
+        - { click_id, resolution: "sam2_queued", job_id }
+        # Region not yet analyzed → pin, resolves automatically later (FR-005):
+        - { click_id, resolution: "pinned",
+            message: "Got them — we'll match this player across the match as we finish watching." }
+        # Analyzed, missed all boxes, AND SAM 2 finds no person at that point either (set by refine job):
+        # click status becomes no_player; the instant response for an obvious miss on empty grass:
+        - { click_id, resolution: "no_player_here",
+            message: "We don't see a player there — try clicking directly on their body." }
+    get:
+      summary: List this project's clicks and their resolution status (drives pin badges in UI)
+      response 200: { clicks: [ { click_id, t, x_norm, y_norm, label, status, resolved_tracklet_id? } ] }
+
+  # ── Candidates, evidence, confirmation ─────────────────────────────────────
+
+  /projects/{project_id}/candidates:
+    get:
+      summary: Ranked identity clusters (screen time × jersey-hint agreement).
+               Used for the evidence strip after a click and for optional browsing.
+      query: { cluster_id?: string, anchor_tracklet_id?: string, anchor_ts?: float }
+               # filter post-click and lead evidence with the crop nearest that click
+      response 200:
+        candidates:
+          - cluster_id: string
+            jersey_number: string | null
+            jersey_agreement: { readings: int, agrees_with_hint: bool | null }   # plain-language source
+            kit_color_name: string | null
+            screen_time_s: float
+            tracklet_count: int
+            rep_crop_uri: string
+            ambiguous: bool?             # substantial mixed-kit or low-separation evidence
+            evidence:                    # 8–12 crops spread across the match (FR-003)
+              - { ts: float, thumbnail_uri: string, clip_uri?: string, tracklet_id: string }
+            timeline_spans: [ { start_ts, end_ts } ]
+
+  /projects/{project_id}/target:
+    post:
+      summary: Confirm the identity (US1); builds appearance_segments synchronously (fast SQL)
+      request: { cluster_id: string }
+      response 200:
+        target_cluster_id: string
+        coverage: { segment_count: int, total_s: float, gaps: [ { start_ts, end_ts } ] }
+    delete:
+      summary: Start over from a fresh click (keeps pipeline artifacts; resets cluster status)
+      response 204: {}
+
+  /projects/{project_id}/target/adjust:
+    post:
+      summary: Corrections — add missed appearances or remove wrong-player tracklets (FR-004/005)
+      request:
+        add_tracklet_ids?: [string]      # e.g. from a gap-filling click resolution
+        remove_tracklet_ids?: [string]   # "Not them" on evidence crops or timeline segments
+      response 200: { coverage: { segment_count, total_s } }   # segments rebuilt
+
+  # ── Coverage timeline ──────────────────────────────────────────────────────
+
+  /projects/{project_id}/timeline:
+    get:
+      summary: Appearance segments for the confirmed identity (US3)
+      response 200:
+        summary: { segment_count: int, total_s: float, included_count: int }
+        segments:
+          - { segment_id, start_ts, end_ts, score, included: bool,
+              thumbnail_uri: string, preview_clip_uri: string }
+
+  /projects/{project_id}/timeline/{segment_id}:
+    patch:
+      summary: Toggle inclusion or trim a segment
+      request: { included?: bool, start_ts?: float, end_ts?: float }
+      response 200: { segment_id, start_ts, end_ts, included }
+
+  # ── Exports (kept; request shape updated) ──────────────────────────────────
+
+  /projects/{project_id}/exports:
+    post:
+      summary: Render a reel from included segments (FR-015); background job
+      request:
+        profile: short_highlight | medium_best_plays | full_appearances
+        overlay_mode: none | target_marker      # marker follows real per-frame boxes
+      response 202: { output_id, job_id }
+      errors:
+        409 target_not_confirmed: "Confirm your player first — click them on a frame and
+                                   check the evidence." (FR-014)
+    get:
+      summary: List outputs
+      response 200: { outputs: [ { output_id, profile, overlay_mode, status, duration_s?, created_at } ] }
+
+  /projects/{project_id}/exports/{output_id}/download:
+    get:
+      summary: Download the rendered MP4 (kept from existing app)
+      response 200: video/mp4
+
+  # ── Media serving (kept from 003) ──────────────────────────────────────────
+
+  /projects/{project_id}/evidence-media/{name}:
+    get:
+      summary: Serve project-scoped media artifacts (crops, thumbnails, preview clips)
+               with the existing path-traversal protection. crop/clip URIs returned by
+               /candidates and /timeline resolve here.
+      response 200: image/jpeg | video/mp4
+
+# ── Removed endpoints (deleted with the legacy code, FR-020) ────────────────
+# POST /projects/{id}/player-request        (jersey-first evidence search — replaced by clicks)
+# POST /projects/{id}/player-confirmation   (replaced by POST /target)
+# /review/* routes and review queue         (001-era manual review — deleted)
+# /analysis legacy routes                   (replaced by /jobs)
