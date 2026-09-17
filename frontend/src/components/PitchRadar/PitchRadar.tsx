@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { RadarFrame, RadarPlayer } from '../../types';
-import { RotateCw, Share2, Maximize2, Minimize2, Eye } from 'lucide-react';
+import { RadarFrame } from '../../types';
+import { RotateCw, Maximize2, Minimize2 } from 'lucide-react';
 
 interface PitchRadarProps {
   currentFrame: RadarFrame | null;
@@ -287,7 +287,7 @@ export const PitchRadar: React.FC<PitchRadarProps> = ({
 
           {/* Ball (Glowing white dot) */}
           {currentFrame?.ball && (
-            <g className="transition-all duration-200">
+            <g className="transition-all duration-200" opacity={currentFrame.ball.detected !== false ? 1.0 : 0.3}>
               <circle
                 cx={getX(currentFrame.ball.x)}
                 cy={getY(currentFrame.ball.y)}

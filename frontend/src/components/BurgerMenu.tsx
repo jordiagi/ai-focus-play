@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Video, Users, Camera, User, AtSign, BarChart2, Settings, 
-  HelpCircle, ChevronDown, ChevronRight, X, Check, ShieldCheck
+  HelpCircle, ChevronDown, X, Check
 } from 'lucide-react';
 import { Match } from '../types';
 
@@ -28,6 +28,8 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showVeoCamsModal, setShowVeoCamsModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showMentionsModal, setShowMentionsModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   if (!isOpen) return null;
 
@@ -123,6 +125,17 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
           {/* Player & Mentions */}
           <nav className="space-y-1">
             <button
+              onClick={() => {
+                onOpenPlayerMoments();
+                onClose();
+              }}
+              className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-[#141414] hover:text-white transition font-normal"
+            >
+              <Video className="w-4 h-4 text-gray-400" />
+              <span>Player Moments</span>
+            </button>
+
+            <button
               onClick={() => setShowProfileModal(true)}
               className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-[#141414] hover:text-white transition font-normal"
             >
@@ -131,7 +144,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
             </button>
 
             <button
-              onClick={() => alert('No new notifications or mentions.')}
+              onClick={() => setShowMentionsModal(true)}
               className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-[#141414] hover:text-white transition font-normal"
             >
               <AtSign className="w-4 h-4 text-gray-400" />
@@ -173,7 +186,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
         {/* Drawer Footer */}
         <div className="p-3 border-t border-[#181818] space-y-2">
           <button
-            onClick={() => alert('Veo Knowledge Base: Support & Documentation is active.')}
+            onClick={() => setShowHelpModal(true)}
             className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-[#141414] transition"
           >
             <HelpCircle className="w-4 h-4 text-gray-400" />
@@ -297,6 +310,59 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
                 <div className="text-sm font-bold text-white">Eric Yeh-Fuentes (#10)</div>
                 <div className="text-xs text-gray-400">Arlington SA U16B ECNL • Attacking Midfielder</div>
                 <div className="text-[10px] text-[#00E676] mt-0.5">Veo Player Profile Active</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Mentions */}
+      {showMentionsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+          <div className="bg-[#12141a] border border-[#262c3b] w-full max-w-md rounded-2xl p-5 shadow-2xl text-white">
+            <div className="flex items-center justify-between mb-4 border-b border-[#222] pb-3">
+              <h3 className="text-base font-bold">Mentions & Notifications</h3>
+              <button onClick={() => setShowMentionsModal(false)} className="text-gray-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 text-center text-xs text-gray-400">
+              No new player mentions or coach tags for this match.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Help & Shortcuts */}
+      {showHelpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+          <div className="bg-[#12141a] border border-[#262c3b] w-full max-w-md rounded-2xl p-5 shadow-2xl text-white">
+            <div className="flex items-center justify-between mb-4 border-b border-[#222] pb-3">
+              <h3 className="text-base font-bold">Veo Player Shortcuts</h3>
+              <button onClick={() => setShowHelpModal(false)} className="text-gray-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-2.5 text-xs">
+              <div className="flex justify-between py-1 border-b border-[#222]">
+                <span className="text-gray-400">Play / Pause</span>
+                <span className="font-mono bg-[#1f2430] px-2 py-0.5 rounded text-[#00E676]">Space</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-[#222]">
+                <span className="text-gray-400">Skip ±10 Seconds</span>
+                <span className="font-mono bg-[#1f2430] px-2 py-0.5 rounded text-[#00E676]">J / L or ← / →</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-[#222]">
+                <span className="text-gray-400">Jump Highlights</span>
+                <span className="font-mono bg-[#1f2430] px-2 py-0.5 rounded text-[#00E676]">[ / ]</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-[#222]">
+                <span className="text-gray-400">Toggle Telestrator Drawing</span>
+                <span className="font-mono bg-[#1f2430] px-2 py-0.5 rounded text-[#00E676]">D</span>
+              </div>
+              <div className="flex justify-between py-1 pt-2 text-[11px] text-gray-500">
+                <span>Support ID: A0EXC</span>
+                <span>Veo Cam 3 Connected</span>
               </div>
             </div>
           </div>

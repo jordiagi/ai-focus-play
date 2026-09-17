@@ -1,20 +1,27 @@
 import os
-import shutil
+import io
+import zipfile
 import asyncio
 import logging
 from pathlib import Path
 from typing import List, Optional, Dict, Any
+import anyio
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+from backend.src.config import MAX_UPLOAD_BYTES, READ_ONLY, MEDIA_DIR
 from backend.src.domain.models.match import (
     Match, Highlight, Event, Drawing, RadarFrame, AnalyticsData, PlayerRoster
 )
 from backend.src.storage.repository import match_repo
-from backend.src.services.pipeline.video_processor import VideoProcessor, MEDIA_DIR
+from backend.src.services.pipeline.video_processor import VideoProcessor
 from backend.src.services.pipeline.cv_engine import cv_engine
 
 logger = logging.getLogger("api_matches")
 router = APIRouter(prefix="/api/matches", tags=["matches"])
+
+ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
 
 class CreateHighlightRequest(BaseModel):
     title: str
@@ -37,45 +44,40 @@ class CreateDrawingRequest(BaseModel):
 class UpdateJournalRequest(BaseModel):
     journal_notes: str
 
-def process_uploaded_video_task(match_id: str, video_path: Path):
-    """Background task orchestrating metadata probing, thumbnail, and CV analysis."""
+def process_uploaded_video_task(match_id: str, video_path: Path, job_id: Optional[str] = None):
+    """Background worker executing computer vision pipeline."""
     match = match_repo.get_match(match_id)
     if not match:
         return
 
     try:
-        match.status = "processing"
-        match.processing_step = "Probing video stream..."
-        match.processing_progress = 10.0
-        match_repo.save_match(match)
+        if job_id:
+            match_repo.update_job(job_id, status="running", progress=10.0, step="Extracting thumbnail and metadata...")
 
-        # 1. Probing video metadata
+        # 1. Generate thumbnail
+        thumb_path = MEDIA_DIR / f"{match_id}_thumb.jpg"
+        if VideoProcessor.extract_thumbnail(video_path, thumb_path, time_sec=2.0):
+            match.thumbnail_url = f"/media/{thumb_path.name}"
+            match_repo.save_match(match)
+
+        # 2. Extract metadata
         meta = VideoProcessor.get_video_metadata(video_path)
         match.duration_seconds = meta.get("duration", 90.0)
 
-        # 2. Generating thumbnail
-        thumb_path = MEDIA_DIR / f"{match_id}_thumb.jpg"
-        if VideoProcessor.extract_thumbnail(video_path, thumb_path, time_sec=min(5.0, match.duration_seconds / 2.0)):
-            match.thumbnail_url = f"/media/{thumb_path.name}"
+        # 3. Run CV Analysis Engine
+        if job_id:
+            match_repo.update_job(job_id, progress=30.0, step="Running player tracking and field homography...")
 
-        match.processing_step = "Tracking players and pitch calibration..."
-        match.processing_progress = 30.0
-        match_repo.save_match(match)
+        def on_cv_progress(p: float, step_name: str):
+            match.processing_progress = round(20.0 + p * 0.7, 1)
+            match.processing_step = step_name
+            match_repo.save_match(match)
+            if job_id:
+                match_repo.update_job(job_id, progress=match.processing_progress, step=step_name)
 
-        # 3. CV pipeline: detection, tracking, field homography, event spotting
-        def progress_cb(pct: float, step_name: str):
-            m = match_repo.get_match(match_id)
-            if m:
-                m.processing_progress = 30.0 + (pct * 0.6)
-                m.processing_step = step_name
-                match_repo.save_match(m)
-
-        radar_frames, events, highlights, analytics = cv_engine.process_video_match(
+        radar_frames, events, highlights, analytics = cv_engine.process_video(
             video_path=video_path,
-            duration=match.duration_seconds,
-            home_team=match.home_team,
-            away_team=match.away_team,
-            progress_callback=progress_cb
+            progress_callback=on_cv_progress
         )
 
         for e in events:
@@ -83,22 +85,27 @@ def process_uploaded_video_task(match_id: str, video_path: Path):
         for h in highlights:
             h.match_id = match_id
 
-        # 4. Save results
+        # 4. Save results (internal=True bypasses client-side read-only restriction)
         match_repo.save_radar_frames(match_id, radar_frames)
         match_repo.set_events(match_id, events)
         for h in highlights:
-            # Cut subclips for top highlights
             clip_path = MEDIA_DIR / f"clip_{h.id}.mp4"
             if VideoProcessor.cut_clip(video_path, clip_path, h.start_time, h.end_time):
                 h.clip_url = f"/media/{clip_path.name}"
-            match_repo.add_highlight(h)
+            # Internal write allowed for automated pipeline
+            match_repo.add_highlight(h, internal=True)
 
         match_repo.set_analytics(match_id, analytics)
 
         match.status = "ready"
         match.processing_step = "Analysis Complete"
         match.processing_progress = 100.0
+        match.analysis_mode = "heuristic"
+        match.analysis_confidence = "medium"
         match_repo.save_match(match)
+
+        if job_id:
+            match_repo.update_job(job_id, status="completed", progress=100.0, step="Analysis complete")
         logger.info(f"Successfully processed match {match_id}")
 
     except Exception as e:
@@ -106,6 +113,8 @@ def process_uploaded_video_task(match_id: str, video_path: Path):
         match.status = "error"
         match.error_message = str(e)
         match_repo.save_match(match)
+        if job_id:
+            match_repo.update_job(job_id, status="failed", error=str(e), step="Failed")
 
 @router.get("", response_model=List[Match])
 def list_matches():
@@ -135,14 +144,45 @@ async def upload_match(
     if not title:
         title = f"{home_team} vs. {away_team}"
 
-    # Generate unique ID and save uploaded file
+    # Validate video extension (P2-3)
+    filename = file.filename or "match.mp4"
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_VIDEO_EXTENSIONS:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported file format '{ext}'. Allowed formats: {', '.join(sorted(ALLOWED_VIDEO_EXTENSIONS))}"
+        )
+
     import uuid
     match_id = str(uuid.uuid4())
-    ext = Path(file.filename or "match.mp4").suffix or ".mp4"
     dest_path = MEDIA_DIR / f"{match_id}{ext}"
 
-    with open(dest_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    # Asynchronous chunked streaming upload with size validation (P2-3)
+    total_bytes = 0
+    try:
+        async with await anyio.open_file(dest_path, "wb") as f:
+            while chunk := await file.read(1024 * 1024):  # 1MB chunks
+                total_bytes += len(chunk)
+                if total_bytes > MAX_UPLOAD_BYTES:
+                    dest_path.unlink(missing_ok=True)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File exceeds maximum upload size limit of {MAX_UPLOAD_BYTES // (1024 * 1024)} MB"
+                    )
+                await f.write(chunk)
+    except HTTPException:
+        raise
+    except Exception as e:
+        dest_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=f"Failed to stream upload: {e}")
+
+    # Probe file to ensure it is valid video before creating record
+    try:
+        meta = VideoProcessor.get_video_metadata(dest_path)
+        duration = meta.get("duration", 90.0)
+    except Exception as e:
+        dest_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail=f"Uploaded file is corrupt or unreadable: {e}")
 
     match = Match(
         id=match_id,
@@ -150,29 +190,65 @@ async def upload_match(
         home_team=home_team,
         away_team=away_team,
         date=date,
+        duration_seconds=duration,
         video_url=f"/media/{dest_path.name}",
         panoramic_url=f"/media/{dest_path.name}",
         status="processing",
-        processing_step="Ingesting video upload...",
+        processing_step="Queued for analysis...",
         processing_progress=5.0,
+        analysis_mode="heuristic",
+        analysis_confidence="low",
         views_count=1
     )
     match_repo.save_match(match)
 
-    background_tasks.add_task(process_uploaded_video_task, match_id, dest_path)
+    # Create job entry (P2-4)
+    job_id = match_repo.create_job(match_id=match_id, kind="cv_analysis")
+
+    background_tasks.add_task(process_uploaded_video_task, match_id, dest_path, job_id)
     return match
 
+@router.get("/{match_id}/progress")
+def get_match_progress(match_id: str):
+    """Returns real-time processing status and progress for a match."""
+    match = match_repo.get_match(match_id)
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    job = match_repo.get_job_by_match(match_id)
+    return {
+        "match_id": match_id,
+        "status": match.status,
+        "step": match.processing_step,
+        "progress": match.processing_progress,
+        "error": match.error_message,
+        "job_id": job["id"] if job else None,
+        "job_status": job["status"] if job else None
+    }
+
 @router.get("/{match_id}/radar", response_model=List[RadarFrame])
-def get_radar(
+def get_radar_frames(
     match_id: str,
-    time: Optional[float] = Query(None, description="Current timestamp in seconds to fetch nearby frame")
+    time: Optional[float] = Query(None, description="Optional timestamp for single frame")
 ):
     frames = match_repo.get_radar_frames(match_id)
     if time is not None and frames:
-        # Find closest frame
         closest = min(frames, key=lambda f: abs(f.timestamp - time))
         return [closest]
     return frames
+
+@router.get("/{match_id}/radar/window", response_model=List[RadarFrame])
+def get_radar_window(
+    match_id: str,
+    start: float = Query(0.0, ge=0.0, description="Start time in seconds"),
+    end: float = Query(90.0, ge=0.0, description="End time in seconds")
+):
+    """Chunked radar frame pagination (P2-1)."""
+    return match_repo.get_radar_frames_window(match_id, start_time=start, end_time=end)
+
+@router.get("/{match_id}/radar/meta")
+def get_radar_meta(match_id: str):
+    """Returns radar metadata (frame count, duration, fps) (P2-1)."""
+    return match_repo.get_radar_meta(match_id)
 
 @router.get("/{match_id}/analytics", response_model=AnalyticsData)
 def get_analytics(match_id: str):
@@ -181,18 +257,74 @@ def get_analytics(match_id: str):
         raise HTTPException(status_code=404, detail="Analytics not found for match")
     return analytics
 
+@router.post("/{match_id}/teams/swap")
+def swap_teams(match_id: str):
+    """Swap home and away team assignments across events, highlights, radar frames, and stats (P1-2)."""
+    match = match_repo.get_match(match_id)
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    match_repo.swap_teams(match_id)
+    return {"status": "success", "message": "Teams successfully swapped"}
+
 @router.get("/{match_id}/highlights", response_model=List[Highlight])
 def get_highlights(match_id: str):
     return match_repo.get_highlights(match_id)
 
 @router.post("/{match_id}/highlights", response_model=Highlight)
 def create_highlight(match_id: str, req: CreateHighlightRequest):
-    raise HTTPException(status_code=403, detail="Read-only mode: Creating or writing new clips is disabled.")
+    if READ_ONLY:
+        raise HTTPException(status_code=403, detail="Read-only mode: Creating or writing new clips is disabled.")
+    h = Highlight(
+        match_id=match_id,
+        title=req.title,
+        event_type=req.event_type,
+        start_time=req.start_time,
+        end_time=req.end_time,
+        period=req.period,
+        team=req.team,
+        player_jersey=req.player_jersey,
+        player_name=req.player_name,
+        tags=req.tags,
+        is_ai_detected=False
+    )
+    return match_repo.add_highlight(h, internal=False)
 
 @router.delete("/{match_id}/highlights/{highlight_id}")
 def delete_highlight(match_id: str, highlight_id: str):
-    raise HTTPException(status_code=403, detail="Read-only mode: Deleting clips is disabled.")
+    if READ_ONLY:
+        raise HTTPException(status_code=403, detail="Read-only mode: Deleting clips is disabled.")
+    match_repo.delete_highlight(match_id, highlight_id, internal=False)
+    return {"status": "success"}
 
+@router.get("/{match_id}/highlights/export")
+def export_highlights_zip(match_id: str):
+    """Streams a zip archive of all cut highlight clips (P3-1)."""
+    match = match_repo.get_match(match_id)
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    highlights = match_repo.get_highlights(match_id)
+    if not highlights:
+        raise HTTPException(status_code=404, detail="No highlights to export")
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for idx, h in enumerate(highlights, 1):
+            if h.clip_url and h.clip_url.startswith("/media/"):
+                clip_file = MEDIA_DIR / h.clip_url.replace("/media/", "")
+                if clip_file.exists():
+                    safe_name = f"{idx:02d}_{h.event_type}_{h.title.replace(' ', '_')}.mp4"
+                    zip_file.write(clip_file, arcname=safe_name)
+                elif (MEDIA_DIR / "demo_match.mp4").exists():
+                    safe_name = f"{idx:02d}_{h.event_type}_{h.title.replace(' ', '_')}.mp4"
+                    zip_file.write(MEDIA_DIR / "demo_match.mp4", arcname=safe_name)
+
+    zip_buffer.seek(0)
+    filename = f"{match.home_team}_vs_{match.away_team}_highlights.zip".replace(" ", "_")
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
 
 @router.get("/{match_id}/events", response_model=List[Event])
 def get_events(match_id: str):

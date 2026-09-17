@@ -45,6 +45,7 @@ export interface Event {
   description: string;
   pitch_x: number;
   pitch_y: number;
+  confidence?: number;
 }
 
 export interface RadarPlayer {
@@ -60,6 +61,7 @@ export interface RadarBall {
   x: number;
   y: number;
   z: number;
+  detected?: boolean;
 }
 
 export interface RadarFrame {
@@ -84,17 +86,17 @@ export interface ShotRecord {
 export interface TeamStats {
   goals: number;
   shots: number;
-  attempts: number;
-  corners: number;
-  free_kicks: number;
-  throw_ins: number;
-  fouls: number;
-  penalties: number;
-  tackles: number;
-  passes_completed: number;
+  attempts?: number | null;
+  corners?: number | null;
+  free_kicks?: number | null;
+  throw_ins?: number | null;
+  fouls?: number | null;
+  penalties?: number | null;
+  tackles?: number | null;
+  passes_completed?: number | null;
   possession_percent: number;
   possession_minutes: number;
-  possession_won: number;
+  possession_won?: number | null;
 }
 
 export interface AnalyticsData {
@@ -148,4 +150,12 @@ export interface Match {
   views_count: number;
   lineup: PlayerRoster[];
   journal_notes: string;
+  analysis_mode?: 'demo' | 'heuristic' | 'ml';
+  analysis_confidence?: 'low' | 'medium' | 'high';
+}
+
+export interface Capabilities {
+  read_only: boolean;
+  allow_uploads: boolean;
+  supported_analysis_modes: string[];
 }

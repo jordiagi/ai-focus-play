@@ -7,8 +7,7 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger("video_processor")
 
-MEDIA_DIR = Path("/home/ai/workspaces/users/jordi/ai-focus-play/backend/.local/media")
-MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+from backend.src.config import MEDIA_DIR
 
 class VideoProcessor:
     @staticmethod
@@ -48,7 +47,7 @@ class VideoProcessor:
             }
         except Exception as e:
             logger.error(f"Failed to probe video {video_path}: {e}")
-            return {"duration": 90.0, "width": 1920, "height": 1080, "fps": 30.0}
+            raise ValueError(f"Failed to probe video {video_path}: {e}")
 
     @staticmethod
     def extract_thumbnail(video_path: Path, output_path: Path, time_sec: float = 5.0) -> bool:

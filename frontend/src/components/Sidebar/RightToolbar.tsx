@@ -21,9 +21,10 @@ export const RightToolbar: React.FC<RightToolbarProps> = ({
       <div className="flex flex-col items-center space-y-4">
         {/* Plus icon (Read-only indication) */}
         <button
-          onClick={() => alert('Read-Only Mode: Adding new clips or modifying match data is disabled.')}
-          className="text-[#00E676] hover:opacity-80 transition p-1"
-          title="Create clip (Disabled - Read Only)"
+          disabled
+          className="text-gray-600 cursor-not-allowed p-1"
+          title="Read-only mode: manual clip creation is disabled"
+          aria-label="Create clip (disabled in read-only mode)"
         >
           <Plus className="w-5 h-5 stroke-[2.5]" />
         </button>
@@ -98,9 +99,10 @@ export const RightToolbar: React.FC<RightToolbarProps> = ({
       {/* Bottom Icons */}
       <div className="flex flex-col items-center space-y-3">
         <button
-          onClick={() => alert('Veo Analysis Guide: Spacebar to Play/Pause, J/L to skip 10s, D to draw, [ and ] to jump highlights.')}
+          onClick={() => onToggleDrawer(activeDrawer === 'summary' ? null : 'summary')}
           className="text-gray-400 hover:text-white transition p-1"
           title="Help & Shortcuts"
+          aria-label="Help and shortcuts"
         >
           <HelpCircle className="w-5 h-5" />
         </button>

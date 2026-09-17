@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Drawing, DrawingCoordinate } from '../../types';
 import { 
-  Pencil, ArrowUpRight, Circle, Sun, Type, Undo, Trash2, Check, X
+  Pencil, ArrowUpRight, Circle, Sun, Type, Trash2, Check, X
 } from 'lucide-react';
 
 interface TelestratorProps {
@@ -15,6 +15,85 @@ interface TelestratorProps {
 type ToolType = 'arrow' | 'spotlight' | 'circle' | 'pen' | 'text';
 
 const COLORS = ['#00E676', '#FFD700', '#2979FF', '#FF5252', '#FFFFFF'];
+
+const renderDrawing = (
+  ctx: CanvasRenderingContext2D,
+  tool: ToolType,
+  color: string,
+  coords: DrawingCoordinate[],
+  w: number,
+  h: number,
+  label?: string
+) => {
+  if (coords.length === 0) return;
+
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  const p0 = { x: coords[0].x * w, y: coords[0].y * h };
+  const p1 = coords.length > 1 ? { x: coords[coords.length - 1].x * w, y: coords[coords.length - 1].y * h } : p0;
+
+  if (tool === 'pen') {
+    ctx.beginPath();
+    ctx.moveTo(p0.x, p0.y);
+    for (let i = 1; i < coords.length; i++) {
+      ctx.lineTo(coords[i].x * w, coords[i].y * h);
+    }
+    ctx.stroke();
+  } else if (tool === 'arrow') {
+    // Draw line from p0 to p1
+    ctx.beginPath();
+    ctx.moveTo(p0.x, p0.y);
+    ctx.lineTo(p1.x, p1.y);
+    ctx.stroke();
+
+    // Arrow head
+    const angle = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+    const headLen = 16;
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p1.x - headLen * Math.cos(angle - Math.PI / 6), p1.y - headLen * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(p1.x - headLen * Math.cos(angle + Math.PI / 6), p1.y - headLen * Math.sin(angle + Math.PI / 6));
+    ctx.closePath();
+    ctx.fill();
+  } else if (tool === 'circle') {
+    const rx = Math.max(20, Math.abs(p1.x - p0.x));
+    const ry = Math.max(12, Math.abs(p1.y - p0.y) || rx * 0.5);
+    ctx.beginPath();
+    ctx.ellipse(p0.x, p0.y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = color + '22'; // semi-transparent fill
+    ctx.fill();
+  } else if (tool === 'spotlight') {
+    const radius = Math.max(35, Math.hypot(p1.x - p0.x, p1.y - p0.y));
+    // Outer dimming
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(0, 0, w, h);
+    // Clear spotlight area
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.arc(p0.x, p0.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Spotlight glow ring
+    ctx.beginPath();
+    ctx.arc(p0.x, p0.y, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  } else if (tool === 'text' && label) {
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillStyle = 'black';
+    ctx.fillRect(p0.x - 4, p0.y - 20, ctx.measureText(label).width + 8, 26);
+    ctx.fillStyle = color;
+    ctx.fillText(label, p0.x, p0.y);
+  }
+};
 
 export const TelestratorCanvas: React.FC<TelestratorProps> = ({
   currentTime,
@@ -56,84 +135,6 @@ export const TelestratorCanvas: React.FC<TelestratorProps> = ({
     }
   }, [existingDrawings, currentCoords, selectedTool, selectedColor, currentTime, textInput]);
 
-  const renderDrawing = (
-    ctx: CanvasRenderingContext2D,
-    tool: ToolType,
-    color: string,
-    coords: DrawingCoordinate[],
-    w: number,
-    h: number,
-    label?: string
-  ) => {
-    if (coords.length === 0) return;
-
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    const p0 = { x: coords[0].x * w, y: coords[0].y * h };
-    const p1 = coords.length > 1 ? { x: coords[coords.length - 1].x * w, y: coords[coords.length - 1].y * h } : p0;
-
-    if (tool === 'pen') {
-      ctx.beginPath();
-      ctx.moveTo(p0.x, p0.y);
-      for (let i = 1; i < coords.length; i++) {
-        ctx.lineTo(coords[i].x * w, coords[i].y * h);
-      }
-      ctx.stroke();
-    } else if (tool === 'arrow') {
-      // Draw line from p0 to p1
-      ctx.beginPath();
-      ctx.moveTo(p0.x, p0.y);
-      ctx.lineTo(p1.x, p1.y);
-      ctx.stroke();
-
-      // Arrow head
-      const angle = Math.atan2(p1.y - p0.y, p1.x - p0.x);
-      const headLen = 16;
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p1.x - headLen * Math.cos(angle - Math.PI / 6), p1.y - headLen * Math.sin(angle - Math.PI / 6));
-      ctx.lineTo(p1.x - headLen * Math.cos(angle + Math.PI / 6), p1.y - headLen * Math.sin(angle + Math.PI / 6));
-      ctx.closePath();
-      ctx.fill();
-    } else if (tool === 'circle') {
-      const rx = Math.max(20, Math.abs(p1.x - p0.x));
-      const ry = Math.max(12, Math.abs(p1.y - p0.y) || rx * 0.5);
-      ctx.beginPath();
-      ctx.ellipse(p0.x, p0.y, rx, ry, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = color + '22'; // semi-transparent fill
-      ctx.fill();
-    } else if (tool === 'spotlight') {
-      const radius = Math.max(35, Math.hypot(p1.x - p0.x, p1.y - p0.y));
-      // Outer dimming
-      ctx.save();
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      ctx.fillRect(0, 0, w, h);
-      // Clear spotlight area
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.beginPath();
-      ctx.arc(p0.x, p0.y, radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-
-      // Spotlight glow ring
-      ctx.beginPath();
-      ctx.arc(p0.x, p0.y, radius, 0, Math.PI * 2);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    } else if (tool === 'text' && label) {
-      ctx.font = 'bold 16px sans-serif';
-      ctx.fillStyle = 'black';
-      ctx.fillRect(p0.x - 4, p0.y - 20, ctx.measureText(label).width + 8, 26);
-      ctx.fillStyle = color;
-      ctx.fillText(label, p0.x, p0.y);
-    }
-  };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;

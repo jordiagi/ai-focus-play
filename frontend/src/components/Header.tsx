@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
 import { Match } from '../types';
-import { Upload, Download, Check, Video } from 'lucide-react';
+import { Upload, Download, Check, Video, FileArchive } from 'lucide-react';
+import { api } from '../services/api';
 
 interface HeaderProps {
   currentMatch: Match | null;
   onOpenBurgerMenu: () => void;
   onOpenUpload: () => void;
+  canUpload?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   currentMatch,
   onOpenBurgerMenu,
   onOpenUpload,
+  canUpload = true,
 }) => {
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
@@ -22,15 +25,18 @@ export const Header: React.FC<HeaderProps> = ({
     setTimeout(() => setCopiedShare(false), 2000);
   };
 
+  const mode = currentMatch?.analysis_mode || 'demo';
+
   return (
     <header className="h-14 bg-[#000000] border-b border-[#141414] px-4 flex items-center justify-between select-none z-30 relative">
-      {/* Left: Hamburger Icon + Stylized veo Logo + Match Title */}
+      {/* Left: Hamburger Icon + Stylized veo Logo + Match Title + Mode Badge */}
       <div className="flex items-center space-x-4">
         {/* Hamburger 3-line button */}
         <button
           onClick={onOpenBurgerMenu}
           className="p-2 -ml-2 rounded-lg text-white hover:bg-[#1a1a1a] transition focus:outline-none"
           title="Open Veo Menu"
+          aria-label="Open Veo Menu"
         >
           <div className="space-y-1 w-4">
             <div className="h-[2px] bg-white rounded-full" />
@@ -51,9 +57,38 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Match Title & Subtitle */}
         <div className="pl-1">
-          <h1 className="text-[14px] font-semibold text-white tracking-normal leading-tight truncate max-w-[320px] md:max-w-[600px]">
-            {currentMatch?.title || 'Arlington SA U16B ECNL (26-27) vs. Skyline U16B ECNL'}
-          </h1>
+          <div className="flex items-center space-x-2">
+            <h1 className="text-[14px] font-semibold text-white tracking-normal leading-tight truncate max-w-[280px] md:max-w-[480px]">
+              {currentMatch?.title || 'Arlington SA U16B ECNL (26-27) vs. Skyline U16B ECNL'}
+            </h1>
+
+            {/* Analysis Mode Badge (P1-0) */}
+            {mode === 'demo' && (
+              <span 
+                className="bg-amber-500/20 border border-amber-500/40 text-amber-400 text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0"
+                title="Synthetic demonstration dataset — coordinates and statistics not from this video"
+              >
+                Demo Data
+              </span>
+            )}
+            {mode === 'heuristic' && (
+              <span 
+                className="bg-zinc-800 border border-zinc-700 text-zinc-300 text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0"
+                title="Heuristic computer vision pipeline — coordinates approximate"
+              >
+                Heuristic CV
+              </span>
+            )}
+            {mode === 'ml' && (
+              <span 
+                className="bg-emerald-500/20 border border-emerald-500/40 text-[#00E676] text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0"
+                title="Deep learning object detection & tracking"
+              >
+                AI Analysis
+              </span>
+            )}
+          </div>
+
           <div className="text-[11px] text-[#8e8e8e] flex items-center space-x-1.5 leading-none mt-0.5">
             <span>{currentMatch?.date || 'Sep 13, 2026'}</span>
             <span>-</span>
@@ -62,12 +97,25 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Right: Share, Download, Profile */}
-      <div className="flex items-center space-x-5">
+      {/* Right: Upload, Share, Download, Profile */}
+      <div className="flex items-center space-x-4">
+        {/* Upload Button */}
+        {canUpload && (
+          <button
+            onClick={onOpenUpload}
+            className="flex items-center space-x-1.5 bg-[#161616] hover:bg-[#222] border border-[#262626] text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+            title="Upload and analyze soccer match"
+          >
+            <Upload className="w-3.5 h-3.5 text-[#00E676]" />
+            <span>Upload</span>
+          </button>
+        )}
+
         {/* Share Button (Veo style tray arrow) */}
         <button
           onClick={handleShare}
           className="flex items-center space-x-1.5 text-[#e1e1e1] hover:text-white text-xs font-medium transition cursor-pointer"
+          aria-label="Share match"
         >
           {copiedShare ? (
             <Check className="w-4 h-4 text-[#00E676]" />
@@ -82,38 +130,38 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={() => setShowDownloadMenu(!showDownloadMenu)}
             className="flex items-center space-x-1.5 text-[#e1e1e1] hover:text-white text-xs font-medium transition cursor-pointer"
+            aria-label="Download match media"
           >
             <Download className="w-4 h-4" />
             <span>Download</span>
           </button>
 
-          {showDownloadMenu && (
-            <div className="absolute right-0 mt-2 w-56 bg-[#12141a] border border-[#262c3b] rounded-xl shadow-2xl py-1 z-50">
+          {showDownloadMenu && currentMatch && (
+            <div className="absolute right-0 mt-2 w-60 bg-[#12141a] border border-[#262c3b] rounded-xl shadow-2xl py-1 z-50">
               <a
-                href={currentMatch?.video_url}
+                href={currentMatch.video_url}
                 download
                 onClick={() => setShowDownloadMenu(false)}
                 className="flex items-center space-x-2.5 px-3 py-2 text-xs text-gray-200 hover:bg-[#1a1e28] transition"
               >
                 <Video className="w-4 h-4 text-[#00E676]" />
                 <div>
-                  <div className="font-semibold text-white">Full Match (1080p)</div>
-                  <div className="text-[10px] text-gray-400">AI Follow-Cam MP4</div>
+                  <div className="font-semibold text-white">Full Match Video</div>
+                  <div className="text-[10px] text-gray-400">Broadcast MP4</div>
                 </div>
               </a>
-              <div
-                onClick={() => {
-                  alert('Compiling highlight clips into export package...');
-                  setShowDownloadMenu(false);
-                }}
-                className="flex items-center space-x-2.5 px-3 py-2 text-xs text-gray-200 hover:bg-[#1a1e28] cursor-pointer transition border-t border-[#222]"
+              <a
+                href={api.getExportHighlightsUrl(currentMatch.id)}
+                download
+                onClick={() => setShowDownloadMenu(false)}
+                className="flex items-center space-x-2.5 px-3 py-2 text-xs text-gray-200 hover:bg-[#1a1e28] transition border-t border-[#222]"
               >
-                <Download className="w-4 h-4 text-blue-400" />
+                <FileArchive className="w-4 h-4 text-blue-400" />
                 <div>
-                  <div className="font-semibold text-white">Highlights Reel</div>
-                  <div className="text-[10px] text-gray-400">Export detected clips</div>
+                  <div className="font-semibold text-white">Export Highlights (ZIP)</div>
+                  <div className="text-[10px] text-gray-400">Download all clips package</div>
                 </div>
-              </div>
+              </a>
             </div>
           )}
         </div>

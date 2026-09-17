@@ -1,0 +1,83 @@
+import cv2
+import numpy as np
+import pytest
+from pathlib import Path
+from fastapi.testclient import TestClient
+from backend.src.app.main import app
+from backend.src.storage.repository import match_repo
+from backend.src.api.routes.matches import process_uploaded_video_task
+
+@pytest.fixture
+def client():
+    return TestClient(app)
+
+def _create_dummy_video(path: Path, duration_sec: float = 3.0):
+    fps = 30
+    w, h = 320, 240
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(str(path), fourcc, fps, (w, h))
+    for _ in range(int(fps * duration_sec)):
+        frame = np.zeros((h, w, 3), dtype=np.uint8)
+        frame[:] = [45, 120, 45]  # green field
+        out.write(frame)
+    out.release()
+
+def test_upload_pipeline_success(client, tmp_path: Path):
+    """Verifies that an uploaded soccer video processes through CV and reaches ready status (P0-1 & P2-3)."""
+    vid_file = tmp_path / "sample_match.mp4"
+    _create_dummy_video(vid_file, duration_sec=3.0)
+
+    with open(vid_file, "rb") as f:
+        res = client.post(
+            "/api/matches/upload",
+            files={"file": ("sample_match.mp4", f, "video/mp4")},
+            data={"home_team": "Team A", "away_team": "Team B", "date": "Today"}
+        )
+
+    assert res.status_code == 200
+    match_data = res.json()
+    match_id = match_data["id"]
+    assert match_data["status"] == "processing"
+
+    # Run processing task synchronously to verify pipeline
+    dest_path = Path("backend/.local/media") / f"{match_id}.mp4"
+    process_uploaded_video_task(match_id, dest_path)
+
+    # Fetch updated match
+    updated = client.get(f"/api/matches/{match_id}").json()
+    assert updated["status"] == "ready"
+    assert updated["analysis_mode"] == "heuristic"
+
+    # Highlights and radar frames should exist without PermissionError
+    highlights = client.get(f"/api/matches/{match_id}/highlights").json()
+    assert isinstance(highlights, list)
+
+    radar = client.get(f"/api/matches/{match_id}/radar").json()
+    assert len(radar) > 0
+
+    # Cleanup match and verify secure file deletion (P2-6)
+    del_res = client.delete(f"/api/matches/{match_id}")
+    assert del_res.status_code == 200
+    assert not dest_path.exists()
+
+def test_upload_rejects_invalid_extensions(client, tmp_path: Path):
+    fake_file = tmp_path / "script.html"
+    fake_file.write_text("<h1>Not a video</h1>")
+
+    with open(fake_file, "rb") as f:
+        res = client.post(
+            "/api/matches/upload",
+            files={"file": ("script.html", f, "text/html")}
+        )
+    assert res.status_code == 415
+
+def test_upload_rejects_corrupt_video(client, tmp_path: Path):
+    bad_vid = tmp_path / "corrupt.mp4"
+    bad_vid.write_bytes(b"0000notarealmp4video")
+
+    with open(bad_vid, "rb") as f:
+        res = client.post(
+            "/api/matches/upload",
+            files={"file": ("corrupt.mp4", f, "video/mp4")}
+        )
+    assert res.status_code == 400

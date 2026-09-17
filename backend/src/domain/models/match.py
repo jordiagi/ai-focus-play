@@ -43,6 +43,7 @@ class Event(BaseModel):
     description: str
     pitch_x: float = 52.5  # standard 0..105 meters
     pitch_y: float = 34.0  # standard 0..68 meters
+    confidence: float = 0.8
 
 class RadarPlayer(BaseModel):
     id: int
@@ -56,6 +57,7 @@ class RadarBall(BaseModel):
     x: float
     y: float
     z: float = 0.0
+    detected: bool = True
 
 class RadarFrame(BaseModel):
     timestamp: float
@@ -65,7 +67,7 @@ class RadarFrame(BaseModel):
 class ShotRecord(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: float
-    period: int
+    period: int = 1
     team: str
     player_jersey: Optional[str] = None
     outcome: str  # "goal", "saved", "missed", "blocked"
@@ -77,17 +79,17 @@ class ShotRecord(BaseModel):
 class TeamStats(BaseModel):
     goals: int = 0
     shots: int = 0
-    attempts: int = 0
-    corners: int = 0
-    free_kicks: int = 0
-    throw_ins: int = 0
-    fouls: int = 0
-    penalties: int = 0
-    tackles: int = 0
-    passes_completed: int = 0
+    attempts: Optional[int] = None
+    corners: Optional[int] = None
+    free_kicks: Optional[int] = None
+    throw_ins: Optional[int] = None
+    fouls: Optional[int] = None
+    penalties: Optional[int] = None
+    tackles: Optional[int] = None
+    passes_completed: Optional[int] = None
     possession_percent: float = 50.0
     possession_minutes: float = 0.0
-    possession_won: int = 0
+    possession_won: Optional[int] = None
 
 class AnalyticsData(BaseModel):
     home_stats: TeamStats
@@ -102,7 +104,6 @@ class AnalyticsData(BaseModel):
         "away": {"defensive": 20.0, "middle": 52.0, "attacking": 28.0}
     }
     pass_strings: Dict[str, List[int]] = {
-        # Distribution of strings from 3 to 10+ passes
         "home": [18, 12, 8, 4, 3, 2, 1, 0],
         "away": [24, 16, 11, 7, 4, 3, 2, 1]
     }
@@ -139,4 +140,6 @@ class Match(BaseModel):
     views_count: int = 1
     lineup: List[PlayerRoster] = []
     journal_notes: str = ""
+    analysis_mode: str = "heuristic"         # "demo" | "heuristic" | "ml"
+    analysis_confidence: str = "low"         # "low" | "medium" | "high"
     created_at: float = Field(default_factory=time.time)

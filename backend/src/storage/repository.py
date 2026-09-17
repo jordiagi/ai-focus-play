@@ -2,12 +2,13 @@ import json
 import logging
 import time
 import math
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from pathlib import Path
 from sqlalchemy.orm import Session
+from backend.src.config import READ_ONLY, MEDIA_DIR
 from backend.src.storage.database import (
     engine, SessionLocal, init_db,
-    MatchDB, HighlightDB, EventDB, DrawingDB, LineupPlayerDB, RadarFrameDB, AnalyticsDB, ClubDB
+    MatchDB, HighlightDB, EventDB, DrawingDB, LineupPlayerDB, RadarFrameDB, AnalyticsDB, ClubDB, JobDB
 )
 from backend.src.domain.models.match import (
     Match, Highlight, Event, Drawing, RadarFrame, RadarPlayer, RadarBall,
@@ -57,6 +58,8 @@ class MatchRepository:
                 existing.thumbnail_url = match.thumbnail_url
                 existing.views_count = match.views_count
                 existing.journal_notes = match.journal_notes
+                existing.analysis_mode = match.analysis_mode
+                existing.analysis_confidence = match.analysis_confidence
             else:
                 db_m = MatchDB(
                     id=match.id,
@@ -76,19 +79,51 @@ class MatchRepository:
                     thumbnail_url=match.thumbnail_url,
                     views_count=match.views_count,
                     journal_notes=match.journal_notes,
+                    analysis_mode=match.analysis_mode,
+                    analysis_confidence=match.analysis_confidence,
                     created_at=match.created_at,
                 )
                 db.add(db_m)
             db.commit()
 
     def delete_match(self, match_id: str):
+        # 1. Collect and clean up media files securely (P2-6)
+        media_root = MEDIA_DIR.resolve()
         with self.get_db() as db:
             m = db.query(MatchDB).filter(MatchDB.id == match_id).first()
-            if m:
-                db.delete(m)
-                db.commit()
+            if not m:
+                return
 
-    # Highlights (Strictly Read-Only enforcement: No editing or writing new clips!)
+            files_to_remove: List[Path] = []
+            if m.video_url and m.video_url.startswith("/media/"):
+                files_to_remove.append(MEDIA_DIR / m.video_url.replace("/media/", ""))
+            if m.thumbnail_url and m.thumbnail_url.startswith("/media/"):
+                files_to_remove.append(MEDIA_DIR / m.thumbnail_url.replace("/media/", ""))
+            
+            highlights = db.query(HighlightDB).filter(HighlightDB.match_id == match_id).all()
+            for h in highlights:
+                if h.clip_url and h.clip_url.startswith("/media/"):
+                    files_to_remove.append(MEDIA_DIR / h.clip_url.replace("/media/", ""))
+                if h.thumbnail_url and h.thumbnail_url.startswith("/media/"):
+                    files_to_remove.append(MEDIA_DIR / h.thumbnail_url.replace("/media/", ""))
+
+            # Delete DB records (cascading deletes highlights, events, drawings, lineup, radar, analytics)
+            db.delete(m)
+            db.commit()
+
+        # Safely unlink files after DB transaction completes
+        for fpath in files_to_remove:
+            try:
+                # Guard unlink: must be within MEDIA_DIR and not demo fixtures
+                resolved = fpath.resolve()
+                if resolved.is_relative_to(media_root) and "demo_match" not in resolved.name and "demo_thumb" not in resolved.name:
+                    if resolved.exists():
+                        resolved.unlink(missing_ok=True)
+                        logger.info(f"Unlinked match media file: {resolved}")
+            except Exception as e:
+                logger.warning(f"Failed to unlink file {fpath}: {e}")
+
+    # Highlights
     def get_highlights(self, match_id: str) -> List[Highlight]:
         with self.get_db() as db:
             db_highlights = db.query(HighlightDB).filter(HighlightDB.match_id == match_id).order_by(HighlightDB.start_time.asc()).all()
@@ -114,12 +149,40 @@ class MatchRepository:
                 for h in db_highlights
             ]
 
-    def add_highlight(self, highlight: Highlight):
-        # Enforce read-only constraint as explicitly requested by user
-        raise PermissionError("Read-only mode: Creating or writing new clips is disabled.")
+    def add_highlight(self, highlight: Highlight, *, internal: bool = False):
+        if READ_ONLY and not internal:
+            raise PermissionError("Read-only mode: Creating or writing new clips is disabled.")
+        with self.get_db() as db:
+            db_h = HighlightDB(
+                id=highlight.id,
+                match_id=highlight.match_id,
+                title=highlight.title,
+                event_type=highlight.event_type,
+                start_time=highlight.start_time,
+                end_time=highlight.end_time,
+                period=highlight.period,
+                team=highlight.team,
+                player_jersey=highlight.player_jersey,
+                player_name=highlight.player_name,
+                thumbnail_url=highlight.thumbnail_url,
+                clip_url=highlight.clip_url,
+                is_ai_detected=highlight.is_ai_detected,
+                tags=json.dumps(highlight.tags),
+                comments_count=highlight.comments_count,
+                created_at=highlight.created_at
+            )
+            db.add(db_h)
+            db.commit()
+            return highlight
 
-    def delete_highlight(self, match_id: str, highlight_id: str):
-        raise PermissionError("Read-only mode: Deleting clips is disabled.")
+    def delete_highlight(self, match_id: str, highlight_id: str, *, internal: bool = False):
+        if READ_ONLY and not internal:
+            raise PermissionError("Read-only mode: Deleting clips is disabled.")
+        with self.get_db() as db:
+            h = db.query(HighlightDB).filter(HighlightDB.match_id == match_id, HighlightDB.id == highlight_id).first()
+            if h:
+                db.delete(h)
+                db.commit()
 
     # Events
     def get_events(self, match_id: str) -> List[Event]:
@@ -137,7 +200,8 @@ class MatchRepository:
                     player_name=e.player_name,
                     description=e.description,
                     pitch_x=e.pitch_x,
-                    pitch_y=e.pitch_y
+                    pitch_y=e.pitch_y,
+                    confidence=getattr(e, 'confidence', 0.8)
                 )
                 for e in db_events
             ]
@@ -146,7 +210,7 @@ class MatchRepository:
         with self.get_db() as db:
             db.query(EventDB).filter(EventDB.match_id == match_id).delete()
             for e in events:
-                db_e = EventDB(
+                db.add(EventDB(
                     id=e.id,
                     match_id=match_id,
                     timestamp=e.timestamp,
@@ -157,15 +221,15 @@ class MatchRepository:
                     player_name=e.player_name,
                     description=e.description,
                     pitch_x=e.pitch_x,
-                    pitch_y=e.pitch_y
-                )
-                db.add(db_e)
+                    pitch_y=e.pitch_y,
+                    confidence=e.confidence
+                ))
             db.commit()
 
     # Drawings
     def get_drawings(self, match_id: str) -> List[Drawing]:
         with self.get_db() as db:
-            db_drawings = db.query(DrawingDB).filter(DrawingDB.match_id == match_id).all()
+            db_drawings = db.query(DrawingDB).filter(DrawingDB.match_id == match_id).order_by(DrawingDB.timestamp.asc()).all()
             return [
                 Drawing(
                     id=d.id,
@@ -182,7 +246,7 @@ class MatchRepository:
 
     def add_drawing(self, drawing: Drawing):
         with self.get_db() as db:
-            db_d = DrawingDB(
+            db.add(DrawingDB(
                 id=drawing.id,
                 match_id=drawing.match_id,
                 timestamp=drawing.timestamp,
@@ -191,22 +255,30 @@ class MatchRepository:
                 coordinates=json.dumps(drawing.coordinates),
                 text_label=drawing.text_label,
                 created_at=drawing.created_at
-            )
-            db.add(db_d)
+            ))
             db.commit()
+            return drawing
 
     def delete_drawing(self, match_id: str, drawing_id: str):
         with self.get_db() as db:
-            db.query(DrawingDB).filter(DrawingDB.id == drawing_id).delete()
+            db.query(DrawingDB).filter(DrawingDB.match_id == match_id, DrawingDB.id == drawing_id).delete()
+            db.commit()
+
+    def clear_drawings(self, match_id: str, timestamp: Optional[float] = None):
+        with self.get_db() as db:
+            q = db.query(DrawingDB).filter(DrawingDB.match_id == match_id)
+            if timestamp is not None:
+                q = q.filter(DrawingDB.timestamp >= timestamp - 1.0, DrawingDB.timestamp <= timestamp + 1.0)
+            q.delete()
             db.commit()
 
     # Analytics
     def get_analytics(self, match_id: str) -> Optional[AnalyticsData]:
         with self.get_db() as db:
-            row = db.query(AnalyticsDB).filter(AnalyticsDB.match_id == match_id).first()
-            if row and row.data:
-                return AnalyticsData(**json.loads(row.data))
-            return None
+            db_an = db.query(AnalyticsDB).filter(AnalyticsDB.match_id == match_id).first()
+            if not db_an:
+                return None
+            return AnalyticsData(**json.loads(db_an.data))
 
     def set_analytics(self, match_id: str, data: AnalyticsData):
         with self.get_db() as db:
@@ -223,16 +295,162 @@ class MatchRepository:
             db_frames = db.query(RadarFrameDB).filter(RadarFrameDB.match_id == match_id).order_by(RadarFrameDB.timestamp.asc()).all()
             return [RadarFrame(**json.loads(f.data)) for f in db_frames]
 
+    def get_radar_frames_window(self, match_id: str, start_time: float, end_time: float) -> List[RadarFrame]:
+        with self.get_db() as db:
+            db_frames = (
+                db.query(RadarFrameDB)
+                .filter(
+                    RadarFrameDB.match_id == match_id,
+                    RadarFrameDB.timestamp >= start_time,
+                    RadarFrameDB.timestamp <= end_time
+                )
+                .order_by(RadarFrameDB.timestamp.asc())
+                .all()
+            )
+            return [RadarFrame(**json.loads(f.data)) for f in db_frames]
+
+    def get_radar_meta(self, match_id: str) -> Dict[str, Any]:
+        with self.get_db() as db:
+            count = db.query(RadarFrameDB).filter(RadarFrameDB.match_id == match_id).count()
+            first = db.query(RadarFrameDB).filter(RadarFrameDB.match_id == match_id).order_by(RadarFrameDB.timestamp.asc()).first()
+            last = db.query(RadarFrameDB).filter(RadarFrameDB.match_id == match_id).order_by(RadarFrameDB.timestamp.desc()).first()
+            duration = (last.timestamp - first.timestamp) if (first and last) else 0.0
+            sample_fps = (count / duration) if (duration > 0 and count > 1) else 2.0
+            return {
+                "match_id": match_id,
+                "frame_count": count,
+                "duration": round(duration, 2),
+                "sample_fps": round(sample_fps, 2)
+            }
+
     def save_radar_frames(self, match_id: str, frames: List[RadarFrame]):
         with self.get_db() as db:
             db.query(RadarFrameDB).filter(RadarFrameDB.match_id == match_id).delete()
-            for f in frames:
-                db.add(RadarFrameDB(
+            db_objects = [
+                RadarFrameDB(
                     match_id=match_id,
                     timestamp=f.timestamp,
                     data=json.dumps(f.model_dump())
-                ))
+                )
+                for f in frames
+            ]
+            db.add_all(db_objects)
             db.commit()
+
+    # Team Swap (P1-2)
+    def swap_teams(self, match_id: str):
+        with self.get_db() as db:
+            # 1. Swap events team
+            events = db.query(EventDB).filter(EventDB.match_id == match_id).all()
+            for e in events:
+                if e.team == "home":
+                    e.team = "away"
+                elif e.team == "away":
+                    e.team = "home"
+
+            # 2. Swap highlights team
+            highlights = db.query(HighlightDB).filter(HighlightDB.match_id == match_id).all()
+            for h in highlights:
+                if h.team == "home":
+                    h.team = "away"
+                elif h.team == "away":
+                    h.team = "home"
+
+            # 3. Swap radar frame player teams
+            radar_frames = db.query(RadarFrameDB).filter(RadarFrameDB.match_id == match_id).all()
+            for rf in radar_frames:
+                frame_dict = json.loads(rf.data)
+                for p in frame_dict.get("players", []):
+                    if p.get("team") == "home":
+                        p["team"] = "away"
+                    elif p.get("team") == "away":
+                        p["team"] = "home"
+                rf.data = json.dumps(frame_dict)
+
+            # 4. Swap analytics
+            an = db.query(AnalyticsDB).filter(AnalyticsDB.match_id == match_id).first()
+            if an:
+                adata = json.loads(an.data)
+                home_st = adata.get("home_stats")
+                away_st = adata.get("away_stats")
+                adata["home_stats"] = away_st
+                adata["away_stats"] = home_st
+
+                pass_locs = adata.get("pass_locations", {})
+                h_pass = pass_locs.get("home")
+                a_pass = pass_locs.get("away")
+                if h_pass and a_pass:
+                    adata["pass_locations"] = {"home": a_pass, "away": h_pass}
+
+                pos_locs = adata.get("possession_locations", {})
+                h_pos = pos_locs.get("home")
+                a_pos = pos_locs.get("away")
+                if h_pos and a_pos:
+                    adata["possession_locations"] = {"home": a_pos, "away": h_pos}
+
+                for s in adata.get("shot_map", []):
+                    if s.get("team") == "home":
+                        s["team"] = "away"
+                    elif s.get("team") == "away":
+                        s["team"] = "home"
+
+                an.data = json.dumps(adata)
+
+            # 5. Swap score on match
+            m = db.query(MatchDB).filter(MatchDB.id == match_id).first()
+            if m:
+                m.home_score, m.away_score = m.away_score, m.home_score
+
+            db.commit()
+
+    # Background Jobs (P2-4)
+    def create_job(self, match_id: str, kind: str = "cv_analysis") -> str:
+        import uuid
+        job_id = str(uuid.uuid4())
+        job = JobDB(
+            id=job_id,
+            match_id=match_id,
+            kind=kind,
+            status="running",
+            progress=0.0,
+            step="Initializing analysis...",
+            started_at=time.time()
+        )
+        with self.get_db() as db:
+            db.add(job)
+            db.commit()
+        return job_id
+
+    def update_job(self, job_id: str, status: Optional[str] = None, progress: Optional[float] = None, step: Optional[str] = None, error: Optional[str] = None):
+        with self.get_db() as db:
+            j = db.query(JobDB).filter(JobDB.id == job_id).first()
+            if j:
+                if status is not None:
+                    j.status = status
+                    if status in ("completed", "failed", "interrupted"):
+                        j.finished_at = time.time()
+                if progress is not None:
+                    j.progress = progress
+                if step is not None:
+                    j.step = step
+                if error is not None:
+                    j.error = error
+                db.commit()
+
+    def get_job_by_match(self, match_id: str) -> Optional[Dict[str, Any]]:
+        with self.get_db() as db:
+            j = db.query(JobDB).filter(JobDB.match_id == match_id).order_by(JobDB.started_at.desc()).first()
+            if not j:
+                return None
+            return {
+                "id": j.id,
+                "match_id": j.match_id,
+                "kind": j.kind,
+                "status": j.status,
+                "progress": j.progress,
+                "step": j.step,
+                "error": j.error
+            }
 
     def _match_db_to_domain(self, db: Session, m: MatchDB) -> Match:
         db_lineup = db.query(LineupPlayerDB).filter(LineupPlayerDB.match_id == m.id).all()
@@ -267,11 +485,18 @@ class MatchRepository:
             views_count=m.views_count,
             lineup=lineup,
             journal_notes=m.journal_notes,
+            analysis_mode=getattr(m, 'analysis_mode', 'heuristic') or 'heuristic',
+            analysis_confidence=getattr(m, 'analysis_confidence', 'low') or 'low',
             created_at=m.created_at
         )
 
     def _seed_if_empty(self):
         with self.get_db() as db:
+            demo_m = db.query(MatchDB).filter(MatchDB.id == "demo-arlington-skyline").first()
+            if demo_m and demo_m.analysis_mode != "demo":
+                demo_m.analysis_mode = "demo"
+                db.commit()
+
             if db.query(MatchDB).count() > 0:
                 return
 
@@ -293,6 +518,8 @@ class MatchRepository:
                 thumbnail_url="/media/demo_thumb.jpg",
                 views_count=95,
                 journal_notes="Great high-press organization in the first half. Focus on transitional recovery when attacking wings overextend.",
+                analysis_mode="demo",
+                analysis_confidence="low",
                 created_at=time.time()
             )
             db.add(match)
@@ -380,7 +607,8 @@ class MatchRepository:
                     player_jersey=j,
                     description=desc,
                     pitch_x=px,
-                    pitch_y=py
+                    pitch_y=py,
+                    confidence=0.9
                 ))
 
             # Analytics
@@ -424,6 +652,7 @@ class MatchRepository:
             home_bases = [(5.0, 34.0), (25.0, 12.0), (22.0, 26.0), (22.0, 42.0), (25.0, 56.0), (48.0, 22.0), (54.0, 34.0), (48.0, 46.0), (75.0, 16.0), (82.0, 34.0)]
             away_bases = [(100.0, 34.0), (80.0, 12.0), (82.0, 26.0), (82.0, 42.0), (80.0, 56.0), (56.0, 24.0), (52.0, 34.0), (56.0, 44.0), (32.0, 18.0), (26.0, 34.0)]
 
+            radar_objects = []
             for i in range(int(90.0 * fps)):
                 t = i / fps
                 ball_x = 52.5 + 35.0 * math.sin(t * 0.15) + 8.0 * math.sin(t * 0.6)
@@ -450,16 +679,20 @@ class MatchRepository:
                 frame_data = {
                     "timestamp": round(t, 2),
                     "players": players,
-                    "ball": {"x": round(ball_x, 1), "y": round(ball_y, 1), "z": 0.0}
+                    "ball": {"x": round(ball_x, 1), "y": round(ball_y, 1), "z": 0.0, "detected": True}
                 }
-                db.add(RadarFrameDB(
+                radar_objects.append(RadarFrameDB(
                     match_id=default_id,
                     timestamp=round(t, 2),
                     data=json.dumps(frame_data)
                 ))
 
+            db.add_all(radar_objects)
             db.commit()
             logger.info("Successfully seeded SQLite database with Arlington vs Skyline match data.")
 
 # Global match repository instance backed by SQLite
 match_repo = MatchRepository()
+
+def get_repository() -> MatchRepository:
+    return match_repo

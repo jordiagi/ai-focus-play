@@ -2,17 +2,26 @@ import os
 import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+
+from backend.src.config import CORS_ORIGINS, MEDIA_DIR, READ_ONLY
 from backend.src.api.routes.matches import router as matches_router
-from backend.src.services.pipeline.video_processor import VideoProcessor, MEDIA_DIR
+from backend.src.services.pipeline.video_processor import VideoProcessor
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 logger = logging.getLogger("veo_clone_app")
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,11 +45,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Enable CORS for local dev and frontend
+# Security headers middleware
+app.add_middleware(SecurityHeadersMiddleware)
+
+# Enable CORS for local dev and frontend without wildcard + credentials collision
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -50,6 +62,14 @@ app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
 
 # Include API routes
 app.include_router(matches_router)
+
+@app.get("/api/capabilities")
+def get_capabilities():
+    return {
+        "read_only": READ_ONLY,
+        "allow_uploads": True,
+        "supported_analysis_modes": ["demo", "heuristic", "ml"]
+    }
 
 @app.get("/")
 def root():

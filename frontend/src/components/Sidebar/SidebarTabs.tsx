@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Video, List, Shirt, BarChart2, LayoutGrid, FileText, 
-  Play, Download, ChevronRight, X, Eye
+  Play, ArrowLeftRight, X
 } from 'lucide-react';
 import { Match, Highlight, Event, AnalyticsData } from '../../types';
 
@@ -12,8 +12,10 @@ interface SidebarDrawerProps {
   highlights: Highlight[];
   events: Event[];
   analytics: AnalyticsData | null;
+  currentTime?: number;
   onSeek: (time: number) => void;
   onPlayAllHighlights: () => void;
+  onSwapTeams?: () => void;
   selectedJersey: string | null;
   onSelectJersey: (jersey: string | null) => void;
 }
@@ -25,8 +27,10 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
   highlights,
   events,
   analytics,
+  currentTime = 0,
   onSeek,
   onPlayAllHighlights,
+  onSwapTeams,
   selectedJersey,
   onSelectJersey,
 }) => {
@@ -47,6 +51,20 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
     if (highlightFilter === 'shots') return h.event_type === 'shot';
     return true;
   });
+
+  const renderStatValue = (val: number | string | null | undefined) => {
+    if (val === null || val === undefined) {
+      return (
+        <span 
+          className="text-gray-500 font-bold cursor-help"
+          title="Not measured — requires event detection"
+        >
+          —
+        </span>
+      );
+    }
+    return <span className="font-bold text-white">{val}</span>;
+  };
 
   return (
     <div className="w-80 md:w-96 bg-[#0a0c10] border-l border-[#1a1a1a] flex flex-col h-full text-gray-200 z-20 shadow-2xl select-none animate-in slide-in-from-right duration-150 shrink-0">
@@ -71,6 +89,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
         <button
           onClick={onClose}
           className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-[#181818] transition"
+          aria-label="Close drawer"
         >
           <X className="w-4 h-4" />
         </button>
@@ -83,7 +102,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
           <div className="p-3 space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-[#181818]">
               <span className="text-xs text-gray-400 font-medium">
-                {filteredHighlights.length} Highlights (Read-Only)
+                {filteredHighlights.length} Highlights
               </span>
               <button
                 onClick={onPlayAllHighlights}
@@ -111,144 +130,100 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
 
             {/* Clips List */}
             <div className="space-y-2.5">
-              {filteredHighlights.map(h => (
-                <div
-                  key={h.id}
-                  onClick={() => onSeek(h.start_time)}
-                  className="bg-[#12141a] hover:bg-[#181c25] border border-[#1e222d] hover:border-[#00E676]/60 rounded-xl p-2.5 cursor-pointer transition flex space-x-3 group"
-                >
-                  <div className="w-20 h-14 bg-[#0a0c10] rounded-lg border border-[#222] relative flex items-center justify-center shrink-0 overflow-hidden">
-                    <Play className="w-4 h-4 text-white fill-white group-hover:scale-125 transition" />
-                    <span className="absolute bottom-1 right-1 bg-black/80 text-[9px] font-mono px-1 rounded text-gray-300">
-                      {formatTime(h.start_time)}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-white truncate group-hover:text-[#00E676] transition">
-                        {h.title}
-                      </h4>
-                      <span className="text-[9px] bg-[#00E676]/20 text-[#00E676] px-1.5 py-0.5 rounded font-bold">
-                        AI
+              {filteredHighlights.map(h => {
+                const isActive = currentTime >= h.start_time && currentTime <= h.end_time;
+                return (
+                  <div
+                    key={h.id}
+                    onClick={() => onSeek(h.start_time)}
+                    className={`border rounded-xl p-2.5 cursor-pointer transition flex space-x-3 group ${
+                      isActive 
+                        ? 'bg-[#14261c] border-[#00E676] shadow-lg shadow-[#00E676]/10' 
+                        : 'bg-[#12141a] hover:bg-[#181c25] border-[#1e222d] hover:border-[#00E676]/60'
+                    }`}
+                  >
+                    <div className="w-20 h-14 bg-[#0a0c10] rounded-lg border border-[#222] relative flex items-center justify-center shrink-0 overflow-hidden">
+                      <Play className={`w-4 h-4 text-white fill-white transition ${isActive ? 'scale-125 text-[#00E676] fill-[#00E676]' : 'group-hover:scale-125'}`} />
+                      <span className="absolute bottom-1 right-1 bg-black/80 text-[9px] font-mono px-1 rounded text-gray-300">
+                        {formatTime(h.start_time)}
                       </span>
                     </div>
-                    <div className="text-[11px] text-gray-400 mt-0.5 flex items-center space-x-1.5">
-                      <span className="capitalize">{h.event_type}</span>
-                      {h.player_jersey && (
-                        <>
-                          <span>•</span>
-                          <span className="bg-[#1f2430] text-gray-200 px-1 rounded text-[10px]">#{h.player_jersey}</span>
-                        </>
-                      )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <h4 className={`text-xs font-bold truncate transition ${isActive ? 'text-[#00E676]' : 'text-white group-hover:text-[#00E676]'}`}>
+                          {h.title}
+                        </h4>
+                        <span className="text-[9px] bg-[#00E676]/20 text-[#00E676] px-1.5 py-0.5 rounded font-bold">
+                          AI
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-gray-400 mt-0.5 flex items-center space-x-1.5">
+                        <span className="capitalize">{h.event_type}</span>
+                        {h.player_jersey && (
+                          <>
+                            <span>•</span>
+                            <span className="bg-[#1f2430] text-gray-200 px-1 rounded text-[10px]">#{h.player_jersey}</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* ================= EVENTS TAB ================= */}
+        {/* ================= EVENTS LOG TAB ================= */}
         {activeTab === 'events' && (
-          <div>
-            {/* Period Switcher */}
-            <div className="p-3 border-b border-[#181818] flex items-center justify-between">
-              <span className="text-xs text-gray-400">{events.length} Granular Events</span>
-              <div className="flex items-center space-x-1 bg-[#141414] p-0.5 rounded-lg text-xs">
+          <div className="p-3 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-[#181818]">
+              <span className="text-xs text-gray-400 font-medium">Timeline Events</span>
+              <div className="flex space-x-1">
                 <button
                   onClick={() => setEventPeriod(1)}
-                  className={`px-2.5 py-0.5 rounded-md transition ${eventPeriod === 1 ? 'bg-[#00E676] text-black font-bold' : 'text-gray-400'}`}
+                  className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                    eventPeriod === 1 ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+                  }`}
                 >
-                  1st Period
+                  1st Half
                 </button>
                 <button
                   onClick={() => setEventPeriod(2)}
-                  className={`px-2.5 py-0.5 rounded-md transition ${eventPeriod === 2 ? 'bg-[#00E676] text-black font-bold' : 'text-gray-400'}`}
+                  className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                    eventPeriod === 2 ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+                  }`}
                 >
-                  2nd Period
+                  2nd Half
                 </button>
               </div>
             </div>
 
-            <div className="divide-y divide-[#181818]">
-              {events.filter(e => e.period === eventPeriod).map(e => (
-                <div
-                  key={e.id}
-                  onClick={() => onSeek(e.timestamp)}
-                  className="p-3 hover:bg-[#12141a] cursor-pointer transition flex items-center justify-between group"
-                >
-                  <div className="flex items-center space-x-3">
-                    <span className="text-xs font-mono text-gray-400 group-hover:text-[#00E676]">
-                      {formatTime(e.timestamp)}
-                    </span>
-                    <div>
-                      <div className="text-xs font-semibold text-white group-hover:text-[#00E676] transition">
-                        {e.description}
-                      </div>
-                      <div className="text-[10px] text-gray-500">
-                        {e.event_type} • {e.team.toUpperCase()}
-                      </div>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-white transition" />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ================= PLAYER MOMENTS TAB ================= */}
-        {activeTab === 'players' && (
-          <div className="p-3 space-y-3">
-            {/* Active player indicator */}
-            {selectedJersey ? (
-              <div className="bg-[#12141a] border border-[#22242c] p-3 rounded-xl flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-9 h-9 rounded-full bg-[#FFD700] text-black font-black text-sm flex items-center justify-center shadow">
-                    #{selectedJersey}
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-white">
-                      {match.lineup.find(p => p.jersey === selectedJersey)?.name || `Player #${selectedJersey}`}
-                    </div>
-                    <div className="text-[11px] text-gray-400">
-                      {match.lineup.find(p => p.jersey === selectedJersey)?.position || 'MID'} • 90 mins played
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => onSelectJersey(null)}
-                  className="text-xs text-gray-400 hover:text-white"
-                >
-                  Reset
-                </button>
-              </div>
-            ) : (
-              <div className="text-xs text-gray-400 bg-[#12141a] p-3 rounded-xl border border-[#1e222d]">
-                Click any jersey in the bottom bar to filter actions and highlight clips.
-              </div>
-            )}
-
-            {/* List of player moments */}
             <div className="space-y-2">
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                Moments Feed
-              </span>
-              {events.filter(e => !selectedJersey || e.player_jersey === selectedJersey).map(e => (
-                <div
-                  key={e.id}
-                  onClick={() => onSeek(e.timestamp)}
-                  className="p-2.5 bg-[#12141a] hover:bg-[#181c25] border border-[#1e222d] rounded-xl cursor-pointer transition flex items-center justify-between"
-                >
-                  <div className="flex items-center space-x-2">
-                    <span className="text-[10px] font-mono text-[#00E676] bg-[#00E676]/10 px-1.5 py-0.5 rounded font-bold">
-                      {formatTime(e.timestamp)}
-                    </span>
-                    <span className="text-xs text-white font-medium">{e.description}</span>
+              {events.filter(e => e.period === eventPeriod).map(e => {
+                const isActive = currentTime >= e.timestamp - 1.0 && currentTime <= e.timestamp + 3.0;
+                return (
+                  <div
+                    key={e.id}
+                    onClick={() => onSeek(e.timestamp)}
+                    className={`p-2.5 border rounded-xl cursor-pointer transition flex items-center justify-between ${
+                      isActive
+                        ? 'bg-[#14261c] border-[#00E676] shadow-lg shadow-[#00E676]/10'
+                        : 'bg-[#12141a] hover:bg-[#181c25] border-[#1e222d]'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold ${
+                        isActive ? 'bg-[#00E676] text-black' : 'text-[#00E676] bg-[#00E676]/10'
+                      }`}>
+                        {formatTime(e.timestamp)}
+                      </span>
+                      <span className="text-xs text-white font-medium">{e.description}</span>
+                    </div>
+                    <Play className={`w-3.5 h-3.5 ${isActive ? 'text-[#00E676]' : 'text-gray-400'}`} />
                   </div>
-                  <Play className="w-3.5 h-3.5 text-gray-400" />
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -256,6 +231,36 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
         {/* ================= ANALYTICS STUDIO TAB ================= */}
         {activeTab === 'analytics' && analytics && (
           <div className="p-3 space-y-4">
+            {/* Analysis Mode & Swap Teams Controls (P1-0 & P1-2) */}
+            <div className="flex items-center justify-between bg-[#12141a] border border-[#1e222d] rounded-xl p-2.5">
+              <div className="flex items-center space-x-2">
+                {match.analysis_mode === 'demo' ? (
+                  <span className="text-[10px] font-bold text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/40">
+                    Demo Dataset
+                  </span>
+                ) : match.analysis_mode === 'heuristic' ? (
+                  <span className="text-[10px] font-bold text-zinc-300 bg-zinc-800 px-2 py-0.5 rounded-full border border-zinc-700">
+                    Heuristic Analysis
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold text-[#00E676] bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                    AI Analysis
+                  </span>
+                )}
+              </div>
+
+              {onSwapTeams && (
+                <button
+                  onClick={onSwapTeams}
+                  className="flex items-center space-x-1.5 bg-[#1f2430] hover:bg-[#2c3444] border border-[#2a2a2a] text-xs text-white px-2.5 py-1 rounded-lg transition font-medium cursor-pointer"
+                  title="Correct team kit assignment"
+                >
+                  <ArrowLeftRight className="w-3.5 h-3.5 text-[#00E676]" />
+                  <span>Swap Teams</span>
+                </button>
+              )}
+            </div>
+
             {/* Match Comparison */}
             <div className="bg-[#12141a] border border-[#1e222d] rounded-xl p-3 space-y-2 text-xs">
               <div className="flex items-center justify-between font-bold text-gray-300 pb-1.5 border-b border-[#222]">
@@ -272,9 +277,9 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                 { label: 'Tackles', h: analytics.home_stats.tackles, a: analytics.away_stats.tackles },
               ].map((r, i) => (
                 <div key={i} className="flex items-center justify-between py-1 border-b border-[#1a1e28]">
-                  <span className="font-bold text-white w-8 text-left">{r.h}</span>
+                  <div className="w-12 text-left">{renderStatValue(r.h)}</div>
                   <span className="text-gray-400 text-[11px]">{r.label}</span>
-                  <span className="font-bold text-white w-8 text-right">{r.a}</span>
+                  <div className="w-12 text-right">{renderStatValue(r.a)}</div>
                 </div>
               ))}
             </div>
@@ -283,10 +288,14 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
             <div className="bg-[#12141a] border border-[#1e222d] rounded-xl p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-white uppercase tracking-wider">Shot Map</span>
-                <span className="text-[10px] text-[#00E676] font-bold">23% Conversion</span>
+                <span className="text-[10px] text-[#00E676] font-bold">
+                  {analytics.shot_map.length > 0
+                    ? `${Math.round((analytics.shot_map.filter(s => s.outcome === 'goal').length / analytics.shot_map.length) * 100)}% Conversion`
+                    : 'No shots recorded'}
+                </span>
               </div>
               <div className="relative w-full aspect-[105/68] bg-[#1a472a] rounded-lg border border-[#2d5f3e] overflow-hidden">
-                <svg viewBox="0 0 105 68" className="w-full h-full">
+                <svg viewBox="0 0 105 68" className="w-full h-full" role="img" aria-label="2D soccer shot map">
                   <rect x="1" y="1" width="103" height="66" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
                   <line x1="52.5" y1="1" x2="52.5" y2="67" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
                   <circle cx="52.5" cy="34" r="9.15" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
@@ -343,13 +352,57 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
           </div>
         )}
 
+        {/* ================= PLAYERS TAB ================= */}
+        {activeTab === 'players' && (
+          <div className="p-3 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-[#181818]">
+              <span className="text-xs text-gray-400 font-medium">Player Moments</span>
+              {selectedJersey && (
+                <button
+                  onClick={() => onSelectJersey(null)}
+                  className="text-xs text-[#00E676] hover:underline"
+                >
+                  Show All Players
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              {match.lineup.map(player => (
+                <div
+                  key={player.jersey}
+                  onClick={() => onSelectJersey(player.jersey)}
+                  className={`p-2.5 border rounded-xl cursor-pointer transition flex items-center justify-between ${
+                    selectedJersey === player.jersey
+                      ? 'bg-[#14261c] border-[#00E676]'
+                      : 'bg-[#12141a] hover:bg-[#181c25] border-[#1e222d]'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <span className="w-7 h-7 rounded-full bg-[#1f2430] text-[#00E676] font-bold text-xs flex items-center justify-center border border-[#2a2a2a]">
+                      {player.jersey}
+                    </span>
+                    <div>
+                      <div className="text-xs font-bold text-white">{player.name}</div>
+                      <div className="text-[10px] text-gray-400">{player.position} • {player.minutes_played} mins played</div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-[#00E676] font-semibold bg-[#00E676]/10 px-2 py-0.5 rounded">
+                    {highlights.filter(h => h.player_jersey === player.jersey).length} moments
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ================= LINEUP TAB ================= */}
         {activeTab === 'lineup' && (
           <div className="p-3 space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-[#181818]">
               <div>
-                <h4 className="text-xs font-bold text-white">Starting XI (4-3-3)</h4>
-                <p className="text-[10px] text-gray-400">Arlington SA U16B ECNL</p>
+                <h4 className="text-xs font-bold text-white">Starting XI</h4>
+                <p className="text-[10px] text-gray-400">{match.home_team}</p>
               </div>
               <span className="text-xs font-mono font-bold text-[#FFD700] bg-[#1a1e28] px-2 py-0.5 rounded">
                 4-3-3
