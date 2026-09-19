@@ -3,9 +3,10 @@ import logging
 import sqlite3
 from typing import List, Dict, Any, Optional
 from sqlalchemy import (
-    create_engine, Column, String, Integer, Float, Boolean, Text, ForeignKey, Index, event, text
+    create_engine, Column, String, Integer, Float, Boolean, Text, ForeignKey, Index, event, text, inspect
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+from sqlalchemy.schema import CreateIndex
 from backend.src.config import DB_PATH
 
 logger = logging.getLogger("database")
@@ -173,8 +174,28 @@ class JobDB(Base):
 
     match = relationship("MatchDB", back_populates="jobs")
 
+def _reconcile_indexes():
+    """Create any indexes the models declare that the live database is missing.
+
+    Indexes are created by create_all only when the table itself is new, so a
+    database that predates a new index never gets it. This is idempotent:
+    indexes that already exist are left untouched.
+    """
+    try:
+        insp = inspect(engine)
+        with engine.begin() as conn:
+            for table in Base.metadata.tables.values():
+                existing = insp.get_indexes(table.name)
+                for index in table.indexes:
+                    if any(e.get("name") == index.name for e in existing):
+                        continue
+                    conn.execute(CreateIndex(index))
+    except Exception as e:
+        logger.warning(f"Database index migration notice: {e}")
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+    _reconcile_indexes()
     # Check for missing columns on existing tables (lightweight migration)
     try:
         with engine.connect() as conn:
