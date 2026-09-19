@@ -20,6 +20,7 @@ logger = logging.getLogger("repository")
 class MatchRepository:
     def __init__(self):
         init_db()
+        self._recover_interrupted_jobs()
         self._seed_if_empty()
 
     def get_db(self) -> Session:
@@ -437,6 +438,27 @@ class MatchRepository:
                     j.error = error
                 db.commit()
 
+    def _recover_interrupted_jobs(self):
+        """Startup crash-recovery sweep: reclaim jobs a previous, now-dead process left
+        mid-flight. This repository is instantiated exactly once at process startup,
+        before this process itself ever creates a job -- so any row already sitting in
+        'running' or 'pending' at this point cannot belong to a job this process owns.
+        (There is no pid/heartbeat column on JobDB to tell apart a live sibling worker
+        from a crashed one; database.py is out of scope for this package. In a
+        single-process deployment, which is what this app currently is, that limitation
+        doesn't bite.)"""
+        with self.get_db() as db:
+            stale = db.query(JobDB).filter(JobDB.status.in_(("running", "pending"))).all()
+            for j in stale:
+                prev_status = j.status
+                j.status = "interrupted"
+                j.error = (f"Recovered at startup: job was still '{prev_status}' when "
+                           "the previous process ended without completing it.")
+                j.finished_at = time.time()
+            if stale:
+                db.commit()
+                logger.warning(f"Crash-recovery sweep: marked {len(stale)} orphaned job(s) as interrupted.")
+
     def get_job_by_match(self, match_id: str) -> Optional[Dict[str, Any]]:
         with self.get_db() as db:
             j = db.query(JobDB).filter(JobDB.match_id == match_id).order_by(JobDB.started_at.desc()).first()
@@ -611,40 +633,6 @@ class MatchRepository:
                     confidence=0.9
                 ))
 
-            # Analytics
-            analytics_payload = {
-                "home_stats": {
-                    "goals": 3, "shots": 10, "attempts": 13, "corners": 6, "free_kicks": 7, "throw_ins": 24,
-                    "fouls": 8, "penalties": 0, "tackles": 41, "passes_completed": 203,
-                    "possession_percent": 38.0, "possession_minutes": 14.0, "possession_won": 150
-                },
-                "away_stats": {
-                    "goals": 3, "shots": 9, "attempts": 12, "corners": 3, "free_kicks": 8, "throw_ins": 14,
-                    "fouls": 7, "penalties": 0, "tackles": 43, "passes_completed": 283,
-                    "possession_percent": 62.0, "possession_minutes": 22.0, "possession_won": 151
-                },
-                "shot_map": [
-                    {"id": "s1", "timestamp": 18.0, "period": 1, "team": "home", "player_jersey": "10", "outcome": "goal", "x": 98.0, "y": 32.0, "is_inside_box": True, "label": "Goal at 18s (Inside Box)"},
-                    {"id": "s2", "timestamp": 36.0, "period": 1, "team": "home", "player_jersey": "14", "outcome": "saved", "x": 88.0, "y": 35.0, "is_inside_box": True, "label": "Shot Saved at 36s"},
-                    {"id": "s3", "timestamp": 42.0, "period": 1, "team": "home", "player_jersey": "8", "outcome": "missed", "x": 80.0, "y": 24.0, "is_inside_box": False, "label": "Shot Wide at 42s"},
-                    {"id": "s4", "timestamp": 53.0, "period": 1, "team": "away", "player_jersey": "9", "outcome": "goal", "x": 12.0, "y": 33.0, "is_inside_box": True, "label": "Skyline Goal at 53s"},
-                    {"id": "s5", "timestamp": 72.0, "period": 2, "team": "home", "player_jersey": "18", "outcome": "blocked", "x": 92.0, "y": 38.0, "is_inside_box": True, "label": "Shot Blocked at 72s"}
-                ],
-                "pass_locations": {
-                    "home": {"defensive": 7.0, "middle": 78.0, "attacking": 15.0},
-                    "away": {"defensive": 12.0, "middle": 68.0, "attacking": 20.0}
-                },
-                "possession_locations": {
-                    "home": {"defensive": 33.0, "middle": 44.0, "attacking": 23.0},
-                    "away": {"defensive": 22.0, "middle": 54.0, "attacking": 24.0}
-                },
-                "pass_strings": {
-                    "home": [18, 12, 8, 4, 3, 2, 1, 0],
-                    "away": [24, 16, 11, 7, 4, 3, 2, 1]
-                }
-            }
-            db.add(AnalyticsDB(match_id=default_id, data=json.dumps(analytics_payload)))
-
             # 2D Radar frames
             fps = 2.0
             home_jerseys = ["GK", "2", "4", "6", "8", "10", "12", "14", "18", "28"]
@@ -653,6 +641,10 @@ class MatchRepository:
             away_bases = [(100.0, 34.0), (80.0, 12.0), (82.0, 26.0), (82.0, 42.0), (80.0, 56.0), (56.0, 24.0), (52.0, 34.0), (56.0, 44.0), (32.0, 18.0), (26.0, 34.0)]
 
             radar_objects = []
+            home_positions: List[tuple] = []
+            away_positions: List[tuple] = []
+            home_possession_frames = 0
+            away_possession_frames = 0
             for i in range(int(90.0 * fps)):
                 t = i / fps
                 ball_x = 52.5 + 35.0 * math.sin(t * 0.15) + 8.0 * math.sin(t * 0.6)
@@ -676,6 +668,14 @@ class MatchRepository:
                         "y": round(max(2.0, min(66.0, by + shift_y)), 1),
                         "speed": round(2.0 + 1.2 * math.cos(t + p_idx), 1)
                     })
+                for p in players:
+                    (home_positions if p["team"] == "home" else away_positions).append((p["x"], p["y"]))
+                closest = min(players, key=lambda p: math.hypot(p["x"] - ball_x, p["y"] - ball_y))
+                if math.hypot(closest["x"] - ball_x, closest["y"] - ball_y) < 3.0:
+                    if closest["team"] == "home":
+                        home_possession_frames += 1
+                    else:
+                        away_possession_frames += 1
                 frame_data = {
                     "timestamp": round(t, 2),
                     "players": players,
@@ -686,6 +686,83 @@ class MatchRepository:
                     timestamp=round(t, 2),
                     data=json.dumps(frame_data)
                 ))
+
+            # Analytics -- every number below is derived from the events and radar
+            # frames seeded above. Anything the real CV pipeline never computes either
+            # (see cv_engine.py's _calculate_analytics: attempts/corners/free_kicks/
+            # throw_ins/fouls/penalties/tackles/passes_completed/possession_won are
+            # always None there too) is left None here, so the seed can't claim a
+            # capability the app doesn't have. Nothing here is a plausible-looking
+            # invented literal.
+            goal_counts = {"home": 0, "away": 0}
+            shot_or_goal_counts = {"home": 0, "away": 0}
+            goal_events = []
+            for eid, t, per, etype, tm, j, desc, px, py in events_seed:
+                if etype.lower() in ("shot", "goal"):
+                    shot_or_goal_counts[tm] = shot_or_goal_counts.get(tm, 0) + 1
+                if etype.lower() == "goal":
+                    goal_counts[tm] = goal_counts.get(tm, 0) + 1
+                    goal_events.append((eid, t, per, tm, j, px, py))
+
+            # Only events with an unambiguous outcome (a goal) go into the shot map --
+            # the one non-goal "shot" event has no real save/miss/block detection
+            # behind it, and inventing that outcome is the exact defect this fixes.
+            shot_map = []
+            for eid, t, per, tm, j, px, py in goal_events:
+                is_inside = (px > 88.5 or px < 16.5) and (13.84 < py < 54.16)
+                shot_map.append({
+                    "id": f"{default_id}_{eid}", "timestamp": t, "period": per, "team": tm,
+                    "player_jersey": j, "outcome": "goal", "x": px, "y": py,
+                    "is_inside_box": is_inside, "label": f"Goal at {int(t)}s"
+                })
+
+            def _thirds(positions):
+                total = len(positions) or 1
+                return (
+                    round(sum(1 for x, _ in positions if x < 35.0) / total * 100.0, 1),
+                    round(sum(1 for x, _ in positions if 35.0 <= x <= 70.0) / total * 100.0, 1),
+                    round(sum(1 for x, _ in positions if x > 70.0) / total * 100.0, 1),
+                )
+            h_def, h_mid, h_att = _thirds(home_positions)
+            # Away attacks the opposite end of the pitch, so its thirds are mirrored.
+            a_att, a_mid, a_def = _thirds(away_positions)
+
+            total_poss_frames = home_possession_frames + away_possession_frames
+            if total_poss_frames > 0:
+                h_poss_pct = round((home_possession_frames / total_poss_frames) * 100.0, 1)
+                a_poss_pct = round(100.0 - h_poss_pct, 1)
+            else:
+                h_poss_pct = a_poss_pct = 50.0
+            h_poss_min = round(home_possession_frames / (fps * 60.0), 1)
+            a_poss_min = round(away_possession_frames / (fps * 60.0), 1)
+
+            analytics_payload = {
+                "home_stats": {
+                    "goals": goal_counts["home"], "shots": shot_or_goal_counts["home"],
+                    "attempts": None, "corners": None, "free_kicks": None, "throw_ins": None,
+                    "fouls": None, "penalties": None, "tackles": None, "passes_completed": None,
+                    "possession_percent": h_poss_pct, "possession_minutes": h_poss_min, "possession_won": None
+                },
+                "away_stats": {
+                    "goals": goal_counts["away"], "shots": shot_or_goal_counts["away"],
+                    "attempts": None, "corners": None, "free_kicks": None, "throw_ins": None,
+                    "fouls": None, "penalties": None, "tackles": None, "passes_completed": None,
+                    "possession_percent": a_poss_pct, "possession_minutes": a_poss_min, "possession_won": None
+                },
+                "shot_map": shot_map,
+                "pass_locations": {
+                    "home": {"defensive": h_def, "middle": h_mid, "attacking": h_att},
+                    "away": {"defensive": a_def, "middle": a_mid, "attacking": a_att}
+                },
+                "possession_locations": {
+                    "home": {"defensive": h_def, "middle": h_mid, "attacking": h_att},
+                    "away": {"defensive": a_def, "middle": a_mid, "attacking": a_att}
+                },
+                # No pass-sequencing detection exists; an empty series is honest, a
+                # decreasing-looking literal series is not.
+                "pass_strings": {"home": [], "away": []}
+            }
+            db.add(AnalyticsDB(match_id=default_id, data=json.dumps(analytics_payload)))
 
             db.add_all(radar_objects)
             db.commit()
