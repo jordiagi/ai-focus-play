@@ -20,7 +20,11 @@ export const Header: React.FC<HeaderProps> = ({
   const [copiedShare, setCopiedShare] = useState(false);
 
   const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
+    const shareUrl = new URL(window.location.href);
+    if (currentMatch) {
+      shareUrl.searchParams.set('match', currentMatch.id);
+    }
+    navigator.clipboard.writeText(shareUrl.toString());
     setCopiedShare(true);
     setTimeout(() => setCopiedShare(false), 2000);
   };

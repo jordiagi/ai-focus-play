@@ -10,6 +10,20 @@ import { SidebarDrawer } from './components/Sidebar/SidebarTabs';
 import { UploadModal } from './components/UploadModal';
 import { Loader2, AlertTriangle, X } from 'lucide-react';
 
+const DRAWER_ROUTES: Record<Exclude<ActiveDrawerType, null>, string> = {
+  analytics: '#/analysis/',
+  players: '#/player-moments/',
+  highlights: '#/highlights/',
+  events: '#/events/',
+  lineup: '#/lineup/',
+  summary: '#/summary/',
+};
+
+const getDrawerFromHash = (): ActiveDrawerType => {
+  const route = Object.entries(DRAWER_ROUTES).find(([, hash]) => hash === window.location.hash);
+  return route ? route[0] as Exclude<ActiveDrawerType, null> : null;
+};
+
 export const App: React.FC = () => {
   const playerRef = useRef<PlayerHandle>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -26,7 +40,7 @@ export const App: React.FC = () => {
   const [selectedJersey, setSelectedJersey] = useState<string | null>(null);
   const [isBurgerOpen, setIsBurgerOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [activeDrawer, setActiveDrawer] = useState<ActiveDrawerType>(null);
+  const [activeDrawer, setActiveDrawer] = useState<ActiveDrawerType>(getDrawerFromHash);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -70,7 +84,8 @@ export const App: React.FC = () => {
       const data = await api.listMatches();
       setMatches(data);
       if (data.length > 0) {
-        selectMatch(data[0]);
+        const sharedMatchId = new URLSearchParams(window.location.search).get('match');
+        selectMatch(data.find(match => match.id === sharedMatchId) ?? data[0]);
       }
     } catch (err) {
       console.error('Failed to load matches:', err);
@@ -85,6 +100,18 @@ export const App: React.FC = () => {
   useEffect(() => {
     loadMatches();
   }, [loadMatches]);
+
+  useEffect(() => {
+    const syncDrawerWithHash = () => setActiveDrawer(getDrawerFromHash());
+    window.addEventListener('hashchange', syncDrawerWithHash);
+    return () => window.removeEventListener('hashchange', syncDrawerWithHash);
+  }, []);
+
+  const navigateToDrawer = useCallback((drawer: ActiveDrawerType) => {
+    const nextHash = drawer ? DRAWER_ROUTES[drawer] : '';
+    if (window.location.hash === nextHash) return;
+    window.location.hash = nextHash;
+  }, []);
 
   // Poll for progress when match is processing
   useEffect(() => {
@@ -126,7 +153,7 @@ export const App: React.FC = () => {
   const handleSelectJersey = (jersey: string | null) => {
     setSelectedJersey(jersey);
     if (jersey) {
-      setActiveDrawer('players');
+      navigateToDrawer('players');
     }
   };
 
@@ -171,8 +198,8 @@ export const App: React.FC = () => {
         matches={matches}
         currentMatch={currentMatch}
         onSelectMatch={selectMatch}
-        onOpenAnalytics={() => setActiveDrawer('analytics')}
-        onOpenPlayerMoments={() => setActiveDrawer('players')}
+        onOpenAnalytics={() => navigateToDrawer('analytics')}
+        onOpenPlayerMoments={() => navigateToDrawer('players')}
       />
 
       {/* 3. Upload Modal */}
@@ -241,7 +268,7 @@ export const App: React.FC = () => {
           {/* Expandable Right Drawer */}
           <SidebarDrawer
             activeTab={activeDrawer}
-            onClose={() => setActiveDrawer(null)}
+            onClose={() => navigateToDrawer(null)}
             match={currentMatch}
             highlights={highlights}
             events={events}
@@ -263,7 +290,7 @@ export const App: React.FC = () => {
           {/* Right Vertical Tool Rail */}
           <RightToolbar
             activeDrawer={activeDrawer}
-            onToggleDrawer={setActiveDrawer}
+            onToggleDrawer={navigateToDrawer}
           />
         </div>
       ) : null}
