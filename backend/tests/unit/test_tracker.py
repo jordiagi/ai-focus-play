@@ -25,7 +25,11 @@ def test_tracker_identity_stability_and_crossing():
         ]
 
         players = tracker.update(detections, dt=dt)
-        # Find player closest to x1 and x2
+        if i == 0:
+            assert players == []
+            continue
+
+        # Find player closest to x1 and x2 after two-hit confirmation.
         p1 = min(players, key=lambda p: abs(p.x - x1) + abs(p.y - y1))
         p2 = min(players, key=lambda p: abs(p.x - x2) + abs(p.y - y2))
 
@@ -33,8 +37,8 @@ def test_tracker_identity_stability_and_crossing():
         p2_ids.append(p2.id)
 
     # Initial IDs after confirmation
-    confirmed_p1_id = p1_ids[1]
-    confirmed_p2_id = p2_ids[1]
+    confirmed_p1_id = p1_ids[0]
+    confirmed_p2_id = p2_ids[0]
 
     assert confirmed_p1_id != confirmed_p2_id
     # Assert ID maintained after crossing at frame 5 (x1 ~ x2 ~ 35)
