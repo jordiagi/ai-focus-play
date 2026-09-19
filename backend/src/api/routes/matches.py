@@ -1,5 +1,6 @@
 import os
-import io
+import json
+import tempfile
 import zipfile
 import asyncio
 import logging
@@ -97,11 +98,23 @@ def process_uploaded_video_task(match_id: str, video_path: Path, job_id: Optiona
 
         match_repo.set_analytics(match_id, analytics)
 
+        # Honest label: report the mode the engine actually ran (P-WP2-4). If the
+        # engine tells us nothing -- e.g. it silently fell back to synthetic
+        # tracking, or hasn't been wired up to report meta yet -- we must not
+        # claim more than "demo"/"low".
+        run_meta = getattr(cv_engine, "last_run_meta", {}) or {}
+        mode = run_meta.get("mode", "demo")
+        confidence = run_meta.get("confidence", "low")
+        if mode not in ("demo", "heuristic", "ml"):
+            mode = "demo"
+        if confidence not in ("low", "medium", "high"):
+            confidence = "low"
+
         match.status = "ready"
         match.processing_step = "Analysis Complete"
         match.processing_progress = 100.0
-        match.analysis_mode = "heuristic"
-        match.analysis_confidence = "medium"
+        match.analysis_mode = mode
+        match.analysis_confidence = confidence
         match_repo.save_match(match)
 
         if job_id:
@@ -196,7 +209,7 @@ async def upload_match(
         status="processing",
         processing_step="Queued for analysis...",
         processing_progress=5.0,
-        analysis_mode="heuristic",
+        analysis_mode="demo",
         analysis_confidence="low",
         views_count=1
     )
@@ -296,9 +309,26 @@ def delete_highlight(match_id: str, highlight_id: str):
     match_repo.delete_highlight(match_id, highlight_id, internal=False)
     return {"status": "success"}
 
+def _iter_zip_file_and_cleanup(path: Path, chunk_size: int = 1024 * 1024):
+    """Streams a file from disk in bounded-size chunks, deleting it once fully sent
+    (or on error) so no request ever holds the whole archive in memory."""
+    try:
+        with open(path, "rb") as f:
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                yield chunk
+    finally:
+        path.unlink(missing_ok=True)
+
+
 @router.get("/{match_id}/highlights/export")
 def export_highlights_zip(match_id: str):
-    """Streams a zip archive of all cut highlight clips (P3-1)."""
+    """Streams a zip archive of all cut highlight clips (P3-1). Builds the archive
+    on disk (never in an in-memory buffer) and never substitutes a different file
+    for a highlight whose clip is missing -- it is omitted and recorded in a
+    manifest entry instead (defect 6)."""
     match = match_repo.get_match(match_id)
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
@@ -306,22 +336,40 @@ def export_highlights_zip(match_id: str):
     if not highlights:
         raise HTTPException(status_code=404, detail="No highlights to export")
 
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        for idx, h in enumerate(highlights, 1):
-            if h.clip_url and h.clip_url.startswith("/media/"):
-                clip_file = MEDIA_DIR / h.clip_url.replace("/media/", "")
-                if clip_file.exists():
+    tmp = tempfile.NamedTemporaryFile(prefix="highlights_export_", suffix=".zip", delete=False)
+    tmp_path = Path(tmp.name)
+    tmp.close()
+
+    try:
+        manifest = []
+        with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for idx, h in enumerate(highlights, 1):
+                clip_file = None
+                if h.clip_url and h.clip_url.startswith("/media/"):
+                    candidate = MEDIA_DIR / h.clip_url.replace("/media/", "")
+                    if candidate.exists():
+                        clip_file = candidate
+
+                if clip_file is not None:
                     safe_name = f"{idx:02d}_{h.event_type}_{h.title.replace(' ', '_')}.mp4"
                     zip_file.write(clip_file, arcname=safe_name)
-                elif (MEDIA_DIR / "demo_match.mp4").exists():
-                    safe_name = f"{idx:02d}_{h.event_type}_{h.title.replace(' ', '_')}.mp4"
-                    zip_file.write(MEDIA_DIR / "demo_match.mp4", arcname=safe_name)
+                    manifest.append({
+                        "highlight_id": h.id, "title": h.title, "file": safe_name,
+                        "status": "included"
+                    })
+                else:
+                    manifest.append({
+                        "highlight_id": h.id, "title": h.title, "file": None,
+                        "status": "omitted", "reason": "clip not available"
+                    })
+            zip_file.writestr("manifest.json", json.dumps(manifest, indent=2))
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
-    zip_buffer.seek(0)
     filename = f"{match.home_team}_vs_{match.away_team}_highlights.zip".replace(" ", "_")
     return StreamingResponse(
-        zip_buffer,
+        _iter_zip_file_and_cleanup(tmp_path),
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
