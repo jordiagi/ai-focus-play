@@ -150,6 +150,10 @@ class SoccerCVEngine:
         # The engine is a module singleton, so all learned match state must be
         # cleared before opening a new video (including an unreadable one).
         self.team_centers = None
+        # Mode contract (consumed by the upload route): the engine, not the caller,
+        # declares what kind of run this was. Default to the weakest claim so that
+        # any early return is reported honestly.
+        self.last_run_meta = {"mode": "demo", "confidence": "low"}
         logger.info(f"Starting computer vision analysis on {video_path}...")
         cap = cv2.VideoCapture(str(video_path))
         if not cap.isOpened():
@@ -313,6 +317,7 @@ class SoccerCVEngine:
         events, highlights = self._extract_match_events(radar_frames, duration, home_team, away_team)
         analytics = self._calculate_analytics(radar_frames, events, home_positions, away_positions, sample_fps=2.0)
 
+        self.last_run_meta = {"mode": "heuristic", "confidence": "medium"}
         return radar_frames, events, highlights, analytics
 
     def _extract_match_events(
@@ -553,6 +558,8 @@ class SoccerCVEngine:
         self, duration: float, home_team: str, away_team: str
     ) -> Tuple[List[RadarFrame], List[Event], List[Highlight], AnalyticsData]:
         """Generates fallback synthetic tracking when video cannot be decoded."""
+        # Synthetic sine-wave players. This is demo data and must say so.
+        self.last_run_meta = {"mode": "demo", "confidence": "low"}
         fps = 2.0
         num_frames = max(10, int(duration * fps))
         frames: List[RadarFrame] = []
