@@ -1,9 +1,20 @@
 import React, { useState } from 'react';
 import { 
   Video, List, Shirt, BarChart2, LayoutGrid, FileText, 
-  Play, ArrowLeftRight, X
+  Play, ArrowLeftRight, ArrowUpRight, X
 } from 'lucide-react';
-import { Match, Highlight, Event, AnalyticsData } from '../../types';
+import { Match, Highlight, Event, AnalyticsData, EventTypeLabel } from '../../types';
+
+const EVENT_TYPES: EventTypeLabel[] = [
+  'Kickoff', 'Goal', 'Shot on goal', 'Shot', 'Save', 'Corner', 'Foul', 'Free kick',
+  'Goal kick', 'Throw-in', 'Tackle', 'Interception', 'Dribble',
+  'Loose ball recovery', 'Pass',
+];
+
+const DEFAULT_DETECTED_TYPES = new Set<EventTypeLabel>(['Kickoff', 'Goal', 'Shot']);
+
+const normalizeEventType = (eventType: string) =>
+  eventType.toLowerCase().replace(/[-_\s]/g, '');
 
 interface SidebarDrawerProps {
   activeTab: 'analytics' | 'players' | 'highlights' | 'events' | 'lineup' | 'summary' | null;
@@ -52,7 +63,19 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
     return true;
   });
 
-  const renderStatValue = (val: number | string | null | undefined) => {
+  const eventCount = (label: EventTypeLabel) => events.filter(
+    event => normalizeEventType(event.event_type) === normalizeEventType(label),
+  ).length;
+
+  const capabilityFor = (label: EventTypeLabel) => {
+    const capability = match.event_capabilities?.[label];
+    if (capability) return capability;
+    return DEFAULT_DETECTED_TYPES.has(label)
+      ? { status: 'detected' as const, count: eventCount(label) }
+      : { status: 'not_attempted' as const };
+  };
+
+  const renderStatValue = (val: number | string | null | undefined, suffix = '') => {
     if (val === null || val === undefined) {
       return (
         <span 
@@ -63,7 +86,14 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
         </span>
       );
     }
-    return <span className="font-bold text-white">{val}</span>;
+    return <span className="font-bold text-white">{val}{suffix}</span>;
+  };
+
+  const seekToFirstEventOfType = (eventTypes: string[]) => {
+    const event = events.find(candidate => eventTypes.some(
+      eventType => normalizeEventType(candidate.event_type) === normalizeEventType(eventType),
+    ));
+    if (event) onSeek(event.timestamp);
   };
 
   return (
@@ -177,6 +207,32 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
         {/* ================= EVENTS LOG TAB ================= */}
         {activeTab === 'events' && (
           <div className="p-3 space-y-3">
+            <div className="bg-[#12141a] border border-[#1e222d] rounded-xl p-3 space-y-2">
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Event detection</span>
+              <div className="space-y-1" aria-label="Event detection capabilities">
+                {EVENT_TYPES.map(label => {
+                  const capability = capabilityFor(label);
+                  const detectedCount = eventCount(label);
+                  return (
+                    <div key={label} className="flex items-center justify-between gap-3 py-1 border-b border-[#1a1e28] last:border-0">
+                      <span className="text-xs text-gray-200">{label}</span>
+                      {capability.status === 'detected' ? (
+                        <span className="text-[10px] text-[#00E676] font-semibold whitespace-nowrap">
+                          detected ({detectedCount})
+                        </span>
+                      ) : capability.status === 'unavailable' ? (
+                        <span className="text-[10px] text-gray-500 text-right" title={capability.reason || undefined}>
+                          unavailable{capability.reason ? `: ${capability.reason}` : ''}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-gray-500 whitespace-nowrap">not attempted</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="flex items-center justify-between pb-2 border-b border-[#181818]">
               <span className="text-xs text-gray-400 font-medium">Timeline Events</span>
               <div className="flex space-x-1">
@@ -205,11 +261,10 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                 return (
                   <div
                     key={e.id}
-                    onClick={() => onSeek(e.timestamp)}
-                    className={`p-2.5 border rounded-xl cursor-pointer transition flex items-center justify-between ${
+                    className={`p-2.5 border rounded-xl transition flex items-center justify-between ${
                       isActive
                         ? 'bg-[#14261c] border-[#00E676] shadow-lg shadow-[#00E676]/10'
-                        : 'bg-[#12141a] hover:bg-[#181c25] border-[#1e222d]'
+                        : 'bg-[#12141a] border-[#1e222d]'
                     }`}
                   >
                     <div className="flex items-center space-x-2">
@@ -220,7 +275,15 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                       </span>
                       <span className="text-xs text-white font-medium">{e.description}</span>
                     </div>
-                    <Play className={`w-3.5 h-3.5 ${isActive ? 'text-[#00E676]' : 'text-gray-400'}`} />
+                    <button
+                      type="button"
+                      onClick={() => onSeek(e.timestamp)}
+                      className="p-1.5 rounded-md text-gray-400 hover:text-[#00E676] hover:bg-[#20252f] transition"
+                      aria-label={`Seek to ${e.description} at ${formatTime(e.timestamp)}`}
+                      title="Seek to event"
+                    >
+                      <ArrowUpRight className={`w-3.5 h-3.5 ${isActive ? 'text-[#00E676]' : ''}`} />
+                    </button>
                   </div>
                 );
               })}
@@ -269,18 +332,31 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                 <span className="text-[#2979FF] truncate max-w-[100px]">{match.away_team}</span>
               </div>
               {[
-                { label: 'Goals', h: analytics.home_stats.goals, a: analytics.away_stats.goals },
-                { label: 'Shots', h: analytics.home_stats.shots, a: analytics.away_stats.shots },
-                { label: 'Possession %', h: `${analytics.home_stats.possession_percent}%`, a: `${analytics.away_stats.possession_percent}%` },
-                { label: 'Passes Completed', h: analytics.home_stats.passes_completed, a: analytics.away_stats.passes_completed },
-                { label: 'Corners', h: analytics.home_stats.corners, a: analytics.away_stats.corners },
-                { label: 'Tackles', h: analytics.home_stats.tackles, a: analytics.away_stats.tackles },
+                { label: 'Goal', h: analytics.home_stats.goals, a: analytics.away_stats.goals, eventTypes: ['Goal'] },
+                { label: 'Shot', h: analytics.home_stats.shots, a: analytics.away_stats.shots, eventTypes: ['Shot'] },
+                { label: 'Total attempts', h: analytics.home_stats.attempts, a: analytics.away_stats.attempts, eventTypes: ['Shot', 'Shot on goal'] },
+                { label: 'Corner', h: analytics.home_stats.corners, a: analytics.away_stats.corners, eventTypes: ['Corner'] },
+                { label: 'Foul', h: analytics.home_stats.fouls, a: analytics.away_stats.fouls, eventTypes: ['Foul'] },
+                { label: 'Free kick', h: analytics.home_stats.free_kicks, a: analytics.away_stats.free_kicks, eventTypes: ['Free kick'] },
+                { label: 'Passes completed', h: analytics.home_stats.passes_completed, a: analytics.away_stats.passes_completed, derived: true, eventTypes: [] },
+                { label: 'Penalty', h: analytics.home_stats.penalties, a: analytics.away_stats.penalties, eventTypes: ['Penalty'] },
+                { label: 'Possession %', h: analytics.home_stats.possession_percent, a: analytics.away_stats.possession_percent, derived: true, suffix: '%', eventTypes: [] },
+                { label: 'Possession minutes', h: analytics.home_stats.possession_minutes, a: analytics.away_stats.possession_minutes, eventTypes: [] },
+                { label: 'Possession won', h: analytics.home_stats.possession_won, a: analytics.away_stats.possession_won, derived: true, eventTypes: [] },
+                { label: 'Tackle', h: analytics.home_stats.tackles, a: analytics.away_stats.tackles, eventTypes: ['Tackle'] },
+                { label: 'Throw-in', h: analytics.home_stats.throw_ins, a: analytics.away_stats.throw_ins, eventTypes: ['Throw-in'] },
               ].map((r, i) => (
-                <div key={i} className="flex items-center justify-between py-1 border-b border-[#1a1e28]">
-                  <div className="w-12 text-left">{renderStatValue(r.h)}</div>
+                <button
+                  type="button"
+                  key={i}
+                  disabled={r.derived}
+                  onClick={() => seekToFirstEventOfType(r.eventTypes)}
+                  className="w-full flex items-center justify-between py-1 border-b border-[#1a1e28] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <div className="w-12 text-left">{renderStatValue(r.h, r.suffix)}</div>
                   <span className="text-gray-400 text-[11px]">{r.label}</span>
-                  <div className="w-12 text-right">{renderStatValue(r.a)}</div>
-                </div>
+                  <div className="w-12 text-right">{renderStatValue(r.a, r.suffix)}</div>
+                </button>
               ))}
             </div>
 

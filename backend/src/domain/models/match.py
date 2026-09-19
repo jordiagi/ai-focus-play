@@ -1,5 +1,5 @@
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any, Literal
+from pydantic import BaseModel, Field, model_validator
 import uuid
 import time
 
@@ -121,6 +121,35 @@ class PlayerRoster(BaseModel):
     is_player_of_match: bool = False
     minutes_played: int = 90
 
+class EventCapability(BaseModel):
+    status: Literal["detected", "not_attempted", "unavailable"]
+    count: Optional[int] = Field(default=None, ge=0)
+    reason: Optional[str] = None
+
+    @model_validator(mode="after")
+    def require_status_details(self):
+        if self.status == "detected" and self.count is None:
+            raise ValueError("detected event capabilities require a count")
+        if self.status == "unavailable" and not self.reason:
+            raise ValueError("unavailable event capabilities require a reason")
+        return self
+
+def default_event_capabilities() -> Dict[str, EventCapability]:
+    """Capabilities of the current heuristic pipeline for legacy/new matches."""
+    labels = [
+        "Kickoff", "Goal", "Shot on goal", "Shot", "Save", "Corner", "Foul",
+        "Free kick", "Goal kick", "Throw-in", "Tackle", "Interception", "Dribble",
+        "Loose ball recovery", "Pass",
+    ]
+    detected = {"Kickoff", "Goal", "Shot"}
+    return {
+        label: EventCapability(
+            status="detected" if label in detected else "not_attempted",
+            count=0 if label in detected else None,
+        )
+        for label in labels
+    }
+
 class Match(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     title: str
@@ -142,4 +171,5 @@ class Match(BaseModel):
     journal_notes: str = ""
     analysis_mode: str = "heuristic"         # "demo" | "heuristic" | "ml"
     analysis_confidence: str = "low"         # "low" | "medium" | "high"
+    event_capabilities: Dict[str, EventCapability] = Field(default_factory=default_event_capabilities)
     created_at: float = Field(default_factory=time.time)
