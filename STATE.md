@@ -4,7 +4,7 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-19 · by Claude Opus 5 · **Track 2 (UI parity) COMPLETE**; Track 1 blocked on gpu-box auth
+**Last updated:** 2026-09-19 · by Claude Opus 5 · Track 2 complete; G1 gate PASSED on both halves; starting G2
 
 ---
 
@@ -70,7 +70,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | ID | Work | Status | Notes |
 | :-- | :-- | :-- | :-- |
 | G0 | Rebuild `benchmarks/veo_reference.json`; fix `scripts/config.env` time base; decode Veo's x/z convention | ☑ | `c38d62f`. Coords decoded: x=length, z=width, absolute. Centre spot lands 2 m off ideal — Veo's own bias, recorded not corrected |
-| G1 | **Measure ball-detection rate** — the go/no-go gate | ◐ | **Period-1 slice (1200-1800s, 3000 frames) measured.** full-frame **0.677 FAILS** the >=0.70 gate; **tiled 0.833 PASSES**, median gap 0.2s. Period-2 slice running. See caveat below |
+| G1 | **Measure ball-detection rate** — the go/no-go gate | ☑ | **Both halves measured.** tiled 0.833 / 0.828 — **gate passes**. full-frame 0.677 / 0.716 — fails one half. Caveat below: this is candidate presence, not correctness |
 | G2 | Mosaic homography + confidence gate, validated on the 71 restart coords | ☐ | **Now mandatory** — user confirmed Veo will not export the panorama |
 | G3 | Tier A detectors (7 types) | ☐ | |
 | G4 | Possession HMM → Tier B (4 types + Pass count) | ☐ | Conditional on G1 gate |
@@ -93,10 +93,15 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 Slice 1200-1800 s of period 1, 3000 frames at 5 fps, `yolo11x`, conf 0.05, COCO
 `sports ball`, tiles 3x2 with 0.15 overlap above y=0.22h.
 
-| config | detection rate | median gap | max gap | throughput |
-| :-- | --: | --: | --: | --: |
-| full frame @1280 | **0.677 — fails** | 0.2 s | 5.8 s | 48.8 fps |
-| **tiled @640** | **0.833 — passes** | 0.2 s | 2.6 s | 35.6 fps |
+Two slices, one per half, 3000 frames each, so the figure is not a cherry-picked window.
+
+| config | period 1 (1200-1800s) | period 2 (4200-4800s) |
+| :-- | --: | --: |
+| full frame @1280 | **0.677 — fails** (median gap 0.2s) | 0.716 (median gap **0.4s**, at the limit) |
+| **tiled @640** | **0.833 — passes** (0.2s) | **0.828 — passes** (0.2s) |
+
+Tiled is stable at ~0.83 across both halves. Full-frame straddles the gate and fails on
+one of them, so it is not merely worse, it is unreliable.
 
 The full-frame configuration is effectively what the Colab notebook used, and it
 **misses the gate**. Tiling is what clears it — which is the single most useful thing
