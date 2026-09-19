@@ -8,6 +8,7 @@ from backend.src.api.guards import ReadOnlyAPIMiddleware
 from backend.src.app.main import app
 from backend.src.storage.repository import match_repo
 from backend.src.api.routes.matches import process_uploaded_video_task
+from backend.src.config import MEDIA_DIR
 
 @pytest.fixture
 def client():
@@ -73,7 +74,9 @@ def test_upload_pipeline_success(client, tmp_path: Path):
     assert match_data["status"] == "processing"
 
     # Run processing task synchronously to verify pipeline
-    dest_path = Path("backend/.local/media") / f"{match_id}.mp4"
+    # Resolve against the CONFIGURED media dir, not a hardcoded relative path:
+    # the suite now runs against an isolated directory (backend/tests/conftest.py).
+    dest_path = MEDIA_DIR / f"{match_id}.mp4"
     process_uploaded_video_task(match_id, dest_path)
 
     # Fetch updated match

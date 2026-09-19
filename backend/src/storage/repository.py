@@ -17,6 +17,29 @@ from backend.src.domain.models.match import (
 
 logger = logging.getLogger("repository")
 
+
+def _seed_clip(highlight_id: str, start: float, end: float):
+    """Cut a real demo clip for a seeded highlight; None if it cannot be produced.
+
+    Returning None is the honest answer: the export then records the clip as
+    unavailable instead of substituting the full match video.
+    """
+    from backend.src.config import MEDIA_DIR
+    from backend.src.services.pipeline.video_processor import VideoProcessor
+
+    source = MEDIA_DIR / "demo_match.mp4"
+    if not source.exists():
+        return None
+    out = MEDIA_DIR / f"clip_{highlight_id}.mp4"
+    if out.exists() and out.stat().st_size > 0:
+        return f"/media/{out.name}"
+    try:
+        if VideoProcessor.cut_clip(source, out, start, end) and out.exists():
+            return f"/media/{out.name}"
+    except Exception as exc:  # pragma: no cover - depends on ffmpeg at runtime
+        logger.warning(f"Could not cut seed clip for {highlight_id}: {exc}")
+    return None
+
 class MatchRepository:
     def __init__(self):
         init_db()
@@ -600,7 +623,11 @@ class MatchRepository:
                     player_jersey=j,
                     player_name=pname,
                     thumbnail_url="/media/demo_thumb.jpg",
-                    clip_url="/media/demo_match.mp4",
+                    # Cut a real clip for this window. Pointing every highlight at the
+                    # full match video made the export hand the user five copies of the
+                    # whole game named as highlights. If the cut fails we say so with
+                    # None rather than substituting something that is not a highlight.
+                    clip_url=_seed_clip(hid, st, et),
                     is_ai_detected=True,
                     tags=json.dumps(tags),
                     comments_count=0,

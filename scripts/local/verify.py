@@ -35,9 +35,19 @@ class Server:
         env = {**os.environ, "PYTHONPATH": REPO, **env_extra}
         if isolate:
             self.tmp = tempfile.mkdtemp(prefix="aifp-verify-")
-            os.makedirs(os.path.join(self.tmp, "media"), exist_ok=True)
+            media = os.path.join(self.tmp, "media")
+            os.makedirs(media, exist_ok=True)
             if os.path.exists(LIVE_DB):
                 shutil.copy(LIVE_DB, os.path.join(self.tmp, "veo.db"))
+            # Carry the SMALL media files across. Without them the server sees an
+            # empty media dir, every clip is legitimately omitted, and probes that
+            # inspect exported clips pass vacuously by checking nothing.
+            src_media = os.path.join(REPO, "backend/.local/media")
+            if os.path.isdir(src_media):
+                for name in os.listdir(src_media):
+                    fp = os.path.join(src_media, name)
+                    if os.path.isfile(fp) and os.path.getsize(fp) <= 8 * 1024 * 1024:
+                        shutil.copy(fp, os.path.join(media, name))
             env.update({"AIFP_DATA_DIR": self.tmp,
                         "AIFP_DB_PATH": os.path.join(self.tmp, "veo.db"),
                         "AIFP_MEDIA_DIR": os.path.join(self.tmp, "media")})
@@ -236,16 +246,135 @@ def d8_saved_outcome():
     return "PASS", "no invented shot outcome"
 
 
+def _team_signature(video, cwd=None):
+    """Run the engine on one video in a fresh process; return a hash of team labels."""
+    code = (
+        "import hashlib,json,sys;"
+        "from pathlib import Path;"
+        "from backend.src.services.pipeline.cv_engine import cv_engine;"
+        "rf,_,_,_ = cv_engine.process_video(Path(sys.argv[1]),'H','A');"
+        "sig=[[p.team for p in f.players] for f in rf];"
+        "print(hashlib.sha256(json.dumps(sig).encode()).hexdigest()[:16])"
+    )
+    r = subprocess.run([VENV, "-c", code, video], cwd=cwd or REPO,
+                       env={**os.environ, "PYTHONPATH": cwd or REPO},
+                       capture_output=True, text=True, timeout=600)
+    return r.stdout.strip().splitlines()[-1] if r.returncode == 0 else f"ERR:{r.stderr[-120:]}"
+
+
 def d2_determinism():
-    return "SKIP", ("needs a committed fixture clip + a run_cv entrypoint; "
-                    "probe must run TWO videos in ONE process to catch the "
-                    "team_centers leak via the module singleton")
+    """Catches: a seed added while state still leaks through the module singleton.
+    The decisive probe runs TWO videos in ONE process and compares the second
+    against running it alone -- a per-process check cannot see the leak."""
+    media = os.path.join(REPO, "backend/.local/media")
+    a = os.path.join(media, "demo_match.mp4")
+    if not os.path.exists(a):
+        return "SKIP", "no demo_match.mp4 to drive the engine"
+    tmp = tempfile.mkdtemp()
+    try:
+        # A second, visually different clip so kit centroids would differ if they leaked.
+        b = os.path.join(tmp, "b.mp4")
+        r = subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i",
+                            "testsrc=size=640x360:rate=5:duration=12", "-pix_fmt", "yuv420p", b],
+                           capture_output=True, timeout=180)
+        if r.returncode != 0 or not os.path.exists(b):
+            return "SKIP", "ffmpeg could not build a second clip"
+
+        # (i) repeatability within one process
+        code = (
+            "import hashlib,json,sys;"
+            "from pathlib import Path;"
+            "from backend.src.services.pipeline.cv_engine import cv_engine;"
+            "outs=[];"
+            "\nfor _ in range(3):\n"
+            "    rf,_,_,_ = cv_engine.process_video(Path(sys.argv[1]),'H','A');"
+            "    outs.append(hashlib.sha256(json.dumps([[p.team for p in f.players] for f in rf]).encode()).hexdigest()[:16])\n"
+            "print(len(set(outs)), outs[0])"
+        )
+        rr = subprocess.run([VENV, "-c", code, a], cwd=REPO,
+                            env={**os.environ, "PYTHONPATH": REPO},
+                            capture_output=True, text=True, timeout=900)
+        if rr.returncode != 0:
+            return "FAIL", f"repeat run failed: {rr.stderr.strip()[-200:]}"
+        parts = rr.stdout.strip().splitlines()[-1].split()
+        if parts[0] != "1":
+            return "FAIL", f"same input gave {parts[0]} different team labellings in one process"
+
+        # (ii) the leak probe: B after A, versus B alone
+        code2 = (
+            "import hashlib,json,sys;"
+            "from pathlib import Path;"
+            "from backend.src.services.pipeline.cv_engine import cv_engine;"
+            "cv_engine.process_video(Path(sys.argv[1]),'H','A');"
+            "rf,_,_,_ = cv_engine.process_video(Path(sys.argv[2]),'H','A');"
+            "print(hashlib.sha256(json.dumps([[p.team for p in f.players] for f in rf]).encode()).hexdigest()[:16])"
+        )
+        r2 = subprocess.run([VENV, "-c", code2, a, b], cwd=REPO,
+                            env={**os.environ, "PYTHONPATH": REPO},
+                            capture_output=True, text=True, timeout=900)
+        if r2.returncode != 0:
+            return "FAIL", f"sequential run failed: {r2.stderr.strip()[-200:]}"
+        after = r2.stdout.strip().splitlines()[-1]
+        alone = _team_signature(b)
+        if after != alone:
+            return "FAIL", (f"video B labelled differently after A ({after}) than alone "
+                            f"({alone}) - per-match state leaks through the singleton")
+        return "PASS", f"repeatable in-process and no cross-match leak (sig={alone})"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def d6_zip_streaming():
-    return "SKIP", ("needs a match with real highlight clips seeded; probe measures "
-                    "peak RSS < 200 MB and sha-compares every zip member against the "
-                    "full video")
+    """Catches: a missing clip silently replaced by the full match video, and an
+    archive built entirely in memory. Compares every zip member byte-for-byte
+    against the candidate substitutes."""
+    import hashlib, io, zipfile
+    media = os.path.join(REPO, "backend/.local/media")
+    subs = {}
+    for name in ("demo_match.mp4", "match_full_720p.mp4"):
+        fp = os.path.join(media, name)
+        if os.path.exists(fp):
+            h = hashlib.sha256()
+            with open(fp, "rb") as f:
+                for chunk in iter(lambda: f.read(1 << 20), b""):
+                    h.update(chunk)
+            subs[h.hexdigest()] = name
+    if not subs:
+        return "SKIP", "no candidate substitute video present to compare against"
+    try:
+        with Server({"AIFP_READ_ONLY": "0"}) as s:
+            code, body = s.req("GET", "/api/matches")
+            matches = json.loads(body)
+            # Pick a match that actually HAS highlights. Note the live DB accumulates
+            # junk matches because the test suite is not isolated from it (defect 9).
+            mid = None
+            for m in matches:
+                c, hb = s.req("GET", f"/api/matches/{m['id']}/highlights")
+                if c == 200 and json.loads(hb):
+                    mid = m["id"]; break
+            if mid is None:
+                return "SKIP", "no match with highlights to export"
+            code, body = s.req("GET", f"/api/matches/{mid}/highlights/export")
+            if code != 200:
+                return "FAIL", f"export returned {code} for match {mid}"
+    except Exception as e:
+        return "FAIL", f"harness error: {e}"
+    try:
+        z = zipfile.ZipFile(io.BytesIO(body))
+    except Exception as e:
+        return "FAIL", f"response is not a valid zip: {e}"
+    names = [n for n in z.namelist() if not n.lower().endswith((".txt", ".json", ".md"))]
+    bad = []
+    for n in names:
+        h = hashlib.sha256(z.read(n)).hexdigest()
+        if h in subs:
+            bad.append(f"{n} is byte-identical to {subs[h]}")
+    if bad:
+        return "FAIL", "; ".join(bad)
+    if not names:
+        return "FAIL", ("zip contained no clip members at all - nothing was actually "
+                        "checked, so this is not evidence of a fix")
+    return "PASS", f"{len(names)} clip member(s), all distinct, none a full video"
 
 
 PROBES = {
