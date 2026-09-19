@@ -4,7 +4,7 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-19 · by Claude Opus 5 · G0 + cross-cutting done, UI track dispatched
+**Last updated:** 2026-09-19 · by Claude Opus 5 · G0+G5+cross-cutting done; U1-U3 dispatched and running
 
 ---
 
@@ -74,7 +74,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | G2 | Mosaic homography + confidence gate, validated on the 71 restart coords | ☐ | |
 | G3 | Tier A detectors (7 types) | ☐ | |
 | G4 | Possession HMM → Tier B (4 types + Pass count) | ☐ | Conditional on G1 gate |
-| G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☐ | `scripts/local/score-benchmark.py` does not exist yet |
+| G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
 | G6 | Ingest artifacts → `analysis_mode="ml"` | ☐ | `ml_ingest.py` does not exist yet |
 | G7 | Jersey recognition | ☐ | Last. Unlocks 0 event types. Honest ceiling ~25-40% vs Veo's 75% |
 
@@ -82,10 +82,9 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 
 | ID | Work | Status | Notes |
 | :-- | :-- | :-- | :-- |
-| U1 | Hash router; wire the 6 existing drawers to Veo's routes; real deep-link Share | ☐ | Panels already exist, map 1:1 — this is wiring |
-| U2 | Jersey numbers only, never invented names; jersey bar from `lineup` not 17 literals | ☐ | Veo shows `Player ` blank when unresolved |
-| U3 | Events drawer shows **all 15 types with per-type status** (`detected (n)` / `not attempted` / `gate not met`) | ☐ | Needs a capability manifest in the data model |
-| U4 | Singular stat labels; derived rows as disabled buttons; per-event seek/clip actions | ☐ | |
+| U1 | Hash router; wire the 6 existing drawers to Veo's routes; real deep-link Share | ◐ | dispatched → **codex**, worktree `wt-u1` |
+| U2 | Jersey numbers only, never invented names; jersey bar from `lineup` not 17 literals | ◐ | dispatched → **agy/gemini-3.8-flash-high**, worktree `wt-u2` |
+| U3 | Events drawer 15-type status surface **+ singular stat labels + per-row actions** (U4 merged in: both owned `SidebarTabs.tsx`) | ◐ | dispatched → **claude/sonnet**, worktree `wt-u3` |
 
 ---
 
