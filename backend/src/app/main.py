@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.src.config import CORS_ORIGINS, MEDIA_DIR, READ_ONLY
+from backend.src.api.guards import ReadOnlyAPIMiddleware
 from backend.src.api.routes.matches import router as matches_router
 from backend.src.services.pipeline.video_processor import VideoProcessor
 
@@ -45,6 +46,9 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Reject all client-side API mutations when configured as read-only.
+app.add_middleware(ReadOnlyAPIMiddleware, enabled=READ_ONLY)
+
 # Security headers middleware
 app.add_middleware(SecurityHeadersMiddleware)
 
@@ -67,7 +71,7 @@ app.include_router(matches_router)
 def get_capabilities():
     return {
         "read_only": READ_ONLY,
-        "allow_uploads": True,
+        "allow_uploads": not READ_ONLY,
         "supported_analysis_modes": ["demo", "heuristic", "ml"]
     }
 
