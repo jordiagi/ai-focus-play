@@ -536,16 +536,52 @@ class MatchRepository:
         )
 
     def _seed_if_empty(self):
+        default_id = "demo-arlington-skyline"
+        highlights_seed = [
+            ("h1", "Goal - #10", "goal", 12.0, 24.0, 1, "home", "10", None, ["Goal", "Inside Box", "Top Corner"]),
+            ("h2", "Shot on Goal - #14", "shot", 32.0, 42.0, 1, "home", "14", None, ["Shot on Target", "Save"]),
+            ("h3", "Goal - Skyline Counterattack", "goal", 48.0, 60.0, 1, "away", "9", None, ["Goal", "Counter"]),
+            ("h4", "Corner Kick & Header Chance", "corner", 66.0, 78.0, 2, "home", "8", None, ["Corner", "Header"]),
+            ("h5", "Crucial Tackle & Transition - #4", "foul", 80.0, 88.0, 2, "home", "4", None, ["Tackle", "Recovery"]),
+        ]
+        events_seed = [
+            ("e1", 2.0, 1, "Kickoff", "home", "10", "Kickoff by #10", 52.5, 34.0),
+            ("e2", 7.5, 1, "Pass", "home", "4", "Pass from #4 to #8", 40.0, 28.0),
+            ("e3", 18.0, 1, "Goal", "home", "10", "Goal scored by #10 into top right", 98.0, 32.0),
+            ("e4", 25.0, 1, "Tackle", "home", "6", "Clean challenge won on left wing", 45.0, 12.0),
+            ("e5", 36.0, 1, "Shot", "home", "14", "Shot on goal saved by goalkeeper", 88.0, 35.0),
+            ("e6", 53.0, 1, "Goal", "away", "9", "Goal by Skyline off fast break", 12.0, 33.0),
+            ("e7", 71.0, 2, "Corner Kick", "home", "8", "In-swinging corner delivered into 6-yard box", 105.0, 2.0),
+            ("e8", 84.0, 2, "Interception", "home", "28", "Turnover forced in central midfield", 55.0, 36.0),
+        ]
         with self.get_db() as db:
-            demo_m = db.query(MatchDB).filter(MatchDB.id == "demo-arlington-skyline").first()
-            if demo_m and demo_m.analysis_mode != "demo":
-                demo_m.analysis_mode = "demo"
+            demo_m = db.query(MatchDB).filter(MatchDB.id == default_id).first()
+            if demo_m:
+                if demo_m.analysis_mode != "demo":
+                    demo_m.analysis_mode = "demo"
+                # Strip invented names from existing demo match rows in case DB was pre-seeded
+                for p in db.query(LineupPlayerDB).filter(LineupPlayerDB.match_id == default_id).all():
+                    expected = f"Player {p.jersey}" if p.jersey else "Player "
+                    if p.name != expected:
+                        p.name = expected
+                for h in db.query(HighlightDB).filter(HighlightDB.match_id == default_id).all():
+                    h.player_name = None
+                for e in db.query(EventDB).filter(EventDB.match_id == default_id).all():
+                    e.player_name = None
+                # Restore clean highlight titles and event descriptions from seed
+                for hid, clean_title, _, _, _, _, _, _, _, _ in highlights_seed:
+                    hl = db.query(HighlightDB).filter(HighlightDB.id == f"{default_id}_{hid}").first()
+                    if hl:
+                        hl.title = clean_title
+                for eid, _, _, _, _, _, clean_desc, _, _ in events_seed:
+                    ev = db.query(EventDB).filter(EventDB.id == f"{default_id}_{eid}").first()
+                    if ev:
+                        ev.description = clean_desc
                 db.commit()
 
             if db.query(MatchDB).count() > 0:
                 return
 
-            default_id = "demo-arlington-skyline"
             match = MatchDB(
                 id=default_id,
                 title="Arlington SA U16B ECNL (26-27) vs. Skyline U16B ECNL",
@@ -571,25 +607,26 @@ class MatchRepository:
 
             # Roster
             roster_data = [
-                ("GK", "Alex Reed", "GK", True, False, False),
-                ("1", "Lucas Gomez", "GK", False, False, False),
-                ("2", "Mateo Silva", "DEF", True, False, False),
-                ("4", "Julian Vance", "DEF", True, True, False),
-                ("6", "Noah Bennett", "DEF", True, False, False),
-                ("8", "Carlos Mendez", "MID", True, False, False),
-                ("10", "Eric Jordi", "MID", True, False, True),
-                ("12", "Samir Patel", "MID", True, False, False),
-                ("13", "Liam O'Connor", "FWD", False, False, False),
-                ("14", "Diego Morales", "FWD", True, False, False),
-                ("16", "David Kim", "MID", False, False, False),
-                ("18", "Ethan Ross", "FWD", True, False, False),
-                ("20", "Marcus Cole", "DEF", False, False, False),
-                ("24", "Oliver Brown", "MID", False, False, False),
-                ("28", "Zachary Hall", "MID", True, False, False),
-                ("32", "Gabriel Santos", "FWD", False, False, False),
-                ("44", "Jack Wilson", "DEF", False, False, False),
+                ("GK", "GK", True, False, False),
+                ("1", "GK", False, False, False),
+                ("2", "DEF", True, False, False),
+                ("4", "DEF", True, True, False),
+                ("6", "DEF", True, False, False),
+                ("8", "MID", True, False, False),
+                ("10", "MID", True, False, True),
+                ("12", "MID", True, False, False),
+                ("13", "FWD", False, False, False),
+                ("14", "FWD", True, False, False),
+                ("16", "MID", False, False, False),
+                ("18", "FWD", True, False, False),
+                ("20", "DEF", False, False, False),
+                ("24", "MID", False, False, False),
+                ("28", "MID", True, False, False),
+                ("32", "FWD", False, False, False),
+                ("44", "DEF", False, False, False),
             ]
-            for j, name, pos, starter, capt, motm in roster_data:
+            for j, pos, starter, capt, motm in roster_data:
+                name = f"Player {j}" if j else "Player "
                 db.add(LineupPlayerDB(
                     id=f"{default_id}_{j}",
                     match_id=default_id,
@@ -603,13 +640,6 @@ class MatchRepository:
                 ))
 
             # Highlights
-            highlights_seed = [
-                ("h1", "Goal - 10 Eric Jordi", "goal", 12.0, 24.0, 1, "home", "10", "Eric Jordi", ["Goal", "Inside Box", "Top Corner"]),
-                ("h2", "Shot on Goal - 14 Diego Morales", "shot", 32.0, 42.0, 1, "home", "14", "Diego Morales", ["Shot on Target", "Save"]),
-                ("h3", "Goal - Skyline Counterattack", "goal", 48.0, 60.0, 1, "away", "9", "Skyline Striker", ["Goal", "Counter"]),
-                ("h4", "Corner Kick & Header Chance", "corner", 66.0, 78.0, 2, "home", "8", "Carlos Mendez", ["Corner", "Header"]),
-                ("h5", "Crucial Tackle & Transition - 4 Julian Vance", "foul", 80.0, 88.0, 2, "home", "4", "Julian Vance", ["Tackle", "Recovery"]),
-            ]
             for hid, title, etype, st, et, per, tm, j, pname, tags in highlights_seed:
                 db.add(HighlightDB(
                     id=f"{default_id}_{hid}",
@@ -636,9 +666,9 @@ class MatchRepository:
 
             # Chronological events
             events_seed = [
-                ("e1", 2.0, 1, "Kickoff", "home", "10", "Kickoff by #10 Eric Jordi", 52.5, 34.0),
-                ("e2", 7.5, 1, "Pass", "home", "4", "Pass from Julian Vance to Carlos Mendez", 40.0, 28.0),
-                ("e3", 18.0, 1, "Goal", "home", "10", "Goal scored by #10 Eric Jordi into top right", 98.0, 32.0),
+                ("e1", 2.0, 1, "Kickoff", "home", "10", "Kickoff by #10", 52.5, 34.0),
+                ("e2", 7.5, 1, "Pass", "home", "4", "Pass from #4 to #8", 40.0, 28.0),
+                ("e3", 18.0, 1, "Goal", "home", "10", "Goal scored by #10 into top right", 98.0, 32.0),
                 ("e4", 25.0, 1, "Tackle", "home", "6", "Clean challenge won on left wing", 45.0, 12.0),
                 ("e5", 36.0, 1, "Shot", "home", "14", "Shot on goal saved by goalkeeper", 88.0, 35.0),
                 ("e6", 53.0, 1, "Goal", "away", "9", "Goal by Skyline off fast break", 12.0, 33.0),

@@ -171,3 +171,43 @@ def test_stale_running_job_is_reclaimed_on_startup():
         assert error
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def test_seed_contains_no_invented_player_names():
+    """Assert no fabricated player names exist in the seeded roster, highlights,
+    or events (U-2 contract: jersey numbers only, never invented names)."""
+    tmpdir = tempfile.mkdtemp()
+    try:
+        db_path = _seed_fresh_db(tmpdir)
+        conn = sqlite3.connect(db_path)
+
+        # Roster: verify no fabricated names and conforms to Veo convention (Player <jersey> or Player )
+        roster = conn.execute("SELECT jersey, name, position FROM lineup_players").fetchall()
+        assert len(roster) > 0, "No players seeded in roster"
+        forbidden = ["Eric Jordi", "Diego Morales", "Julian Vance", "Alex Reed", "Carlos Mendez"]
+        for jersey, name, pos in roster:
+            for bad in forbidden:
+                assert bad.lower() not in name.lower(), f"Invented name '{bad}' in roster: {name}"
+            expected = f"Player {jersey}" if jersey else "Player "
+            assert name == expected, f"Roster name must be '{expected}', got '{name}'"
+
+        # Highlights: verify player_name is not populated with fiction and title has no invented names
+        highlights = conn.execute("SELECT title, player_name FROM highlights").fetchall()
+        assert len(highlights) > 0, "No highlights seeded"
+        for title, pname in highlights:
+            assert pname is None or pname == "", f"Highlight player_name must not be populated with fiction: {pname}"
+            for bad in forbidden:
+                assert bad.lower() not in title.lower(), f"Invented name '{bad}' in highlight title: {title}"
+
+        # Events: verify player_name is None and description has no invented names
+        events = conn.execute("SELECT description, player_name FROM events").fetchall()
+        assert len(events) > 0, "No events seeded"
+        for desc, pname in events:
+            assert pname is None or pname == "", f"Event player_name must not be populated with fiction: {pname}"
+            for bad in forbidden:
+                assert bad.lower() not in desc.lower(), f"Invented name '{bad}' in event description: {desc}"
+
+        conn.close()
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
