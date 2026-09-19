@@ -1,6 +1,11 @@
 # Virtual environments
-backend/.venv/
+# NOTE: patterns WITHOUT a trailing slash. A trailing slash matches only a
+# directory, so a SYMLINK named .venv slips past it -- which is exactly how a
+# worktree convenience symlink once got committed and clobbered the real venv.
+backend/.venv
+backend/.local
 .venv/
+.venv
 env/
 venv/
 
