@@ -39,3 +39,6 @@ Thumbs.db
 # scripts/ local overrides and caches
 scripts/config.local.env
 scripts/.video.sha256
+
+# raw agent transcripts (large, not source of truth - the ledger is)
+specs/**/*.log

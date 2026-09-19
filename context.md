@@ -178,6 +178,41 @@ machine: 1080p h264 decodes at 244 fps single-threaded, 749 fps on 8 cores. The 
 185,003 frames take ~4 min on 8 cores, so ~1 min on gpu-box's 128. The Colab notebook's
 decode cost was *Python* (`cap.read()` per frame, discarding 5 of 6), not CPU decoding.
 
+### 5b. The camera PANS - settled visually 2026-09-18
+
+Four frames pulled from video t=700 / 2000 / 4000 / 5500 show **four completely
+different views**: a brick school building behind one goal, then the centre circle,
+then a tree-lined far goal, then another angle. **This export is Veo's virtual
+pan-and-zoom crop that follows the ball, not the static panorama.**
+
+Consequences, and they are structural:
+
+- **A single fixed homography is the wrong *shape* of solution**, not merely
+  inaccurate. `cv_engine.py:23-40` maps fixed image fractions onto a 105x68 rectangle;
+  on this footage that is meaningless for all but a handful of frames.
+- Metric coordinates need a **per-frame** homography: a pitch-keypoint model, or
+  reference-anchored registration against 3-5 fixed anchors (never chained
+  frame-to-frame - 30,865 frames of chaining drifts).
+- Every frame where the homography is not confidently solved must be marked
+  `homography_ok=false`, its coordinates NaN, and excluded from every denominator.
+  A wrong position is worse than no position.
+- **Track in metric space, not pixel space.** A panning camera destroys any
+  pixel-space motion model, so ByteTrack on raw pixels will fragment badly. Prefer
+  `botsort.yaml` with `gmc_method: sparseOptFlow`.
+
+**Two complications visible in the same frames, not previously noted:**
+
+- **The pitch carries two overlapping line systems** - the match's white lines plus a
+  blue layout for a different field. A pitch-line homography must reject the blue
+  set; a naive line detector will happily fit the wrong geometry.
+- **Goals from adjacent pitches appear in frame.** Goal-mouth logic cannot simply
+  look for "a goal"; it must use the calibrated pitch, not appearance.
+
+**Worth checking before building any of this:** Veo usually offers both a *panorama*
+and a *follow* export. If the panorama of this match can be re-downloaded, the camera
+becomes static and this entire section collapses into a one-time 8-point calibration.
+That is a few minutes of checking against days of registration work.
+
 ### 6. `scripts/` is the token-cheap interface to all of this
 
 Every recurrent step is a script; read `scripts/README.md`, not the scripts. Config
