@@ -4,7 +4,7 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-19 · by Claude Opus 5 · Track 2 complete; G1 gate passed; G2 registration proven feasible
+**Last updated:** 2026-09-19 · by Claude Opus 5 · G1 passed; G2 registration proven, calibration attempt 2 running
 
 ---
 
@@ -71,7 +71,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | :-- | :-- | :-- | :-- |
 | G0 | Rebuild `benchmarks/veo_reference.json`; fix `scripts/config.env` time base; decode Veo's x/z convention | ☑ | `c38d62f`. Coords decoded: x=length, z=width, absolute. Centre spot lands 2 m off ideal — Veo's own bias, recorded not corrected |
 | G1 | **Measure ball-detection rate** — the go/no-go gate | ☑ | **Both halves measured.** tiled 0.833 / 0.828 — **gate passes**. full-frame 0.677 / 0.716 — fails one half. Caveat below: this is candidate presence, not correctness |
-| G2 | Mosaic homography + confidence gate, validated on the 71 restart coords | ◐ | **Feasibility PROVEN: 4 anchors cover 100% of sampled frames** (1→0.72, 2→0.94, 3→0.98, 4→1.00). Inliers depend on view overlap, not time separation. Next: calibrate anchors to the pitch and validate against the 71 restart coords |
+| G2 | Mosaic homography + confidence gate | ◐ | **Registration proven** (4 anchors @ min_inliers=100 cover 100%; gate measured via round-trip, not guessed). **Calibration attempt 1 FAILED** (max err 1854 m) — caused by a too-permissive inlier gate. Attempt 2 running with gate=100 and all 355 events |
 | G3 | Tier A detectors (7 types) | ☐ | |
 | G4 | Possession HMM → Tier B (4 types + Pass count) | ☐ | Conditional on G1 gate |
 | G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
@@ -116,26 +116,47 @@ honest per-trajectory number will be lower.
 
 ---
 
-## G2 registration feasibility (measured, not assumed)
+## G2 registration — feasibility proven, calibration NOT yet working
 
-46 frames across 600-6100 s, SIFT + RANSAC, usable = >=30 inliers.
+### Feasibility: yes, with a measured confidence gate
 
-- **Features are not the problem**: median 3231 keypoints per frame (min 1269).
-- **Inliers do not decay with time separation** — usable_frac is 0.42-0.64 whether the
-  pair is 120 s or 960 s apart. The constraint is **view overlap, not drift**. The
-  virtual camera pans across the pitch, so two distant views share no content
-  regardless of when they were shot. Anchor placement is therefore a set-cover problem
-  over the **pan range**, not over time.
-- **Greedy anchor cover: 1 → 0.717, 2 → 0.935, 3 → 0.978, 4 → 1.000.**
+46 frames across 600-6100 s, SIFT + RANSAC. Median 3231 keypoints per frame, so
+features are not the problem. **Inliers do not decay with time separation** — the
+constraint is *view overlap*, not drift, because the virtual camera pans across the
+pitch and distant views share no content. Anchor placement is set-cover over the pan
+range, not over time.
 
-Four anchors cover every sampled frame, and the full 46x46 matrix cost 12.3 s on CPU.
-The mosaic approach works on this footage. This was the riskiest and most expensive
-layer, and the one the "no panorama export" answer made unavoidable.
+**The confidence gate is measured, not guessed.** Round-trip test (`H_AB · H_BA`
+should be identity):
 
-**Still unproven:** that a registered frame yields *accurate metric* coordinates. That
-needs the anchors calibrated to the pitch and validated against the 71 restart events
-whose true pitch positions we know. The L2 gate remains: 90th-percentile error < 2 m on
-gated frames, with gate coverage >= 60% of in-play frames.
+| inliers | round-trip error |
+| --: | :-- |
+| 678, 271, 181, 126, 74 | **0.31–3.93 px** — excellent |
+| 33, 33 | **36–52 px** — garbage |
+
+Registration is bimodal. Use **min_inliers >= 100**. Anchors needed for full coverage
+at that gate: **4** (at 50 or 70 it is 3). An earlier "4 anchors → 100%" figure was
+computed at min_inliers=30 and was therefore meaningless; re-measured, the conclusion
+happens to survive.
+
+### Calibration: first attempt FAILED, and honestly
+
+Fitting anchor→pitch from the 71 restart events gave median error 3.3–8.2 m, p90 up to
+262 m, max **1854 m** on a 105 m pitch — a degenerate fit, not an inaccurate one.
+
+Cause: `--min-inliers 30` let noise registrations into the correspondence set. My first
+hypothesis (restart events are collinear) was **wrong** — as a set they have a
+singular-value ratio of 0.856, well spread. Individual types are degenerate (goal kicks
+0.101, kickoffs 0.148) but the union is not.
+
+Second attempt is running with min_inliers=100 and all 355 coordinate-bearing events
+rather than only the 71 restarts, which were data-starved at 7-14 points per anchor.
+
+**Unproven until that lands:** that a registered frame yields accurate *metric*
+coordinates. The L2 gate stands — 90th-percentile error < 2 m on gated frames, coverage
+>= 60% of in-play frames. Note the validation has a **noise floor**: a throw-in's ball
+is often in the thrower's hands 1-2 m infield and Veo's own coordinates carry a ~2 m
+bias, so even a perfect homography would not score 0 here.
 
 ---
 
