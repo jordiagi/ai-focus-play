@@ -9,9 +9,13 @@
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
 AGENT="${1:?agent}"; WP="${2:?wp-id}"; DIR="${3:?worktree}"; MODEL="${4:-}"
-SPEC="$REPO_ROOT/specs/opus2-hardening/$WP.md"
-README="$REPO_ROOT/specs/opus2-hardening/README.md"
-LEDGER="$REPO_ROOT/specs/opus2-hardening/ledger.jsonl"
+# Find the spec in whichever specs/<set>/ directory holds it.
+SPEC=""; for d in "$REPO_ROOT"/specs/*/; do
+  [ -f "$d$WP.md" ] && { SPEC="$d$WP.md"; SPECDIR="$d"; break; }
+done
+[ -n "$SPEC" ] || die "no spec named $WP.md under $REPO_ROOT/specs/*/"
+README="${SPECDIR}README.md"
+LEDGER="${SPECDIR}ledger.jsonl"
 [ -f "$SPEC" ] || die "no spec: $SPEC"
 [ -d "$DIR" ]  || die "no worktree: $DIR"
 
@@ -32,7 +36,7 @@ You are working in the git worktree at $DIR. Edit ONLY the files listed under
 'Files OWNED'. Run the acceptance command yourself and paste its REAL output.
 Reply with the JSON reporting contract and nothing else."
 
-LOG="$REPO_ROOT/specs/opus2-hardening/${WP}.${AGENT}.log"
+LOG="${SPECDIR}${WP}.${AGENT}.log"
 T0=$(date +%s)
 set +e
 case "$AGENT" in
@@ -52,8 +56,9 @@ set -e
 T1=$(date +%s)
 
 cd "$DIR"
-CHANGED=$(git diff --name-only main 2>/dev/null | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
-DIFFLINES=$(git diff --numstat main 2>/dev/null | awk '{a+=$1;d+=$2} END{print (a+d)+0}')
+BASE=$(git merge-base HEAD main 2>/dev/null || echo main)
+CHANGED=$(git diff --name-only "$BASE" 2>/dev/null | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
+DIFFLINES=$(git diff --numstat "$BASE" 2>/dev/null | awk '{a+=$1;d+=$2} END{print (a+d)+0}')
 cd "$REPO_ROOT"
 
 python3 - "$WP" "$AGENT" "${MODEL:-default}" "$RC" "$((T1-T0))" "$CHANGED" "$DIFFLINES" \
