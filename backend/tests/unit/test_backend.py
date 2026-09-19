@@ -20,7 +20,7 @@ def test_capabilities_endpoint(client):
     data = response.json()
     assert "read_only" in data
     assert "allow_uploads" in data
-    assert data["allow_uploads"] is True
+    assert data["allow_uploads"] is (not data["read_only"])
 
 def test_list_matches(client):
     response = client.get("/api/matches")

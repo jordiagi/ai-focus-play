@@ -2,7 +2,9 @@ import cv2
 import numpy as np
 import pytest
 from pathlib import Path
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from backend.src.api.guards import ReadOnlyAPIMiddleware
 from backend.src.app.main import app
 from backend.src.storage.repository import match_repo
 from backend.src.api.routes.matches import process_uploaded_video_task
@@ -10,6 +12,37 @@ from backend.src.api.routes.matches import process_uploaded_video_task
 @pytest.fixture
 def client():
     return TestClient(app)
+
+
+def test_read_only_middleware_blocks_only_api_mutations():
+    guarded_app = FastAPI()
+    guarded_app.add_middleware(ReadOnlyAPIMiddleware, enabled=True)
+
+    @guarded_app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+    def endpoint(path: str):
+        return {"path": path}
+
+    with TestClient(guarded_app) as guarded_client:
+        for method in ("POST", "PUT", "PATCH", "DELETE"):
+            response = guarded_client.request(method, "/api/resource")
+            assert response.status_code == 403
+            assert "read-only" in response.json()["detail"].lower()
+
+        assert guarded_client.get("/api/resource").status_code == 200
+        assert guarded_client.post("/media/resource").status_code == 200
+        assert guarded_client.post("/docs").status_code == 200
+
+
+def test_disabled_read_only_middleware_allows_api_mutations():
+    writable_app = FastAPI()
+    writable_app.add_middleware(ReadOnlyAPIMiddleware, enabled=False)
+
+    @writable_app.post("/api/resource")
+    def endpoint():
+        return {"created": True}
+
+    with TestClient(writable_app) as writable_client:
+        assert writable_client.post("/api/resource").status_code == 200
 
 def _create_dummy_video(path: Path, duration_sec: float = 3.0):
     fps = 30
