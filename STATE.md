@@ -4,7 +4,7 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-19 · by Claude Opus 5 · G1 passed; G2 registration proven, calibration attempt 2 running
+**Last updated:** 2026-09-19 · by Claude Opus 5 · G1 passed; G2 calibration failed twice — reframe proposed
 
 ---
 
@@ -71,7 +71,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | :-- | :-- | :-- | :-- |
 | G0 | Rebuild `benchmarks/veo_reference.json`; fix `scripts/config.env` time base; decode Veo's x/z convention | ☑ | `c38d62f`. Coords decoded: x=length, z=width, absolute. Centre spot lands 2 m off ideal — Veo's own bias, recorded not corrected |
 | G1 | **Measure ball-detection rate** — the go/no-go gate | ☑ | **Both halves measured.** tiled 0.833 / 0.828 — **gate passes**. full-frame 0.677 / 0.716 — fails one half. Caveat below: this is candidate presence, not correctness |
-| G2 | Mosaic homography + confidence gate | ◐ | **Registration proven** (4 anchors @ min_inliers=100 cover 100%; gate measured via round-trip, not guessed). **Calibration attempt 1 FAILED** (max err 1854 m) — caused by a too-permissive inlier gate. Attempt 2 running with gate=100 and all 355 events |
+| G2 | Mosaic homography + confidence gate | ⊘ | **Registration proven** (4 anchors @ gate 100 cover 100%; gate measured by round-trip). **Calibration failed twice** — ball-position correspondences are too noisy (~40% RANSAC inliers). Footage is a low oblique view of a multi-pitch complex. **See the reframe below: Tier A may not need metres at all** |
 | G3 | Tier A detectors (7 types) | ☐ | |
 | G4 | Possession HMM → Tier B (4 types + Pass count) | ☐ | Conditional on G1 gate |
 | G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
@@ -139,24 +139,57 @@ at that gate: **4** (at 50 or 70 it is 3). An earlier "4 anchors → 100%" figur
 computed at min_inliers=30 and was therefore meaningless; re-measured, the conclusion
 happens to survive.
 
-### Calibration: first attempt FAILED, and honestly
+### Calibration: TWO attempts failed. Do not retry the same way.
 
-Fitting anchor→pitch from the 71 restart events gave median error 3.3–8.2 m, p90 up to
-262 m, max **1854 m** on a 105 m pitch — a degenerate fit, not an inaccurate one.
+| | attempt 1 (71 restarts, gate 30) | attempt 2 (355 events, gate 100) |
+| :-- | :-- | :-- |
+| correspondences | 46 | 217 |
+| max error | 1854 m — degenerate | 50-81 m — stable |
+| median error | 3.3-8.2 m | **10-15 m (worse)** |
+| RANSAC inlier fraction | — | **only ~40%** |
 
-Cause: `--min-inliers 30` let noise registrations into the correspondence set. My first
-hypothesis (restart events are collinear) was **wrong** — as a set they have a
-singular-value ratio of 0.856, well spread. Individual types are degenerate (goal kicks
-0.101, kickoffs 0.148) but the union is not.
+The strict gate fixed the degenerate blowups. It did not fix accuracy, and the ~40%
+inlier fraction is the tell: **most correspondences do not agree with any single
+homography, so the correspondences themselves are bad.** For an interception or tackle
+Veo's coordinate marks where the *action* was, not where a detected ball is, and
+"best ball candidate anywhere in frame" is unverified — a head or a shoe also fires.
 
-Second attempt is running with min_inliers=100 and all 355 coordinate-bearing events
-rather than only the 71 restarts, which were data-starved at 7-14 points per anchor.
+**Conclusion: ball-position correspondences cannot calibrate this. Stop trying.**
 
-**Unproven until that lands:** that a registered frame yields accurate *metric*
-coordinates. The L2 gate stands — 90th-percentile error < 2 m on gated frames, coverage
->= 60% of in-play frames. Note the validation has a **noise floor**: a throw-in's ball
-is often in the thrower's hands 1-2 m infield and Veo's own coordinates carry a ~2 m
-bias, so even a perfect homography would not score 0 here.
+### What the footage actually looks like (viewed, not assumed)
+
+This is a **multi-pitch complex**. A single frame contains our match pitch plus **four
+or more goals belonging to adjacent fields**, tents, parked cars, a building, crowd,
+and a second blue line system crossing diagonally. Two consequences:
+
+- **The camera is low and very oblique.** Our pitch recedes sharply and the far half
+  compresses into a thin band, so a few pixels of error there is many metres. That is
+  a physical limit, and it is consistent with the 10-15 m median we measured.
+- **Most SIFT features are off the pitch plane** — trees, tents, crowd, other pitches.
+  A homography fitted through them does not describe the pitch plane, which is the
+  plane we actually need.
+
+The anchor at t=960 s is much more promising than the midfield one: it shows a penalty
+area with genuinely identifiable landmarks (penalty box corners, six-yard box, goal
+posts, penalty arc) and the white match lines are separable from the blue ones.
+
+### The reframe worth taking seriously before more homography work
+
+**Most Tier A detection does not need metres — it needs pitch-relative regions.**
+
+- Shot: ball speed and direction toward the goal mouth. Definable in **anchor pixel
+  space** if the goal mouth is marked there. No metric needed.
+- Corner / throw-in / goal kick: ball crossing a boundary. Boundaries can be drawn as
+  polygons in anchor pixel space.
+- Goal: the restart signature (ball near the centre spot, players split by half). Needs
+  only coarse position.
+
+Precise metric coordinates are genuinely required for only two things: the radar
+display and speed in m/s. So a sensible next step is **annotate the pitch polygon and
+key zones directly in each anchor's pixel space**, ship Tier A detection on that, and
+treat accurate metric calibration as a separate, later problem for the radar. That
+inverts the current dependency, where everything waits on a homography that has now
+failed twice.
 
 ---
 
