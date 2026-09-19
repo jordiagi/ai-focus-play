@@ -110,9 +110,12 @@ class SoccerTracker:
                 self.next_id += 1
                 self.tracks.append(new_track)
 
-        # 6. Return active players
+        # 6. Return only tracks corroborated by at least two detections. Candidate
+        # tracks remain internal until confirmed, so one-frame noise is not drawn.
         active_players: List[RadarPlayer] = []
         for t in self.tracks:
+            if not t.confirmed:
+                continue
             active_players.append(RadarPlayer(
                 id=t.track_id,
                 team=t.team,

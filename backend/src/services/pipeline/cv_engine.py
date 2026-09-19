@@ -67,6 +67,50 @@ class SoccerCVEngine:
         kf.errorCovPost = np.eye(4, dtype=np.float32) * 1.0
         return kf
 
+    @staticmethod
+    def _grass_mask(hsv_image: np.ndarray) -> np.ndarray:
+        """Return a mask for ordinary turf without discarding bright lime kits."""
+        # Turf occupies the green hue range, but is normally substantially darker
+        # than a fluorescent lime shirt. Yellow is deliberately below the lower
+        # hue bound. Keeping the value ceiling is what separates lime from turf.
+        return cv2.inRange(
+            hsv_image,
+            np.array([35, 40, 40], dtype=np.uint8),
+            np.array([85, 255, 220], dtype=np.uint8),
+        )
+
+    def _fit_team_centers(self, torso_samples: List[Tuple[float, float]]) -> None:
+        """Fit two reproducible kit-colour centers and give them stable labels."""
+        data = np.float32(torso_samples)
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 20, 0.1)
+        cv2.setRNGSeed(0)
+        _, _, centers = cv2.kmeans(
+            data, 2, None, criteria, 10, cv2.KMEANS_PP_CENTERS
+        )
+
+        # OpenCV's Lab a/b axes form a chroma plane. Sorting by hue angle makes
+        # center 0 (home) and center 1 (away) depend on kit colour, never on the
+        # arbitrary cluster index returned by k-means.
+        hue_angles = np.mod(
+            np.arctan2(centers[:, 1] - 128.0, centers[:, 0] - 128.0),
+            2.0 * math.pi,
+        )
+        self.team_centers = centers[np.argsort(hue_angles, kind="stable")]
+
+    def _team_for_chroma(self, chroma: Tuple[float, float]) -> str:
+        if self.team_centers is None:
+            raise RuntimeError("team centers have not been fitted")
+        c_vec = np.asarray(chroma, dtype=np.float32)
+        best_k = int(np.argmin(np.linalg.norm(self.team_centers - c_vec, axis=1)))
+        return "home" if best_k == 0 else "away"
+
+    @staticmethod
+    def _clamp_pitch_point(x: float, y: float) -> Tuple[float, float]:
+        return (
+            float(np.clip(x, 0.0, PITCH_LENGTH)),
+            float(np.clip(y, 0.0, PITCH_WIDTH)),
+        )
+
     def _extract_torso_chroma(self, small_frame: np.ndarray, x: int, y: int, w: int, h: int) -> Optional[Tuple[float, float]]:
         """Extracts median (a, b) Lab chroma from the torso region of player detection (P1-2)."""
         torso_y1 = int(y + 0.2 * h)
@@ -83,7 +127,7 @@ class SoccerCVEngine:
 
         # Mask out grass green in torso
         hsv_torso = cv2.cvtColor(torso, cv2.COLOR_BGR2HSV)
-        grass_mask = cv2.inRange(hsv_torso, np.array([30, 40, 40]), np.array([85, 255, 255]))
+        grass_mask = self._grass_mask(hsv_torso)
         non_grass = cv2.bitwise_not(grass_mask)
 
         lab_torso = cv2.cvtColor(torso, cv2.COLOR_BGR2LAB)
@@ -103,6 +147,9 @@ class SoccerCVEngine:
         progress_callback=None
     ) -> Tuple[List[RadarFrame], List[Event], List[Highlight], AnalyticsData]:
         """Full pipeline with Kalman ball tracking, metric tracker, and Lab kit clustering."""
+        # The engine is a module singleton, so all learned match state must be
+        # cleared before opening a new video (including an unreadable one).
+        self.team_centers = None
         logger.info(f"Starting computer vision analysis on {video_path}...")
         cap = cv2.VideoCapture(str(video_path))
         if not cap.isOpened():
@@ -150,7 +197,7 @@ class SoccerCVEngine:
                 hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
 
                 # Grass field mask
-                field_mask = cv2.inRange(hsv, np.array([30, 40, 40]), np.array([85, 255, 255]))
+                field_mask = self._grass_mask(hsv)
                 non_field = cv2.bitwise_not(field_mask)
 
                 kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
@@ -181,20 +228,14 @@ class SoccerCVEngine:
                                 if chroma:
                                     torso_samples.append(chroma)
 
-                # 2. Torso Kit Clustering (K=3) across initial frames (P1-2)
+                # 2. Torso Kit Clustering across initial frames (P1-2)
                 if self.team_centers is None and len(torso_samples) >= 30:
-                    data = np.float32(torso_samples)
-                    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-                    _, labels, centers = cv2.kmeans(data, 3, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
-                    self.team_centers = centers
+                    self._fit_team_centers(torso_samples)
 
                 # Assign team via cluster nearest center if available
                 for det in detections:
                     if self.team_centers is not None and det["chroma"] is not None:
-                        c_vec = np.array(det["chroma"], dtype=np.float32)
-                        dists = [np.linalg.norm(c_vec - self.team_centers[k]) for k in range(len(self.team_centers))]
-                        best_k = int(np.argmin(dists))
-                        det["team"] = "home" if best_k == 0 else "away"
+                        det["team"] = self._team_for_chroma(det["chroma"])
 
                     if det["team"] == "home":
                         home_positions.append((det["x"], det["y"]))
@@ -241,11 +282,12 @@ class SoccerCVEngine:
                     ball_initialized = True
                     last_ball_detection_time = current_time
                 elif ball_initialized and (current_time - last_ball_detection_time) <= 2.0:
-                    ball_x, ball_y = pred_x, pred_y
-                    ball_detected = True
+                    ball_x, ball_y = self._clamp_pitch_point(pred_x, pred_y)
+                    # A Kalman prediction is a coast, not a measurement.
+                    ball_detected = False
                 else:
                     # After > 2.0s without candidates, mark undetected (P1-1)
-                    ball_x, ball_y = max(0.0, min(105.0, pred_x)), max(0.0, min(68.0, pred_y))
+                    ball_x, ball_y = self._clamp_pitch_point(pred_x, pred_y)
                     ball_detected = False
 
                 radar_frames.append(RadarFrame(
@@ -435,7 +477,7 @@ class SoccerCVEngine:
         for e in events:
             if e.event_type.lower() in ("shot", "goal"):
                 is_inside = (e.pitch_x > 88.5 or e.pitch_x < 16.5) and (13.84 < e.pitch_y < 54.16)
-                outcome = "goal" if e.event_type.lower() == "goal" else "saved"
+                outcome = "goal" if e.event_type.lower() == "goal" else "unknown"
                 shot_map.append(ShotRecord(
                     id=e.id,
                     timestamp=e.timestamp,
