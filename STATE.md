@@ -4,7 +4,7 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-19 · by Claude Opus 5 · G0+G5+cross-cutting done; U1-U3 dispatched and running
+**Last updated:** 2026-09-19 · by Claude Opus 5 · U1+U2 merged; U3 re-dispatched after a quota failure
 
 ---
 
@@ -82,9 +82,31 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 
 | ID | Work | Status | Notes |
 | :-- | :-- | :-- | :-- |
-| U1 | Hash router; wire the 6 existing drawers to Veo's routes; real deep-link Share | ◐ | dispatched → **codex**, worktree `wt-u1` |
-| U2 | Jersey numbers only, never invented names; jersey bar from `lineup` not 17 literals | ◐ | dispatched → **agy/gemini-3.8-flash-high**, worktree `wt-u2` |
-| U3 | Events drawer 15-type status surface **+ singular stat labels + per-row actions** (U4 merged in: both owned `SidebarTabs.tsx`) | ◐ | dispatched → **claude/sonnet**, worktree `wt-u3` |
+| U1 | Hash router; wire the 6 drawers to Veo's routes; real deep-link Share | ☑ | **codex**, merged `35a0659`. Verified behaviourally: loading `/#/events/` directly opens the panel |
+| U2 | Jersey numbers only, never invented names; jersey bar from `lineup` | ☑ | **agy/gemini-3.8-flash-high**, merged `c9054d9`. 36 tests, 0 invented names, follows Veo's blank-number convention |
+| U3 | Events drawer 15-type status surface **+ singular stat labels + per-row actions** | ◐ | claude/sonnet hit a **429 account session limit** (16 turns, 0 changes) — resource failure, not model failure. **Re-dispatched to codex**, worktree `wt-u3` |
+
+---
+
+## Incident log (read before touching worktrees)
+
+**2026-09-19 — the worktree symlink that ate the venv.** I created `.venv`/`.local`
+symlinks inside each UI worktree so agents could run acceptance commands. `.gitignore`
+had `backend/.venv/` and `backend/.local/` **with a trailing slash**, which matches a
+*directory* but **not a symlink**, so `git add -A` in a worktree tracked them and merging
+replaced the real directories with self-referential links.
+
+Lost and rebuilt: the venv (now **Python 3.14.7**, not the previous 3.12.14 — all pinned
+deps install and import fine), the seeded DB, the demo fixtures, and the 916 MB 720p
+proxy. Nothing was unrecoverable: everything in `.local` was either seed data or derived
+from the source mp4, which is intact in `~/Downloads` and on gpu-box.
+
+Two things worth keeping:
+- The ignore patterns are now **slash-free**, so a symlink is caught. Verified with
+  `git check-ignore`.
+- After the rebuild the CV determinism signature was **identical** (`61075316940f2cb1`)
+  across a Python 3.12 → 3.14 change, and the regenerated demo clips were byte-identical
+  in size. That is real evidence the pipeline is deterministic, obtained by accident.
 
 ---
 
@@ -99,6 +121,9 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 - `scripts/` built: doctor, provision, push-video (resumable), push-code, job-status,
   pull-artifacts, restore, verify, plus the agent dispatch wrapper.
 - Veo ground truth captured (above).
+- `scripts/local/score-benchmark.py` (G5) — validated on four cases including a random
+  detector scoring BELOW its own chance baseline.
+- U1 + U2 merged; current baseline **`pass=9 fail=0 skip=0`, 36 tests**.
 
 ---
 
