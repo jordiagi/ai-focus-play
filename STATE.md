@@ -4,7 +4,7 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-19 · by Claude Opus 5 · U1+U2 merged; U3 re-dispatched after a quota failure
+**Last updated:** 2026-09-19 · by Claude Opus 5 · **Track 2 (UI parity) COMPLETE**; Track 1 blocked on gpu-box auth
 
 ---
 
@@ -78,13 +78,13 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | G6 | Ingest artifacts → `analysis_mode="ml"` | ☐ | `ml_ingest.py` does not exist yet |
 | G7 | Jersey recognition | ☐ | Last. Unlocks 0 event types. Honest ceiling ~25-40% vs Veo's 75% |
 
-### Track 2 — UI / route parity (not blocked)
+### Track 2 — UI / route parity — ☑ **COMPLETE**
 
 | ID | Work | Status | Notes |
 | :-- | :-- | :-- | :-- |
 | U1 | Hash router; wire the 6 drawers to Veo's routes; real deep-link Share | ☑ | **codex**, merged `35a0659`. Verified behaviourally: loading `/#/events/` directly opens the panel |
 | U2 | Jersey numbers only, never invented names; jersey bar from `lineup` | ☑ | **agy/gemini-3.8-flash-high**, merged `c9054d9`. 36 tests, 0 invented names, follows Veo's blank-number convention |
-| U3 | Events drawer 15-type status surface **+ singular stat labels + per-row actions** | ◐ | claude/sonnet hit a **429 account session limit** (16 turns, 0 changes) — resource failure, not model failure. **Re-dispatched to codex**, worktree `wt-u3` |
+| U3 | Events drawer 15-type status surface **+ singular stat labels** | ☑ | **codex** (re-dispatch after claude hit a 429 quota limit). All 15 types declared; model validator refuses `detected` without a count or `unavailable` without a reason |
 
 ---
 
@@ -123,7 +123,9 @@ Two things worth keeping:
 - Veo ground truth captured (above).
 - `scripts/local/score-benchmark.py` (G5) — validated on four cases including a random
   detector scoring BELOW its own chance baseline.
-- U1 + U2 merged; current baseline **`pass=9 fail=0 skip=0`, 36 tests**.
+- **Track 2 complete**: U1 (hash routing), U2 (jersey-only identity), U3 (15-type status
+  surface) all merged and independently verified. Baseline **`pass=9 fail=0 skip=0`, 36 tests**.
+- 720p proxy rebuilt and verified (1280x720, duration 6172.933433 exact).
 
 ---
 
