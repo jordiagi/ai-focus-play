@@ -4,7 +4,7 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-19 · by Claude Opus 5 · G1 passed; G2 calibration failed twice — reframe proposed
+**Last updated:** 2026-09-19 · by Claude Opus 5 · G2 switched to learned pitch-keypoint calibration (PnLCalib), partially working
 
 ---
 
@@ -71,7 +71,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | :-- | :-- | :-- | :-- |
 | G0 | Rebuild `benchmarks/veo_reference.json`; fix `scripts/config.env` time base; decode Veo's x/z convention | ☑ | `c38d62f`. Coords decoded: x=length, z=width, absolute. Centre spot lands 2 m off ideal — Veo's own bias, recorded not corrected |
 | G1 | **Measure ball-detection rate** — the go/no-go gate | ☑ | **Both halves measured.** tiled 0.833 / 0.828 — **gate passes**. full-frame 0.677 / 0.716 — fails one half. Caveat below: this is candidate presence, not correctness |
-| G2 | Mosaic homography + confidence gate | ⊘ | **Registration proven** (4 anchors @ gate 100 cover 100%; gate measured by round-trip). **Calibration failed twice** — ball-position correspondences are too noisy (~40% RANSAC inliers). Footage is a low oblique view of a multi-pitch complex. **See the reframe below: Tier A may not need metres at all** |
+| G2 | Pitch calibration | ◐ | **Approach changed: learned pitch-keypoint calibration (PnLCalib), not SIFT.** Installed on the box; 2 of 3 probe frames calibrate out of the box despite being trained on broadcast footage. Line detection needs threshold tuning (0 lines at the default). Prior SIFT/ball-correspondence attempts failed and are documented below |
 | G3 | Tier A detectors (7 types) | ☐ | |
 | G4 | Possession HMM → Tier B (4 types + Pass count) | ☐ | Conditional on G1 gate |
 | G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
@@ -173,7 +173,43 @@ The anchor at t=960 s is much more promising than the midfield one: it shows a p
 area with genuinely identifiable landmarks (penalty box corners, six-yard box, goal
 posts, penalty arc) and the white match lines are separable from the blue ones.
 
-### The reframe worth taking seriously before more homography work
+### The right method: learned pitch-keypoint calibration (researched 2026-09-19)
+
+My two failures shared one root cause: **I used generic SIFT features.** On this footage
+those land on trees, tents, parked cars and adjacent pitches — all *off the pitch plane*,
+which is the one plane we need. The established solution does not use generic features at
+all.
+
+This is a solved research problem with an annual benchmark — the **SoccerNet Camera
+Calibration challenge**. The pitch is a planar target of known dimensions, so a homography
+follows from four lines. 2025-era pipelines (NBJW, **PnLCalib**, Broadtrack) all do
+*learned landmark/line detection* then solve for the camera. Semantics is exactly what
+fixes our multi-pitch problem: a model trained on pitch classes knows a halfway line from
+a stray blue line on an adjacent field.
+
+**PnLCalib is installed and running on the box** (`/opt/PnLCalib`, weights `SV_kp` /
+`SV_lines`, GPL-2.0 — fine locally, relevant only if this is ever distributed).
+
+First numeric probe on our frames:
+
+| frame | keypoints | lines | calibrated |
+| :-- | --: | --: | :-- |
+| anchor 960 (penalty area) | 3 | 0 | FAILED |
+| anchor 2160 (midfield) | 8 | 0 | SUCCESS |
+| frame 1200 | 13 | 0 | SUCCESS |
+
+So it **partially works out of the box** on amateur footage it was never trained for
+(its training sets are broadcast: SoccerNet, WorldCup 2014, TS-WorldCup). Two caveats:
+keypoint counts are low, and **line detection returns zero at the default threshold
+0.7867**, which is tuned for broadcast. A threshold sweep is running.
+
+Note the visualisation is misleading: `inference.py` silently writes the unmodified frame
+when calibration fails, which is why the first output looked like a no-op. Always probe
+numerically.
+
+### The reframe — still useful as a fallback
+
+
 
 **Most Tier A detection does not need metres — it needs pitch-relative regions.**
 
