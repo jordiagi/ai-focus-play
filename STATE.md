@@ -70,13 +70,13 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | ID | Work | Status | Notes |
 | :-- | :-- | :-- | :-- |
 | G0 | Rebuild `benchmarks/veo_reference.json`; fix `scripts/config.env` time base; decode Veo's x/z convention | ☑ | `c38d62f`. Coords decoded: x=length, z=width, absolute. Centre spot lands 2 m off ideal — Veo's own bias, recorded not corrected |
-| G1 | **Measure ball-detection recall** on a 10-min slice — the go/no-go gate | ☐ | Nothing downstream is trustworthy until this number exists |
-| G2 | Mosaic homography + confidence gate, validated on the 71 restart coords | ☐ | |
+| G1 | **Measure ball-detection rate** — the go/no-go gate | ◐ | **Period-1 slice (1200-1800s, 3000 frames) measured.** full-frame **0.677 FAILS** the >=0.70 gate; **tiled 0.833 PASSES**, median gap 0.2s. Period-2 slice running. See caveat below |
+| G2 | Mosaic homography + confidence gate, validated on the 71 restart coords | ☐ | **Now mandatory** — user confirmed Veo will not export the panorama |
 | G3 | Tier A detectors (7 types) | ☐ | |
 | G4 | Possession HMM → Tier B (4 types + Pass count) | ☐ | Conditional on G1 gate |
 | G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
 | G6 | Ingest artifacts → `analysis_mode="ml"` | ☐ | `ml_ingest.py` does not exist yet |
-| G7 | Jersey recognition | ☐ | Last. Unlocks 0 event types. Honest ceiling ~25-40% vs Veo's 75% |
+| G7 | Jersey recognition | ☐ | Last. **No roster available**, so open-set with abstention, or Veo-label leakage that must be declared. Honest ceiling ~25-40% vs Veo's 75% |
 
 ### Track 2 — UI / route parity — ☑ **COMPLETE**
 
@@ -85,6 +85,29 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | U1 | Hash router; wire the 6 drawers to Veo's routes; real deep-link Share | ☑ | **codex**, merged `35a0659`. Verified behaviourally: loading `/#/events/` directly opens the panel |
 | U2 | Jersey numbers only, never invented names; jersey bar from `lineup` | ☑ | **agy/gemini-3.8-flash-high**, merged `c9054d9`. 36 tests, 0 invented names, follows Veo's blank-number convention |
 | U3 | Events drawer 15-type status surface **+ singular stat labels** | ☑ | **codex** (re-dispatch after claude hit a 429 quota limit). All 15 types declared; model validator refuses `detected` without a count or `unavailable` without a reason |
+
+---
+
+## G1 result so far (the gate the roadmap hangs on)
+
+Slice 1200-1800 s of period 1, 3000 frames at 5 fps, `yolo11x`, conf 0.05, COCO
+`sports ball`, tiles 3x2 with 0.15 overlap above y=0.22h.
+
+| config | detection rate | median gap | max gap | throughput |
+| :-- | --: | --: | --: | --: |
+| full frame @1280 | **0.677 — fails** | 0.2 s | 5.8 s | 48.8 fps |
+| **tiled @640** | **0.833 — passes** | 0.2 s | 2.6 s | 35.6 fps |
+
+The full-frame configuration is effectively what the Colab notebook used, and it
+**misses the gate**. Tiling is what clears it — which is the single most useful thing
+this measurement has established.
+
+**Caveat that must travel with this number.** `detection_rate` means a COCO
+`sports ball` candidate was present at conf>0.05 *somewhere in the frame*. It does
+**not** verify the candidate is the ball — a head or a line marking can fire. This is
+candidate presence, not correctness. Do not quote it as tracking accuracy. Trajectory
+association plus validation against known ball positions is a separate step, and the
+honest per-trajectory number will be lower.
 
 ---
 
