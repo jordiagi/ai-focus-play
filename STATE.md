@@ -4,7 +4,7 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-19 · by Claude Opus 5 · after capturing Veo ground truth
+**Last updated:** 2026-09-19 · by Claude Opus 5 · G0 + cross-cutting done, UI track dispatched
 
 ---
 
@@ -12,10 +12,11 @@ is worse than none.
 
 1. `PLAN.md` — the roadmap and the reasoning. `context.md` — environment + traps.
    `OPUS2.md` — the 9 defects already closed and how they were verified.
+   Current probe baseline: **`pass=9 fail=0 skip=0`**, 35 tests.
 2. **Ground truth is now on disk** at `benchmarks/raw/` (see below). It does **not**
    need re-capturing unless the match changes.
 3. Check blockers below before touching gpu-box.
-4. `bash scripts/local/verify.sh all` should print `pass=8 fail=0 skip=0`. If it
+4. `bash scripts/local/verify.sh all` should print `pass=9 fail=0 skip=0`. If it
    doesn't, something regressed — fix that before new work.
 
 ---
@@ -60,15 +61,15 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 
 | ID | Work | Status | Notes |
 | :-- | :-- | :-- | :-- |
-| X1 | Delete surviving `pass_strings` fabrication (`cv_engine.py:551-554`) and `or 20.0` thirds fallbacks (`:544-549`) | ☐ | Seed was fixed; pipeline was not |
-| X2 | Add probe `d10` — no invented analytics literal anywhere | ☐ | Currently nothing covers `pass_strings` |
-| X3 | `PitchRadar` must draw nothing for an undetected ball | ☐ | Today it dims to 30% but still draws at coasted coords |
+| X1 | Delete surviving `pass_strings` fabrication and `or 20.0` thirds fallbacks | ☑ | `c38d62f` |
+| X2 | Add probe `d10` — no invented analytics literal anywhere | ☑ | **Negative-tested**: FAILS on pre-fix code, PASSES after |
+| X3 | `PitchRadar` must draw nothing for an undetected ball | ☑ | Now renders "Ball not detected" instead |
 
 ### Track 1 — GPU pipeline (⊘ blocked on Tailscale re-auth)
 
 | ID | Work | Status | Notes |
 | :-- | :-- | :-- | :-- |
-| G0 | Rebuild `benchmarks/veo_reference.json` from the 447-event dump; fix `scripts/config.env` time base; decode Veo's x/z convention | ◐ | Raw data captured ☑; JSON rebuild + config fix pending |
+| G0 | Rebuild `benchmarks/veo_reference.json`; fix `scripts/config.env` time base; decode Veo's x/z convention | ☑ | `c38d62f`. Coords decoded: x=length, z=width, absolute. Centre spot lands 2 m off ideal — Veo's own bias, recorded not corrected |
 | G1 | **Measure ball-detection recall** on a 10-min slice — the go/no-go gate | ☐ | Nothing downstream is trustworthy until this number exists |
 | G2 | Mosaic homography + confidence gate, validated on the 71 restart coords | ☐ | |
 | G3 | Tier A detectors (7 types) | ☐ | |
@@ -90,7 +91,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 
 ## Done already (do not redo)
 
-- 9 defects closed and verified — `verify.sh all` → `pass=8 fail=0 skip=0`, 35 tests.
+- 9 defects closed and verified — `verify.sh all` → `pass=9 fail=0 skip=0`, 35 tests.
   Full record in `OPUS2.md`.
 - gpu-box provisioned: torch 2.11.0+cu128, CUDA 12.8, 4× H100, uv-managed CPython 3.12.
   `scripts/remote/provision.sh` is idempotent (re-run → `cached`, exit 10).
