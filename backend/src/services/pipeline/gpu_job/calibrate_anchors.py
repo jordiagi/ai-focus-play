@@ -69,7 +69,15 @@ def main():
     ap.add_argument("--frames-dir", default="/workspace/aifp/frames/calib")
     ap.add_argument("--out", default="/workspace/aifp/out/calibration.json")
     ap.add_argument("--device", default="0")
-    ap.add_argument("--min-inliers", type=int, default=30)
+    ap.add_argument("--min-inliers", type=int, default=100,
+                    help="MEASURED: registrations near 30 inliers round-trip at 36-52 px "
+                         "(garbage); >=70 round-trips under 2 px. 30 was far too permissive "
+                         "and poisoned the first calibration attempt.")
+    ap.add_argument("--all-events", action="store_true",
+                    help="use every coordinate-bearing event, not just restarts. Restarts "
+                         "have precise ball positions but individually degenerate geometry "
+                         "(goal kicks singular-value ratio 0.101, kickoffs 0.148); the full "
+                         "set is 6x larger and well spread (0.668).")
     a = ap.parse_args()
 
     import cv2, numpy as np, torch
@@ -82,7 +90,7 @@ def main():
         torch.cuda.set_per_process_memory_fraction(0.30, int(a.device))
 
     rows = [r for r in csv.DictReader(open(a.events))
-            if r["event_type"] in RESTART_GEOM and r["x"] and r["z"]]
+            if r["x"] and r["z"] and (a.all_events or r["event_type"] in RESTART_GEOM)]
     print(f"restart events with coordinates: {len(rows)}", file=sys.stderr)
 
     fdir = Path(a.frames_dir)
