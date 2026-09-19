@@ -1,0 +1,113 @@
+{
+  "$comment": "Veo's own analysis of this match, recovered from captured accessibility trees of the live app.veo.co page. This is a BENCHMARK TO MATCH OR BEAT, not ground truth and not seed data. Never load this into the app as fixture data.",
+
+  "match": {
+    "veo_url": "https://app.veo.co/matches/20260913-arlington-sa-u16b-ecnl-26-27-vs-skyline-u16b-ecnl-v7228589",
+    "home_team": "Arlington SA U16B ECNL (26-27)",
+    "away_team": "Skyline U16B ECNL",
+    "date": "2026-09-13",
+    "source_video": "~/Downloads/arlington-sa-u16b-ecnl-26-27-vs-skyline-u16b-ecnl-2026-09-13-2026-09-13.mp4",
+    "video_duration_seconds": 6172.933,
+    "video_duration_display": "102:52",
+    "video_resolution": "1920x1080",
+    "video_fps": 29.97,
+    "video_has_audio": false
+  },
+
+  "provenance": {
+    "captured_by": "Antigravity browser session, authenticated as the account owner",
+    "capture_files": [
+      "~/.gemini/antigravity/brain/ec49a13a-30d4-4058-8c04-0452b70ec441/.tempmediaStorage/snapshot_full_1789685128256.txt",
+      "~/.gemini/antigravity/brain/ec49a13a-30d4-4058-8c04-0452b70ec441/.tempmediaStorage/snapshot_full_1789685111525.txt"
+    ],
+    "extracted": "2026-09-17",
+    "method": "accessibility-tree text, not a network/API capture"
+  },
+
+  "time_base": {
+    "$comment": "RESOLVED 2026-09-17 by sampling frames from the source video. Shot-map timestamps are MATCH CLOCK, not video time. Convert before scoring.",
+    "confirmed_by_frame_inspection": {
+      "first_half_kickoff_video_s": 561,
+      "evidence": "Frames at 10s/120s/300s/480s show warmup on a near-empty pitch. t=540s shows teams forming up. t=561s shows a textbook kickoff formation: players ringed around the centre circle with one at the spot.",
+      "first_half_end_video_s": 2961,
+      "half_length_s": 2400,
+      "half_length_note": "2961 - 561 = exactly 2400s = 40:00. U16 ECNL plays 40-minute halves, so this is a strong structural confirmation rather than a coincidence.",
+      "halftime_span_video_s": [2961, 3480],
+      "halftime_evidence": "Active play at 2900s. Pitch empties by 2980s and stays empty through 3300s. Teams regather by 3460s."
+    },
+    "conversion": {
+      "first_half": "video_seconds = match_seconds + 561",
+      "second_half": "video_seconds = match_seconds + 1080",
+      "second_half_derivation": "Second half kicks off at video ~3480s at match clock 2400s, so offset = 1080."
+    },
+    "corroboration": "Applying these offsets places all 13 attempts inside the video, and the last one (79:51 -> video 5871s) lands 9 seconds before the predicted second-half end at 5880s, with ~5 minutes of post-match footage remaining to reach the 6172s total. Independent arithmetic agreeing to within 9s is good evidence the offsets are right.",
+    "residual_uncertainty": "The second-half kickoff was bracketed to 3380-3500s by frame sampling, so the +1080 offset carries roughly +/-40s. Pin it precisely before tight-tolerance scoring by bisecting frames in that window for the restart.",
+    "not_confirmed": "No individual goal has been visually verified. Frames around the predicted first goal (video 772s) show a ball airborne at 770s, play switching ends by 775s, and centre-circle activity at 795s - consistent with a goal and restart, but stills cannot prove it. Watching video 765-800s would settle it in under a minute."
+  },
+
+  "home_shot_map": {
+    "$comment": "From the Analytics drawer Shot map section. Chronological. Veo displays one team's shot map at a time; this is the HOME side. Self-consistent with home_stats below: 3 goals + 10 shots = 13 total attempts. video_s is DERIVED via time_base.conversion above, not captured.",
+    "team": "home",
+    "attempts": [
+      { "type": "Goal", "t": "03:31", "half": 1, "video_s": 772 },
+      { "type": "Shot", "t": "07:59", "half": 1, "video_s": 1040 },
+      { "type": "Shot", "t": "14:55", "half": 1, "video_s": 1456 },
+      { "type": "Shot", "t": "21:45", "half": 1, "video_s": 1866 },
+      { "type": "Shot", "t": "30:55", "half": 1, "video_s": 2416 },
+      { "type": "Shot", "t": "33:51", "half": 1, "video_s": 2592 },
+      { "type": "Goal", "t": "39:56", "half": 1, "video_s": 2957 },
+      { "type": "Shot", "t": "55:45", "half": 2, "video_s": 4425 },
+      { "type": "Shot", "t": "64:27", "half": 2, "video_s": 4947 },
+      { "type": "Shot", "t": "70:08", "half": 2, "video_s": 5288 },
+      { "type": "Goal", "t": "73:56", "half": 2, "video_s": 5516 },
+      { "type": "Shot", "t": "76:55", "half": 2, "video_s": 5695 },
+      { "type": "Shot", "t": "79:51", "half": 2, "video_s": 5871 }
+    ]
+  },
+
+  "home_stats": {
+    "$comment": "Veo's published aggregate figures for the home side.",
+    "goals": 3,
+    "shots": 10,
+    "total_attempts": 13,
+    "possession_percent": 38,
+    "passes_completed": 203,
+    "attempts_inside_box_percent": 38,
+    "attempts_outside_box_percent": 62
+  },
+
+  "away_stats": {
+    "goals": 3,
+    "possession_percent": 62,
+    "passes_completed": 283
+  },
+
+  "event_vocabulary": {
+    "$comment": "The 15 event types Veo emits, recovered from the Events drawer. Our clone currently implements only 7.",
+    "types": [
+      "Kickoff", "Goal", "Shot on goal", "Shot", "Save", "Corner",
+      "Foul", "Free kick", "Goal kick", "Throw-in", "Tackle",
+      "Interception", "Dribble", "Loose ball recovery", "Pass"
+    ]
+  },
+
+  "UNRESOLVED": {
+    "away_shot_map": "Not captured - Veo shows one team's shot map at a time and only the home side was captured. So recall can only be scored for the home side; an away-side detection is neither a hit nor a false positive against this set.",
+    "per_event_timestamps": "The Events drawer capture contains ~390 event-type buttons but WITHOUT timestamps. Only these 13 shot-map entries carry times. A fresh capture pass would be needed for a full-vocabulary scored comparison.",
+    "second_half_offset_precision": "See time_base.residual_uncertainty - roughly +/-40s."
+  },
+
+  "scoring_protocol": {
+    "$comment": "How to use this file. Report results honestly, including losses.",
+    "primary_metric": "Goal detection: the pipeline must find goals at video_s 772, 2957 and 5516 within a stated tolerance. Use +/- 30s until the second-half offset is pinned tighter, since its own uncertainty is +/-40s. 3 of 3 is parity with Veo.",
+    "secondary_metric": "Shot/attempt detection: precision and recall against all 13 home attempts.",
+    "rules": [
+      "Score against video_s, never against the raw match-clock string.",
+      "Report per-event hits and misses, not just an aggregate.",
+      "A false positive is as reportable as a miss.",
+      "Away-side detections cannot be scored against this set; report them separately rather than counting them as errors.",
+      "Never tune thresholds on this set and then report the same set as a result. If tuning against it, say so explicitly.",
+      "Beating Veo means finding attempts it missed, and that cannot be demonstrated with this file alone - it requires manual review of the specific clip. Claim it only with a timestamp a human confirmed."
+    ]
+  }
+}

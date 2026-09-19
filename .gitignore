@@ -35,3 +35,7 @@ Thumbs.db
 .agents/
 .gemini/
 .claude/
+
+# scripts/ local overrides and caches
+scripts/config.local.env
+scripts/.video.sha256

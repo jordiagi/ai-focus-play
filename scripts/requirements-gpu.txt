@@ -1,0 +1,14 @@
+# GPU-box environment ONLY. Deliberately NOT backend/requirements.txt:
+# that file pins opencv-python-headless==5.0.0.93 / numpy==2.5.3 / scipy==1.18.1,
+# which fight ultralytics for no benefit. The two environments exchange only
+# parquet and JSON - never in-process objects - so they need not agree.
+#
+# torch is installed SEPARATELY by provision.sh from the cu128 index:
+# driver 575.57.08 is the CUDA 12.9 driver and cu13 wheels fail at cuda.init().
+#
+# Regenerate after a successful provision:  uv pip freeze > scripts/requirements-gpu.txt
+ultralytics
+pandas
+pyarrow
+scipy
+lap
