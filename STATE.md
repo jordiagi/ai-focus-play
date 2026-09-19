@@ -4,7 +4,7 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-19 · by Claude Opus 5 · G2 switched to learned pitch-keypoint calibration (PnLCalib), partially working
+**Last updated:** 2026-09-19 · by Claude Opus 5 · G2: PnLCalib measured (26% well-aligned); hybrid anchor+propagate plan next
 
 ---
 
@@ -71,7 +71,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | :-- | :-- | :-- | :-- |
 | G0 | Rebuild `benchmarks/veo_reference.json`; fix `scripts/config.env` time base; decode Veo's x/z convention | ☑ | `c38d62f`. Coords decoded: x=length, z=width, absolute. Centre spot lands 2 m off ideal — Veo's own bias, recorded not corrected |
 | G1 | **Measure ball-detection rate** — the go/no-go gate | ☑ | **Both halves measured.** tiled 0.833 / 0.828 — **gate passes**. full-frame 0.677 / 0.716 — fails one half. Caveat below: this is candidate presence, not correctness |
-| G2 | Pitch calibration | ◐ | **Approach changed: learned pitch-keypoint calibration (PnLCalib), not SIFT.** Installed on the box; 2 of 3 probe frames calibrate out of the box despite being trained on broadcast footage. Line detection needs threshold tuning (0 lines at the default). Prior SIFT/ball-correspondence attempts failed and are documented below |
+| G2 | Pitch calibration | ◐ | **PnLCalib installed and measured**: at 0.15/0.30 it calibrates 27/46 frames, 12 of them well-aligned (26%). The 85% at looser thresholds is mostly wrong. **Next: use well-aligned frames as verified anchors and propagate via SIFT registration** (proven at 0.31-3.93 px, gate >=100) |
 | G3 | Tier A detectors (7 types) | ☐ | |
 | G4 | Possession HMM → Tier B (4 types + Pass count) | ☐ | Conditional on G1 gate |
 | G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
@@ -190,22 +190,39 @@ a stray blue line on an adjacent field.
 **PnLCalib is installed and running on the box** (`/opt/PnLCalib`, weights `SV_kp` /
 `SV_lines`, GPL-2.0 — fine locally, relevant only if this is ever distributed).
 
-First numeric probe on our frames:
+Measured across 46 frames. **Coverage is not accuracy**, so each calibration was scored
+by projecting the known 105x68 pitch model back into the image and measuring how much of
+it lands on real white-line pixels (bright + desaturated; the other field's lines are
+blue and saturated, so they are excluded by construction). This test needs no ball
+detection and no Veo coordinates, so it cannot be fooled by the noise that broke the
+SIFT attempts.
 
-| frame | keypoints | lines | calibrated |
-| :-- | --: | --: | :-- |
-| anchor 960 (penalty area) | 3 | 0 | FAILED |
-| anchor 2160 (midfield) | 8 | 0 | SUCCESS |
-| frame 1200 | 13 | 0 | SUCCESS |
+| thresholds | calibrated | median alignment | well-aligned (>=0.50) |
+| :-- | --: | --: | --: |
+| 0.3434 / 0.7867 (default) | 12/46 | 0.26 | 4 (9%) |
+| **0.15 / 0.30 (best)** | 27/46 | **0.29** | **12 (26%)** |
+| 0.10 / 0.20 | 39/46 (85%) | 0.19 | 11 (24%) |
 
-So it **partially works out of the box** on amateur footage it was never trained for
-(its training sets are broadcast: SoccerNet, WorldCup 2014, TS-WorldCup). Two caveats:
-keypoint counts are low, and **line detection returns zero at the default threshold
-0.7867**, which is tuned for broadcast. A threshold sweep is running.
+Dropping the threshold to 0.10 lifts "success" to 85% while **degrading** alignment and
+producing no more well-aligned frames — the same failure shape as `min_inliers=30`. That
+85% is mostly confidently-wrong calibration. **Use 0.15 / 0.30.**
 
-Note the visualisation is misleading: `inference.py` silently writes the unmodified frame
-when calibration fails, which is why the first output looked like a no-op. Always probe
-numerically.
+Caveats that may understate true accuracy: the pitch model is fixed at 105x68 and a U16
+field is likely ~100x64, so part of the misalignment could be model mismatch rather than
+camera error; and faint or worn lines may fall outside the white mask.
+
+### The plan that follows: PnLCalib for anchors, SIFT to propagate
+
+Two measured facts combine neatly:
+- **PnLCalib calibrates ~26% of frames well** — sparse, but genuinely metric.
+- **SIFT registration transfers a frame to another at 0.31-3.93 px when inliers >= 100.**
+
+So: use the well-aligned PnLCalib frames as **verified anchors**, and propagate their
+calibration to neighbouring frames by registration. This is the anchor idea from before,
+except the anchors are now chosen because they are *provably calibrated* rather than
+picked by time, and the ball-correspondence step that failed twice is removed entirely.
+
+Both halves are already measured, so this is assembly rather than research.
 
 ### The reframe — still useful as a fallback
 
