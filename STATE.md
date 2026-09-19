@@ -4,7 +4,7 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-19 · by Claude Opus 5 · Track 2 complete; G1 gate PASSED on both halves; starting G2
+**Last updated:** 2026-09-19 · by Claude Opus 5 · Track 2 complete; G1 gate passed; G2 registration proven feasible
 
 ---
 
@@ -71,7 +71,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | :-- | :-- | :-- | :-- |
 | G0 | Rebuild `benchmarks/veo_reference.json`; fix `scripts/config.env` time base; decode Veo's x/z convention | ☑ | `c38d62f`. Coords decoded: x=length, z=width, absolute. Centre spot lands 2 m off ideal — Veo's own bias, recorded not corrected |
 | G1 | **Measure ball-detection rate** — the go/no-go gate | ☑ | **Both halves measured.** tiled 0.833 / 0.828 — **gate passes**. full-frame 0.677 / 0.716 — fails one half. Caveat below: this is candidate presence, not correctness |
-| G2 | Mosaic homography + confidence gate, validated on the 71 restart coords | ☐ | **Now mandatory** — user confirmed Veo will not export the panorama |
+| G2 | Mosaic homography + confidence gate, validated on the 71 restart coords | ◐ | **Feasibility PROVEN: 4 anchors cover 100% of sampled frames** (1→0.72, 2→0.94, 3→0.98, 4→1.00). Inliers depend on view overlap, not time separation. Next: calibrate anchors to the pitch and validate against the 71 restart coords |
 | G3 | Tier A detectors (7 types) | ☐ | |
 | G4 | Possession HMM → Tier B (4 types + Pass count) | ☐ | Conditional on G1 gate |
 | G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
@@ -113,6 +113,29 @@ this measurement has established.
 candidate presence, not correctness. Do not quote it as tracking accuracy. Trajectory
 association plus validation against known ball positions is a separate step, and the
 honest per-trajectory number will be lower.
+
+---
+
+## G2 registration feasibility (measured, not assumed)
+
+46 frames across 600-6100 s, SIFT + RANSAC, usable = >=30 inliers.
+
+- **Features are not the problem**: median 3231 keypoints per frame (min 1269).
+- **Inliers do not decay with time separation** — usable_frac is 0.42-0.64 whether the
+  pair is 120 s or 960 s apart. The constraint is **view overlap, not drift**. The
+  virtual camera pans across the pitch, so two distant views share no content
+  regardless of when they were shot. Anchor placement is therefore a set-cover problem
+  over the **pan range**, not over time.
+- **Greedy anchor cover: 1 → 0.717, 2 → 0.935, 3 → 0.978, 4 → 1.000.**
+
+Four anchors cover every sampled frame, and the full 46x46 matrix cost 12.3 s on CPU.
+The mosaic approach works on this footage. This was the riskiest and most expensive
+layer, and the one the "no panorama export" answer made unavoidable.
+
+**Still unproven:** that a registered frame yields *accurate metric* coordinates. That
+needs the anchors calibrated to the pitch and validated against the 71 restart events
+whose true pitch positions we know. The L2 gate remains: 90th-percentile error < 2 m on
+gated frames, with gate coverage >= 60% of in-play frames.
 
 ---
 
