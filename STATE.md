@@ -139,10 +139,17 @@ Two things worth keeping:
 
 ---
 
-## Open questions for the user
+## Answered by the user (2026-09-19) — both close off an easier path
 
-- **Ask Veo for the panorama export** of this match. The current file is the
-  ball-following crop, which forces per-frame homography — the single most expensive
-  layer (G2). A static panorama collapses it to a one-time 8-point calibration.
-- Team sheet / roster as a product input, so jersey recognition is a closed-set problem
-  rather than open OCR (and so we don't launder Veo's labels into our own prior).
+- **No panorama export.** Veo does not allow exporting or downloading the full panoramic
+  / interactive view. So the ball-following crop is all we get and **per-frame homography
+  (G2) is mandatory** — the mosaic-registration design is now the plan, not one option of
+  two. Budget accordingly; this is the most expensive layer.
+- **No roster / team sheet available from Veo.** So jersey recognition cannot be framed
+  as a closed-set classification over a declared squad. That leaves two honest options,
+  and the choice must be stated in the output either way:
+  1. **Open-set**: read digits with abstention, cluster per track, never assert a number
+     below the confidence margin. Lower coverage, no leakage.
+  2. **Derive the number set from Veo's 334 attributed events** — which is *leakage
+     dressed as a prior* and must be labelled as such wherever the result is reported.
+  Default to (1). Do not quietly do (2).
