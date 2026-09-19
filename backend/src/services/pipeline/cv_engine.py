@@ -540,18 +540,19 @@ class SoccerCVEngine:
                 possession_won=None
             ),
             shot_map=shot_map,
+            # `or 20.0` would turn a genuinely computed 0.0 into a plausible fiction.
+            # A real zero is a real measurement; report it as zero.
             pass_locations={
-                "home": {"defensive": h_def or 20.0, "middle": h_mid or 60.0, "attacking": h_att or 20.0},
-                "away": {"defensive": a_def or 20.0, "middle": a_mid or 60.0, "attacking": a_att or 20.0}
+                "home": {"defensive": h_def, "middle": h_mid, "attacking": h_att},
+                "away": {"defensive": a_def, "middle": a_mid, "attacking": a_att}
             },
             possession_locations={
-                "home": {"defensive": h_def or 25.0, "middle": h_mid or 50.0, "attacking": h_att or 25.0},
-                "away": {"defensive": a_def or 20.0, "middle": a_mid or 55.0, "attacking": a_att or 25.0}
+                "home": {"defensive": h_def, "middle": h_mid, "attacking": h_att},
+                "away": {"defensive": a_def, "middle": a_mid, "attacking": a_att}
             },
-            pass_strings={
-                "home": [10, 6, 4, 2, 1, 0, 0, 0],
-                "away": [12, 7, 3, 1, 0, 0, 0, 0]
-            }
+            # No pass detection exists, so there is no pass-string distribution.
+            # An empty series is honest; a decreasing-looking literal is not.
+            pass_strings={"home": [], "away": []}
         )
 
     def _generate_fallback_tracking(

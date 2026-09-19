@@ -285,9 +285,13 @@ export const PitchRadar: React.FC<PitchRadarProps> = ({
             </g>
           ))}
 
-          {/* Ball (Glowing white dot) */}
-          {currentFrame?.ball && (
-            <g className="transition-all duration-200" opacity={currentFrame.ball.detected !== false ? 1.0 : 0.3}>
+          {/* Ball (Glowing white dot).
+              Rendered ONLY when the tracker actually detected it. A dimmed ball at a
+              coasted position still asserts a position we did not measure, which is
+              the fabrication this app exists to avoid. Not detected -> draw nothing;
+              the "Ball not detected" note below says so explicitly. */}
+          {currentFrame?.ball && currentFrame.ball.detected !== false && (
+            <g className="transition-all duration-200">
               <circle
                 cx={getX(currentFrame.ball.x)}
                 cy={getY(currentFrame.ball.y)}
@@ -302,6 +306,14 @@ export const PitchRadar: React.FC<PitchRadarProps> = ({
       </div>
 
       {/* Legend & Stats below Radar */}
+      {currentFrame?.ball && currentFrame.ball.detected === false && (
+        <div
+          className="text-[10px] text-amber-400/90 px-1 pt-1"
+          title="The tracker did not find the ball in this frame. No position is shown because none was measured."
+        >
+          Ball not detected
+        </div>
+      )}
       <div className="flex items-center justify-between text-[11px] text-gray-400 px-1 pt-1">
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-1.5">

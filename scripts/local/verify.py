@@ -377,6 +377,58 @@ def d6_zip_streaming():
     return "PASS", f"{len(names)} clip member(s), all distinct, none a full video"
 
 
+def d10_no_invented_analytics():
+    """Catches: a plausible-looking literal standing in for a statistic nothing computes.
+
+    This is the class of bug that survived the first hardening pass: the seed was fixed
+    to an empty series while the PIPELINE kept a hardcoded decay curve, and the UI
+    rendered it as a real bar chart. Behavioural, not a grep: it runs the engine and
+    inspects what it actually returns."""
+    media = os.path.join(REPO, "backend/.local/media")
+    clip = os.path.join(media, "demo_match.mp4")
+    if not os.path.exists(clip):
+        return "SKIP", "no clip to drive the engine"
+    code = (
+        "import json,sys;"
+        "from pathlib import Path;"
+        "from backend.src.services.pipeline.cv_engine import cv_engine;"
+        "_,_,_,a = cv_engine.process_video(Path(sys.argv[1]),'H','A');"
+        "print(json.dumps({"
+        "'pass_strings':a.pass_strings,"
+        "'heatmaps':a.heatmaps,"
+        "'home':{k:getattr(a.home_stats,k) for k in "
+        "  ('tackles','passes_completed','corners','fouls','free_kicks','throw_ins',"
+        "   'penalties','possession_won')},"
+        "'pass_locations':a.pass_locations}))"
+    )
+    r = subprocess.run([VENV, "-c", code, clip], cwd=REPO,
+                       env={**os.environ, "PYTHONPATH": REPO},
+                       capture_output=True, text=True, timeout=900)
+    if r.returncode != 0:
+        return "FAIL", f"engine run failed: {r.stderr.strip()[-200:]}"
+    try:
+        a = json.loads(r.stdout.strip().splitlines()[-1])
+    except Exception as e:
+        return "FAIL", f"could not parse engine output: {e}"
+
+    bad = []
+    for side, series in (a.get("pass_strings") or {}).items():
+        if series:
+            bad.append(f"pass_strings[{side}]={series} but nothing detects passes")
+    for side, series in (a.get("heatmaps") or {}).items():
+        if series:
+            bad.append(f"heatmaps[{side}] is populated but nothing computes heatmaps")
+    for k, v in (a.get("home") or {}).items():
+        if v not in (None,):
+            bad.append(f"home_stats.{k}={v} but nothing computes it")
+    # A substituted default betrays itself as a suspiciously round number.
+    for side, thirds in (a.get("pass_locations") or {}).items():
+        vals = [v for v in (thirds or {}).values() if v is not None]
+        if vals and sorted(vals) in ([20.0, 20.0, 60.0], [25.0, 25.0, 50.0]):
+            bad.append(f"pass_locations[{side}]={thirds} is the hardcoded fallback split")
+    return ("PASS", "no invented analytics literal returned") if not bad else ("FAIL", "; ".join(bad))
+
+
 PROBES = {
     "d1": ("read-only enforcement", d1_read_only),
     "d2": ("CV determinism", d2_determinism),
@@ -386,6 +438,7 @@ PROBES = {
     "d6": ("streaming zip export", d6_zip_streaming),
     "d7": ("orphaned-job sweep", d7_orphan_sweep),
     "d8": ("invented shot outcome", d8_saved_outcome),
+    "d10": ("invented analytics literals", d10_no_invented_analytics),
 }
 
 def main():

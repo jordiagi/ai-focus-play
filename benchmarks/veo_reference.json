@@ -1,113 +1,310 @@
 {
-  "$comment": "Veo's own analysis of this match, recovered from captured accessibility trees of the live app.veo.co page. This is a BENCHMARK TO MATCH OR BEAT, not ground truth and not seed data. Never load this into the app as fixture data.",
-
-  "match": {
-    "veo_url": "https://app.veo.co/matches/20260913-arlington-sa-u16b-ecnl-26-27-vs-skyline-u16b-ecnl-v7228589",
-    "home_team": "Arlington SA U16B ECNL (26-27)",
-    "away_team": "Skyline U16B ECNL",
-    "date": "2026-09-13",
-    "source_video": "~/Downloads/arlington-sa-u16b-ecnl-26-27-vs-skyline-u16b-ecnl-2026-09-13-2026-09-13.mp4",
-    "video_duration_seconds": 6172.933,
-    "video_duration_display": "102:52",
-    "video_resolution": "1920x1080",
-    "video_fps": 29.97,
-    "video_has_audio": false
+ "$comment": "Veo's own analysis of this match, captured 2026-09-19 directly from Veo's private API while authenticated in a browser. This is a BENCHMARK TO MATCH OR BEAT, not ground truth about football and NOT seed data. Never load it into the app as fixture data. It REPLACES the previous hand-derived file, whose second-half timestamps were wrong by up to 752 s because they were inferred from Veo's displayed match clock using guessed offsets.",
+ "supersedes": {
+  "file": "veo_reference.json (pre 2026-09-19)",
+  "why": "Derived video_s from match-clock strings with assumed offsets (+561 H1, +1080 H2) and an assumed 2400 s half. Measured reality: offsets 562 and 3674, halves 2317.0 and 2457.7. Home-goal error was 3 s / 752 s / 234 s against a +/-30 s tolerance, so a correct detector would have been scored as missing goals it found.",
+  "lesson": "Self-consistent arithmetic is not corroboration. The old file's 'all 13 attempts land inside the video' check passed while being badly wrong."
+ },
+ "match": {
+  "title": "Arlington SA U16B ECNL (26-27) vs Skyline U16B ECNL",
+  "date": "2026-09-13",
+  "veo_match_uuid": "3ddc7b34-d737-4cd4-83ce-7490d9e07efa",
+  "veo_slug": "20260913-arlington-sa-u16b-ecnl-26-27-vs-skyline-u16b-ecnl-v7228589",
+  "duration_s": 6172.933,
+  "final_score": {
+   "own": 3,
+   "opponent": 3
   },
-
-  "provenance": {
-    "captured_by": "Antigravity browser session, authenticated as the account owner",
-    "capture_files": [
-      "~/.gemini/antigravity/brain/ec49a13a-30d4-4058-8c04-0452b70ec441/.tempmediaStorage/snapshot_full_1789685128256.txt",
-      "~/.gemini/antigravity/brain/ec49a13a-30d4-4058-8c04-0452b70ec441/.tempmediaStorage/snapshot_full_1789685111525.txt"
-    ],
-    "extracted": "2026-09-17",
-    "method": "accessibility-tree text, not a network/API capture"
-  },
-
-  "time_base": {
-    "$comment": "RESOLVED 2026-09-17 by sampling frames from the source video. Shot-map timestamps are MATCH CLOCK, not video time. Convert before scoring.",
-    "confirmed_by_frame_inspection": {
-      "first_half_kickoff_video_s": 561,
-      "evidence": "Frames at 10s/120s/300s/480s show warmup on a near-empty pitch. t=540s shows teams forming up. t=561s shows a textbook kickoff formation: players ringed around the centre circle with one at the spot.",
-      "first_half_end_video_s": 2961,
-      "half_length_s": 2400,
-      "half_length_note": "2961 - 561 = exactly 2400s = 40:00. U16 ECNL plays 40-minute halves, so this is a strong structural confirmation rather than a coincidence.",
-      "halftime_span_video_s": [2961, 3480],
-      "halftime_evidence": "Active play at 2900s. Pitch empties by 2980s and stays empty through 3300s. Teams regather by 3460s."
-    },
-    "conversion": {
-      "first_half": "video_seconds = match_seconds + 561",
-      "second_half": "video_seconds = match_seconds + 1080",
-      "second_half_derivation": "Second half kicks off at video ~3480s at match clock 2400s, so offset = 1080."
-    },
-    "corroboration": "Applying these offsets places all 13 attempts inside the video, and the last one (79:51 -> video 5871s) lands 9 seconds before the predicted second-half end at 5880s, with ~5 minutes of post-match footage remaining to reach the 6172s total. Independent arithmetic agreeing to within 9s is good evidence the offsets are right.",
-    "residual_uncertainty": "The second-half kickoff was bracketed to 3380-3500s by frame sampling, so the +1080 offset carries roughly +/-40s. Pin it precisely before tight-tolerance scoring by bisecting frames in that window for the restart.",
-    "not_confirmed": "No individual goal has been visually verified. Frames around the predicted first goal (video 772s) show a ball airborne at 770s, play switching ends by 775s, and centre-circle activity at 795s - consistent with a goal and restart, but stills cannot prove it. Watching video 765-800s would settle it in under a minute."
-  },
-
-  "home_shot_map": {
-    "$comment": "From the Analytics drawer Shot map section. Chronological. Veo displays one team's shot map at a time; this is the HOME side. Self-consistent with home_stats below: 3 goals + 10 shots = 13 total attempts. video_s is DERIVED via time_base.conversion above, not captured.",
-    "team": "home",
-    "attempts": [
-      { "type": "Goal", "t": "03:31", "half": 1, "video_s": 772 },
-      { "type": "Shot", "t": "07:59", "half": 1, "video_s": 1040 },
-      { "type": "Shot", "t": "14:55", "half": 1, "video_s": 1456 },
-      { "type": "Shot", "t": "21:45", "half": 1, "video_s": 1866 },
-      { "type": "Shot", "t": "30:55", "half": 1, "video_s": 2416 },
-      { "type": "Shot", "t": "33:51", "half": 1, "video_s": 2592 },
-      { "type": "Goal", "t": "39:56", "half": 1, "video_s": 2957 },
-      { "type": "Shot", "t": "55:45", "half": 2, "video_s": 4425 },
-      { "type": "Shot", "t": "64:27", "half": 2, "video_s": 4947 },
-      { "type": "Shot", "t": "70:08", "half": 2, "video_s": 5288 },
-      { "type": "Goal", "t": "73:56", "half": 2, "video_s": 5516 },
-      { "type": "Shot", "t": "76:55", "half": 2, "video_s": 5695 },
-      { "type": "Shot", "t": "79:51", "half": 2, "video_s": 5871 }
-    ]
-  },
-
-  "home_stats": {
-    "$comment": "Veo's published aggregate figures for the home side.",
-    "goals": 3,
-    "shots": 10,
-    "total_attempts": 13,
-    "possession_percent": 38,
-    "passes_completed": 203,
-    "attempts_inside_box_percent": 38,
-    "attempts_outside_box_percent": 62
-  },
-
-  "away_stats": {
-    "goals": 3,
-    "possession_percent": 62,
-    "passes_completed": 283
-  },
-
-  "event_vocabulary": {
-    "$comment": "The 15 event types Veo emits, recovered from the Events drawer. Our clone currently implements only 7.",
-    "types": [
-      "Kickoff", "Goal", "Shot on goal", "Shot", "Save", "Corner",
-      "Foul", "Free kick", "Goal kick", "Throw-in", "Tackle",
-      "Interception", "Dribble", "Loose ball recovery", "Pass"
-    ]
-  },
-
-  "UNRESOLVED": {
-    "away_shot_map": "Not captured - Veo shows one team's shot map at a time and only the home side was captured. So recall can only be scored for the home side; an away-side detection is neither a hit nor a false positive against this set.",
-    "per_event_timestamps": "The Events drawer capture contains ~390 event-type buttons but WITHOUT timestamps. Only these 13 shot-map entries carry times. A fresh capture pass would be needed for a full-vocabulary scored comparison.",
-    "second_half_offset_precision": "See time_base.residual_uncertainty - roughly +/-40s."
-  },
-
-  "scoring_protocol": {
-    "$comment": "How to use this file. Report results honestly, including losses.",
-    "primary_metric": "Goal detection: the pipeline must find goals at video_s 772, 2957 and 5516 within a stated tolerance. Use +/- 30s until the second-half offset is pinned tighter, since its own uncertainty is +/-40s. 3 of 3 is parity with Veo.",
-    "secondary_metric": "Shot/attempt detection: precision and recall against all 13 home attempts.",
-    "rules": [
-      "Score against video_s, never against the raw match-clock string.",
-      "Report per-event hits and misses, not just an aggregate.",
-      "A false positive is as reportable as a miss.",
-      "Away-side detections cannot be scored against this set; report them separately rather than counting them as errors.",
-      "Never tune thresholds on this set and then report the same set as a result. If tuning against it, say so explicitly.",
-      "Beating Veo means finding attempts it missed, and that cannot be demonstrated with this file alone - it requires manual review of the specific clip. Claim it only with a timestamp a human confirmed."
-    ]
+  "own_team": "Arlington SA U16B ECNL (26-27)",
+  "opponent_team": "Skyline U16B ECNL",
+  "video": {
+   "width": 1920,
+   "height": 1080,
+   "fps": "30000/1001",
+   "frames": 185003,
+   "audio": false,
+   "note": "NO audio stream. Whistle-based foul detection is structurally impossible."
   }
+ },
+ "provenance": {
+  "source": "GET /api/app/matches/{uuid}/events/ and /highlights/",
+  "captured": "2026-09-19",
+  "auth": "Bearer token from the live web session; EPHEMERAL, never committed",
+  "headers_required": [
+   "Authorization: Bearer <token>",
+   "veo-agent: veo:svc:web-app",
+   "Veo-App-Id: hazard"
+  ],
+  "note": "The slug returns 403 on these endpoints; the match UUID is required.",
+  "raw_files": [
+   "benchmarks/raw/veo_events_447.csv",
+   "benchmarks/raw/veo_highlights_31.csv"
+  ]
+ },
+ "time_base": {
+  "$comment": "MEASURED, not inferred. video_s = period_time_s + offset_s. Each period's offset is a single exact value across all its events.",
+  "periods": {
+   "1": {
+    "offset_s": 562.0,
+    "offset_unique": true,
+    "video_start_s": 562.3,
+    "video_end_s": 2879.3,
+    "n_events": 211
+   },
+   "2": {
+    "offset_s": 3674.0,
+    "offset_unique": true,
+    "video_start_s": 3674.4,
+    "video_end_s": 6132.1,
+    "n_events": 236
+   }
+  },
+  "kickoff_video_s": 562.3,
+  "h1_end_video_s": 2879.3,
+  "halftime_s": 795.1,
+  "h2_start_video_s": 3674.4,
+  "last_event_video_s": 6132.1,
+  "half_lengths_s": [
+   2317.0,
+   2457.7
+  ],
+  "warning": "Do NOT reconstruct these from Veo's displayed match-clock strings. That is how the previous file went wrong. Use video_time_ms from the raw CSV."
+ },
+ "coordinate_system": {
+  "$comment": "Decoded 2026-09-19 by fitting events with known geometry.",
+  "x": "length axis, normalized; goal lines at x=0 and x=1",
+  "z": "width axis, normalized; touchlines at z=0 and z=1",
+  "absolute_not_attack_relative": true,
+  "evidence": {
+   "kickoffs_at_centre": "n=8 cluster at x=0.519+/-0.003, z=0.506",
+   "throwins_on_touchlines": "30/31 within 0.08 of z=0 or z=1",
+   "goalkicks_on_goal_lines": "14/14 within 0.08 of x=0 or x=1",
+   "both_teams_use_both_ends": "so coordinates are absolute, not flipped per attacking direction"
+  },
+  "to_metres": {
+   "pitch_x_m": "x * pitch_length_m",
+   "pitch_y_m": "z * pitch_width_m",
+   "default_pitch": [
+    105,
+    68
+   ],
+   "measured_offset": "centre spot lands at (54.5, 34.4) m on a 105x68 model vs the ideal (52.5, 34.0) - a ~2 m systematic bias in Veo's own calibration. Recorded, not corrected.",
+   "values_are_unclamped": "z ranges -0.029..1.026, so treat as a model projection with noise"
+  }
+ },
+ "events": {
+  "total": 447,
+  "types": 14,
+  "with_jersey": 334,
+  "with_coords": 355,
+  "per_type": {
+   "interception": {
+    "total": 89,
+    "own": 44,
+    "opponent": 45,
+    "match_tolerance_s": 2.0
+   },
+   "tackle": {
+    "total": 84,
+    "own": 41,
+    "opponent": 43,
+    "match_tolerance_s": 2.0
+   },
+   "FootballOutOfPlay": {
+    "total": 64,
+    "own": 24,
+    "opponent": 40,
+    "match_tolerance_s": 3.0
+   },
+   "dribble": {
+    "total": 41,
+    "own": 12,
+    "opponent": 29,
+    "match_tolerance_s": 2.0
+   },
+   "FootballThrowIn": {
+    "total": 38,
+    "own": 24,
+    "opponent": 14,
+    "match_tolerance_s": 3.0
+   },
+   "loose": {
+    "total": 27,
+    "own": 14,
+    "opponent": 13,
+    "match_tolerance_s": 2.0
+   },
+   "FootballShot": {
+    "total": 25,
+    "own": 13,
+    "opponent": 12,
+    "match_tolerance_s": 5.0
+   },
+   "FootballGoalKick": {
+    "total": 16,
+    "own": 9,
+    "opponent": 7,
+    "match_tolerance_s": 3.0
+   },
+   "FootballFoul": {
+    "total": 15,
+    "own": 8,
+    "opponent": 7,
+    "match_tolerance_s": 3.0
+   },
+   "FootballFreeKick": {
+    "total": 15,
+    "own": 7,
+    "opponent": 8,
+    "match_tolerance_s": 3.0
+   },
+   "save": {
+    "total": 10,
+    "own": 3,
+    "opponent": 7,
+    "match_tolerance_s": 3.0
+   },
+   "FootballCornerKick": {
+    "total": 9,
+    "own": 6,
+    "opponent": 3,
+    "match_tolerance_s": 3.0
+   },
+   "FootballKickOff": {
+    "total": 8,
+    "own": 4,
+    "opponent": 4,
+    "match_tolerance_s": 3.0
+   },
+   "FootballGoal": {
+    "total": 6,
+    "own": 3,
+    "opponent": 3,
+    "match_tolerance_s": 3.0
+   }
+  },
+  "goals": [
+   {
+    "video_s": 725.4,
+    "period": 1,
+    "team": "Opponent",
+    "jersey": "35"
+   },
+   {
+    "video_s": 775.3,
+    "period": 1,
+    "team": "Own",
+    "jersey": "24"
+   },
+   {
+    "video_s": 1261.3,
+    "period": 1,
+    "team": "Opponent",
+    "jersey": "49"
+   },
+   {
+    "video_s": 2527.2,
+    "period": 1,
+    "team": "Opponent",
+    "jersey": "19"
+   },
+   {
+    "video_s": 3709.3,
+    "period": 2,
+    "team": "Own",
+    "jersey": "44"
+   },
+   {
+    "video_s": 5749.6,
+    "period": 2,
+    "team": "Own",
+    "jersey": "14"
+   }
+  ],
+  "note_pass": "Veo's UI shows a 15th type, Pass (203 own / 283 opponent), which this endpoint does NOT expose. Per-event Pass scoring is therefore impossible; only an aggregate count can be compared."
+ },
+ "veo_published_stats": {
+  "$comment": "The 13 rows of Veo's stats table, own/opponent.",
+  "Goal": [
+   3,
+   3
+  ],
+  "PossessionPercent": [
+   38,
+   62
+  ],
+  "Shot": [
+   10,
+   9
+  ],
+  "TotalAttempts": [
+   13,
+   12
+  ],
+  "Corner": [
+   6,
+   3
+  ],
+  "Foul": [
+   8,
+   7
+  ],
+  "FreeKick": [
+   7,
+   8
+  ],
+  "PassesCompleted": [
+   203,
+   283
+  ],
+  "Penalty": [
+   0,
+   0
+  ],
+  "PossessionMinutes": [
+   14,
+   22
+  ],
+  "PossessionWon": [
+   150,
+   151
+  ],
+  "Tackle": [
+   41,
+   43
+  ],
+  "ThrowIn": [
+   24,
+   14
+  ]
+ },
+ "structural_identities": {
+  "$comment": "Free self-consistency checks. Run these on OUR output first - they fail faster and cheaper than a scored comparison.",
+  "kickoffs_equal_periods_plus_goals": "8 = 2 + 6. Exact.",
+  "fouls_mirror_freekicks": "Foul 8/7 vs FreeKick 7/8 - Veo emits a paired Foul(offender)+FreeKick(beneficiary). ONE detector, not two.",
+  "possession_is_control_time": "14+22=36 min of control out of ~79 min of play; 14/36=38.9% ~ the published 38%. Control is only ~46% of playing time. Any model attributing 70 min of control is wrong by construction."
+ },
+ "scoring_protocol": {
+  "$comment": "How to use this file. Report losses as loudly as wins.",
+  "primary": "Per-type Hungarian one-to-one matching on |dt|, capped at that type's match_tolerance_s, requiring team match. Score against video_s only.",
+  "headline_metrics": [
+   "macro_F1 over ATTEMPTED types (each type weighted equally)",
+   "micro_F1 (event-weighted), reported separately and labelled",
+   "parity_count: integer number of types at F1 >= 0.5, out of 14"
+  ],
+  "rules": [
+   "Score against video_s derived from video_time_ms. Never against a match-clock string.",
+   "Print the expected-by-chance baseline beside every recall figure. A detector emitting n candidates over duration D hits a given event by luck with probability 1-(1-2*tol/D)^n; for interception (n=89, tol=2s) that is ~7.5%.",
+   "Report precision AND recall. Recall alone is how noise looks like success.",
+   "Report n on every row. Flag n<10 as low-n and report counts, not percentages.",
+   "Types not attempted are status 'not_attempted', EXCLUDED from macro-F1 but counted in two separate coverage figures: type coverage and event-mass coverage.",
+   "A type that IS attempted and scores 0 stays in the macro average. The attempted-set is declared in a manifest committed BEFORE the run; the harness enforces this, not discipline.",
+   "Period 1 is the dev set, period 2 is held out. Report both side by side so leakage shows up as a gap.",
+   "Report team-agnostic score alongside team-conditioned, to separate detection error from attribution error.",
+   "Jersey accuracy is computed on true positives only.",
+   "The 13 stat rows are scored as signed relative error; a rendered em-dash means NOT PRODUCED and is explicitly not an error of 0.",
+   "Penalty is 0/0. 'Matching' it proves nothing - report 'no penalty-spot restart found'.",
+   "Beating Veo means finding events it missed, which this file cannot demonstrate. Claim it only with a timestamp a human confirmed on the video."
+  ]
+ }
 }

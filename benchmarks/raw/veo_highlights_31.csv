@@ -1,0 +1,37 @@
+# Veo AI-generated highlight clips, captured 2026-09-19 from
+# GET /api/app/matches/{uuid}/highlights/
+# start_s is the CLIP start in video seconds; the event itself occurs
+# roughly 11-15s later (compare against veo_events_447.csv video_time_ms).
+# Goals appear as a goal + shot_on_goal pair at nearly the same start.
+start_s,duration_s,type,team,is_ai
+710,25,goal,opponent,1
+710,25,shot_on_goal,opponent,1
+758,25,shot_on_goal,own,1
+760,25,goal,own,1
+877,25,shot_on_goal,opponent,1
+1026,25,shot_on_goal,own,1
+1200,25,shot_on_goal,opponent,1
+1245,25,shot_on_goal,opponent,1
+1246,25,goal,opponent,1
+1442,25,shot_on_goal,own,1
+1852,25,shot_on_goal,own,1
+2058,25,shot_on_goal,opponent,1
+2123,25,shot_on_goal,opponent,1
+2402,25,shot_on_goal,own,1
+2511,25,shot_on_goal,opponent,1
+2512,25,goal,opponent,1
+2578,25,shot_on_goal,own,1
+2842,25,shot_on_goal,opponent,1
+3693,25,shot_on_goal,own,1
+3694,25,goal,own,1
+3860,25,shot_on_goal,opponent,1
+4492,25,shot_on_goal,opponent,1
+4642,25,shot_on_goal,own,1
+4983,25,shot_on_goal,opponent,1
+5164,25,shot_on_goal,own,1
+5411,25,shot_on_goal,opponent,1
+5505,25,shot_on_goal,own,1
+5733,25,shot_on_goal,own,1
+5734,25,goal,own,1
+5912,25,shot_on_goal,own,1
+6088,25,shot_on_goal,own,1
