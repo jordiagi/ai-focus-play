@@ -131,6 +131,31 @@ export interface PlayerRoster {
   minutes_played: number;
 }
 
+export type EventCapabilityStatus = 'detected' | 'not_attempted' | 'unavailable';
+
+export interface EventCapability {
+  status: EventCapabilityStatus;
+  count?: number | null;
+  reason?: string | null;
+}
+
+export type EventTypeLabel =
+  | 'Kickoff'
+  | 'Goal'
+  | 'Shot on goal'
+  | 'Shot'
+  | 'Save'
+  | 'Corner'
+  | 'Foul'
+  | 'Free kick'
+  | 'Goal kick'
+  | 'Throw-in'
+  | 'Tackle'
+  | 'Interception'
+  | 'Dribble'
+  | 'Loose ball recovery'
+  | 'Pass';
+
 export interface Match {
   id: string;
   title: string;
@@ -152,6 +177,7 @@ export interface Match {
   journal_notes: string;
   analysis_mode?: 'demo' | 'heuristic' | 'ml';
   analysis_confidence?: 'low' | 'medium' | 'high';
+  event_capabilities?: Partial<Record<EventTypeLabel, EventCapability>>;
 }
 
 export interface Capabilities {
