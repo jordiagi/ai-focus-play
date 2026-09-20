@@ -4,7 +4,7 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-19 · by Claude Opus 5 · G2: PnLCalib fails end-to-end (88-110 m); pivoting to mosaic stitching
+**Last updated:** 2026-09-20 · by Claude Opus 5 · **CONSOLIDATED.** G2 stopped by decision; see `specs/deferred.md`
 
 ---
 
@@ -18,6 +18,16 @@ is worse than none.
 3. Check blockers below before touching gpu-box.
 4. `bash scripts/local/verify.sh all` should print `pass=9 fail=0 skip=0`. If it
    doesn't, something regressed — fix that before new work.
+
+---
+
+## Status: consolidated 2026-09-20
+
+Work is **stopped at a deliberate stopping point**, not abandoned mid-flight. Everything
+below is committed, verified and reproducible. Metric pitch calibration was attempted
+three times, failed each time for a diagnosed structural reason, and is parked as **D-A**
+in `specs/deferred.md` along with the pragmatic alternative **D-B** (pixel-space Tier A
+detection, which needs no metres). Pick either up when the feature is wanted.
 
 ---
 
@@ -55,7 +65,7 @@ benchmark went wrong.
 
 ## Work package status
 
-Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked · ✗ abandoned
+Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked · ⏸ deferred by decision · ✗ abandoned
 
 ### Cross-cutting (do first, cheap, no GPU)
 
@@ -71,12 +81,12 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | :-- | :-- | :-- | :-- |
 | G0 | Rebuild `benchmarks/veo_reference.json`; fix `scripts/config.env` time base; decode Veo's x/z convention | ☑ | `c38d62f`. Coords decoded: x=length, z=width, absolute. Centre spot lands 2 m off ideal — Veo's own bias, recorded not corrected |
 | G1 | **Measure ball-detection rate** — the go/no-go gate | ☑ | **Both halves measured.** tiled 0.833 / 0.828 — **gate passes**. full-frame 0.677 / 0.716 — fails one half. Caveat below: this is candidate presence, not correctness |
-| G2 | Pitch calibration | ◐ | **PnLCalib pretrained FAILS end-to-end** (4.5% of event frames well-aligned; median error 88-110 m). All pretrained models are broadcast-trained. **Next: stitch a pitch mosaic and calibrate that**, since single crops show too little pitch |
-| G3 | Tier A detectors (7 types) | ☐ | |
-| G4 | Possession HMM → Tier B (4 types + Pass count) | ☐ | Conditional on G1 gate |
+| G2 | Pitch calibration | ⏸ **STOPPED** | Three approaches measured and failed (1854 m → 10-15 m → 88-110 m). Cause is structural, not tuning: all pretrained models are broadcast-trained and each of our frames shows too little pitch. Parked as **D-A** in `specs/deferred.md` |
+| G3 | Tier A detectors (7 types) | ⏸ | |
+| G4 | Possession HMM → Tier B (4 types + Pass count) | ⏸ | Conditional on G1 gate |
 | G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
-| G6 | Ingest artifacts → `analysis_mode="ml"` | ☐ | `ml_ingest.py` does not exist yet |
-| G7 | Jersey recognition | ☐ | Last. **No roster available**, so open-set with abstention, or Veo-label leakage that must be declared. Honest ceiling ~25-40% vs Veo's 75% |
+| G6 | Ingest artifacts → `analysis_mode="ml"` | ⏸ | `ml_ingest.py` does not exist yet |
+| G7 | Jersey recognition | ⏸ | Last. **No roster available**, so open-set with abstention, or Veo-label leakage that must be declared. Honest ceiling ~25-40% vs Veo's 75% |
 
 ### Track 2 — UI / route parity — ☑ **COMPLETE**
 

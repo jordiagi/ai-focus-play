@@ -1,5 +1,25 @@
 # Veo feature parity on gpu-box
 
+> **STATUS as of 2026-09-20 — read `STATE.md` first.**
+>
+> This document is the *roadmap and reasoning*. It is not a status report, and parts of
+> it were overtaken by measurement:
+>
+> - **Track 2 (UI/route parity) is COMPLETE** — U1, U2, U3 merged and verified.
+> - **G0 (benchmark rebuild), G1 (ball-detection gate) and G5 (scoring harness) are
+>   DONE.** G1 passed on both halves: tiled inference 0.833 / 0.828.
+> - **G2 (metric pitch calibration) was attempted three times and failed each time**, for
+>   a diagnosed structural reason. Work is stopped by decision. The two ways forward are
+>   specified in `specs/deferred.md` as **D-A** (stitch the panorama, then calibrate it)
+>   and **D-B** (pixel-space Tier A detection, which needs no metres at all).
+> - Because G2 is unsolved, **G3, G4, G6 and G7 are deferred** — they depend on it or sit
+>   behind it.
+>
+> The realistic-parity estimate below still stands as an estimate. **Nothing in it has
+> been demonstrated**: no event detector has been built, and the 447-event benchmark has
+> not yet been scored against any output of ours.
+
+
 ## Context
 
 The previous plan (move to gpu-box, build an ML pipeline, close six defects) is **half
