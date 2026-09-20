@@ -337,9 +337,41 @@ with three caveats. **n = 8.** Confidence is not a guarantee: two of the six con
 kickoffs were still 3.6 m and 4.4 m out. And at 5 fps a ±0.1 s timing offset moves a
 just-kicked ball a metre or two, so part of the residual is sampling, not detection.
 
-### Where the ball layer actually stands
+### The trajectory: fixed by letting the tracker say "no"
 
-Usable signal, unusable trajectory. The Viterbi track still has **13.6 % of steps above
-plausible ball speed**, and a confidence gate trades hard: conf >= 0.45 keeps 47 % of
-frames, conf >= 0.55 keeps 38 %. Shot detection needs speed and direction, and a track
-with one step in seven impossible cannot supply them yet.
+The 13.6 % of impossible steps was **my bug, not a detector limit**. The first Viterbi
+had to pick a candidate in every frame; since barely half of frames hold a plausible
+one, it was forced onto a false positive in most of them. Adding an explicit miss state
+— states are (frame, candidate), transitions may skip frames at `miss_cost` each, and
+virtual START/END nodes make the path span the run so the output is a full
+assign-or-decline labelling:
+
+| miss_cost | coverage | track points | median step | steps over vmax |
+| --: | --: | --: | --: | --: |
+| 0.8 | 0.284 | 5,333 | 80.7 px/s | **0.02 %** |
+| **1.8** | **0.586** | **10,994** | 85.4 px/s | **0.51 %** |
+| 2.5 | 0.700 | 13,134 | 83.0 px/s | 0.94 % |
+
+**13.6 % → 0.1-0.9 %.** `miss_cost` is the decision threshold in disguise: a candidate
+is worth taking when `-log(conf)` falls below it, so 1.2 means "assign above conf ~0.30".
+
+Note the first attempt at this returned **37 points from 18,752 frames** — without the
+START/END nodes the cheapest path is a single frame, because any state may begin a
+chain at zero cost.
+
+### How good is the track, really
+
+| measure | value |
+| :-- | --: |
+| centre spot at kickoff, window ±0.6 s, all 8 kickoffs | **5.7-6.2 m** |
+| ... stationary window before the whistle (only 3 kickoffs covered) | **3.9 m** |
+| raw top-confidence candidate at the kickoff frame (n=8) | 3.0 m |
+| control: track sampled at arbitrary times | **24.5 m** |
+
+Real but coarse — roughly 4-6x better than chance. Two honest caveats: **n = 8**, and
+the centre spot itself comes from an ellipse fit, so part of the residual is the
+reference, not the track.
+
+The contaminated correlation test did improve with the clean track (0.833 → **0.885**,
+against a favoured baseline of 0.907), which is consistent with a better track but
+cannot prove it — losing that test means nothing, only winning would.

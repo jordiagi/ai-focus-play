@@ -48,6 +48,11 @@ def main():
                          "ball-following crop, so the camera's aim is evidence about "
                          "where the ball is -- ignoring it threw away the strongest "
                          "signal available, and the first run lost to it 0.833 vs 0.908")
+    ap.add_argument("--max-skip", type=int, default=10,
+                    help="frames the tracker may decline in a row (the miss state)")
+    ap.add_argument("--miss-cost", type=float, default=1.2,
+                    help="cost per declined frame; too low and it tracks nothing, too "
+                         "high and it is forced onto false positives again")
     ap.add_argument("--max-gap-s", type=float, default=3.0,
                     help="beyond this the sequence is cut; continuity means nothing")
     ap.add_argument("--event-tol-s", type=float, default=1.0)
@@ -85,39 +90,75 @@ def main():
     if cur:
         runs.append(cur)
 
+    def emis_of(f):
+        e = np.array([-math.log(max(c[3], 1e-6)) for c in f["c"]]) * a.w_conf
+        pv = prior.get(round(f["t"], 3))
+        if pv is not None and len(pv) == len(e):
+            e = e + a.w_centre * np.asarray(pv) ** 2
+        return e
+
+    # Viterbi WITH an explicit miss state, expressed as skip-transitions.
+    #
+    # The first version had to pick a candidate in every frame. At conf>=0.45 only 47%
+    # of frames hold a plausible candidate, so in most frames it was forced to take a
+    # false positive -- which is exactly what produced a jump. 13.6% of steps above
+    # plausible ball speed was in fact LOW for a tracker that cannot decline.
+    #
+    # Here a state is (frame, candidate) and a transition may skip up to `max-skip`
+    # frames at a per-frame cost. Skipped frames are misses: the tracker declines them
+    # rather than inventing a position, and the motion term is scored over the true
+    # elapsed time rather than a single frame step.
+    # Viterbi WITH an explicit miss state.
+    #
+    # The first version had to pick a candidate in EVERY frame. At conf>=0.45 only 47%
+    # of frames hold a plausible candidate, so in most frames it was forced onto a
+    # false positive -- which is what produced the jumps. 13.6% of steps above
+    # plausible ball speed was in fact LOW for a tracker that cannot decline.
+    #
+    # A state is (frame, candidate); a transition may skip frames at `miss_cost` each.
+    # Virtual START and END nodes make the path span the whole run, so the result is a
+    # full labelling -- assign or decline -- rather than one chain. Without them the
+    # cheapest path is a single frame, which is exactly what the first attempt returned
+    # (37 points from 18,752 frames).
+    #
+    # miss_cost is the decision threshold in disguise: a candidate is worth taking when
+    # -log(conf) is below it, so 1.2 means "assign above conf ~0.30".
     track = []
     for run in runs:
         n = len(run)
-        cost = [None] * n
-        back = [None] * n
-        def emis_of(f):
-            e = np.array([-math.log(max(c[3], 1e-6)) for c in f["c"]]) * a.w_conf
-            pv = prior.get(round(f["t"], 3))
-            if pv is not None and len(pv) == len(e):
-                e = e + a.w_centre * np.asarray(pv) ** 2
-            return e
-
-        cost[0] = emis_of(run[0])
+        pos = [np.array([[c[0], c[1]] for c in f["c"]], float) for f in run]
+        emis = [emis_of(f) for f in run]
+        best = [emis[k] + a.miss_cost * k for k in range(n)]   # from START
+        bptr = [[(-1, -1)] * len(e) for e in emis]
         for k in range(1, n):
-            dt = max(run[k]["t"] - run[k - 1]["t"], 1e-3)
-            prev = np.array([[c[0], c[1]] for c in run[k - 1]["c"]])
-            curp = np.array([[c[0], c[1]] for c in run[k]["c"]])
-            d = np.linalg.norm(curp[:, None, :] - prev[None, :, :], axis=2)
-            # Huber on displacement normalised by the plausible travel in dt
-            z = d / max(a.vmax_px_s * dt, 1e-6)
-            trans = np.where(z <= 1.0, z ** 2, 2 * z - 1.0)
-            emis = emis_of(run[k])
-            tot = trans + cost[k - 1][None, :]
-            back[k] = np.argmin(tot, axis=1)
-            cost[k] = tot[np.arange(len(curp)), back[k]] + emis
-        j = int(np.argmin(cost[n - 1]))
-        idx = [0] * n
-        idx[n - 1] = j
-        for k in range(n - 1, 0, -1):
-            idx[k - 1] = int(back[k][idx[k]])
-        for k, f in enumerate(run):
-            c = f["c"][idx[k]]
-            track.append({"t": f["t"], "u": c[0], "v": c[1], "size": c[2], "conf": c[3]})
+            tk = run[k]["t"]
+            for j0 in range(max(0, k - a.max_skip), k):
+                dt = tk - run[j0]["t"]
+                if dt <= 0 or dt > a.max_gap_s:
+                    continue
+                d = np.linalg.norm(pos[k][:, None, :] - pos[j0][None, :, :], axis=2)
+                z = d / max(a.vmax_px_s * dt, 1e-6)
+                trans = np.where(z <= 1.0, z ** 2, 2 * z - 1.0)
+                trans = trans + a.miss_cost * (k - j0 - 1)
+                tot = trans + best[j0][None, :]
+                am = np.argmin(tot, axis=1)
+                val = tot[np.arange(len(pos[k])), am] + emis[k]
+                for ci in np.nonzero(val < best[k])[0]:
+                    best[k][ci] = val[ci]
+                    bptr[k][ci] = (j0, int(am[ci]))
+        # to END: pay for the frames skipped after k
+        fin = [best[k] + a.miss_cost * (n - 1 - k) for k in range(n)]
+        endk = int(np.argmin([f.min() for f in fin]))
+        endc = int(np.argmin(fin[endk]))
+        k, ci = endk, endc
+        chain = []
+        while k >= 0:
+            chain.append((k, ci))
+            k, ci = bptr[k][ci]
+        for k, ci in reversed(chain):
+            c = run[k]["c"][ci]
+            track.append({"t": run[k]["t"], "u": c[0], "v": c[1],
+                          "size": c[2], "conf": c[3]})
 
     track.sort(key=lambda p: p["t"])
     T = np.array([p["t"] for p in track])
@@ -157,7 +198,10 @@ def main():
     doc = {
         "job": "D-B step 6: ball association by Viterbi, and its test",
         "w_centre": a.w_centre, "w_conf": a.w_conf,
+        "max_skip": a.max_skip, "miss_cost": a.miss_cost,
         "frames_with_candidates": len(fr), "runs": len(runs),
+        "frames_declined": len(fr) - len(track),
+        "coverage": round(len(track) / max(len(fr), 1), 4),
         "track_points": len(track),
         "step_px_per_s": {
             "median": round(float(np.median(speed)), 1) if speed.size else None,

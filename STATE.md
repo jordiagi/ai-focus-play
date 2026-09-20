@@ -39,14 +39,13 @@ that attacks the root cause, and D-0 sharpened its design.
 
 ## Recommended next step
 
-**Clean the ball trajectory, then ship the first scored detector.** The ball layer now
-exists and carries real signal, but **13.6 % of track steps exceed plausible ball
-speed**, and Shot detection needs speed and direction. Options, cheapest first: raise
-the confidence gate (conf>=0.45 keeps 47 % of frames, >=0.55 keeps 38 %), add a motion
-model with an explicit miss state so the tracker can decline a frame instead of picking
-a wrong candidate, and interpolate short gaps.
+**Ship the first scored detector.** The trajectory is fixed: giving the tracker an
+explicit miss state took impossible steps from **13.6 % to 0.1-0.9 %** at 47-70 %
+coverage. Accuracy against the centre spot at kickoff is **5.7 m** (n=8) versus a
+24.5 m control — real but coarse, and part of that residual is the reference ellipse
+rather than the track.
 
-Then the first detector should be **Goal (6 events)** — D-B's own analysis says it needs
+The first detector should be **Goal (6 events)** — D-B's own analysis says it needs
 only coarse position, which is exactly what the occupancy region and a gated ball track
 provide. Score it with `scripts/local/score-benchmark.py`, which prints the
 expected-by-chance recall beside every number.
@@ -326,7 +325,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | B2 | Occupancy map in panorama space | ☑ | 95.7% registered, 14,607 foot points, 92% in one blob |
 | B3 | Pitch region polygon, derived + tested | ◐ | 86% of players inside, boundary **2.35x chance** (8% on-line). Coarse, not a touchline |
 | B4 | Ball in panorama space | ☑ | 5 fps, 23,874 frames, **candidate rate 0.8344** over the whole match (G1 measured 0.833/0.828 on slices). 94.1% registered, 36,291 candidates mapped |
-| B5 | Ball trajectory (Viterbi) | ◐ | Finds the ball — **1.9 m median from the centre spot at kickoff** (conf>=0.45, n=6) vs a 20 m control — but **13.6% of track steps exceed plausible ball speed** |
+| B5 | Ball trajectory (Viterbi + miss state) | ☑ | **Impossible steps 13.6% → 0.1-0.9%.** 58.6% coverage, 10,994 points. Accuracy vs the centre spot at kickoff **5.7 m** (±0.6 s window, n=8) against a 24.5 m control |
 | B6 | Tier A detectors + benchmark scoring | ☐ | The actual deliverable; harness already exists |
 
 ### Track 2 — UI / route parity — ☑ **COMPLETE**
