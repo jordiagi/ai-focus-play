@@ -5,7 +5,7 @@ this file first, then `PLAN.md`. Update the status table as you go — a stale s
 is worse than none.
 
 **Last updated:** 2026-09-20 · by Claude Opus 5 · **D-0 falsified; D-A panorama + line map
-BUILT; ray-space calibration ATTEMPTED and NOT solved.** Tailscale re-authed
+BUILT; calibration pose now PLAUSIBLE but the pitch still does not fit.** Tailscale re-authed
 
 ---
 
@@ -38,25 +38,19 @@ that attacks the root cause, and D-0 sharpened its design.
 
 ## Recommended next step
 
-**Anchor the pitch fit on the centre circle.** D-A step 3 (ray-space calibration) was
-attempted and does not converge — full diagnosis in
-`backend/src/services/pipeline/gpu_job/mosaic/README.md`. **There are still no metric
-coordinates.**
+**Use Veo's own events to decide which lines belong to our pitch.** Calibration is still
+unsolved — **there are no metric coordinates** — but the failure has narrowed to one
+specific thing: the detected lines appear to span more than one field of this multi-pitch
+complex.
 
-The centre circle is now crisply detected in the line map and it removes exactly the two
-degeneracies the optimiser is currently exploiting:
+The 447-event ground truth carries a video timestamp for every event, and
+`frame → panorama` is solved (per-frame R and focal). The virtual camera follows the
+ball, so projecting each event frame's centre into the panorama traces where play
+actually happened. That point cloud outlines **our** pitch; lines outside it belong to
+adjacent fields and can be dropped before fitting. No annotation, no ball detection, and
+it uses ground truth already on disk.
 
-- its centroid fixes the ray to the pitch centre → `tx, ty`;
-- its known 9.15 m radius against its apparent angular size fixes the **camera height**,
-  the parameter that keeps running to its 1-2 m bound (a Veo pole camera is not 1 m high).
-
-That cuts the search from 8 free parameters to about 4. The halfway line — unambiguous,
-vertical, at the panorama centre — fixes the in-plane rotation.
-
-Do not restart from a homography: the pan spans 125°, so no pinhole image can contain
-this pitch and no single homography maps the panorama to the pitch plane. The ray-space
-formulation is right, and its closed form is unit-tested exactly against synthetic
-ground truth; the projection is verified to the pixel against OpenCV's own warper.
+Full diagnosis: `backend/src/services/pipeline/gpu_job/mosaic/README.md`.
 
 ---
 
@@ -66,29 +60,42 @@ ground truth; the projection is verified to the pixel against OpenCV's own warpe
 | :-- | :-- |
 | 0. is a consistent mosaic possible? | ☑ 3-frame loop closure **0.97 px** median, flat in span |
 | 1. stitch the panorama | ☑ **4414x1190, 125.4° FOV**, whole pitch, players dissolved |
-| 2. line evidence | ☑ centre circle, halfway line, both touchlines, both penalty areas |
-| 3. fit the pitch pose | ✗ **does not converge** — no metres |
+| 2. line evidence map | ☑ centre circle, halfway, both touchlines, both penalty areas |
+| 3. fit the pitch pose | ✗ **pose plausible, pitch does not fit** — no metres |
 
-**The line map was the big gain** (`build_line_map.py`). Calibrating against the RGB
-median composite is hopeless: the median is what removes the players, but it also
-averages away a 1-2 px line. Detecting lines per frame — where they are sharp — and
-compositing the *response* instead:
+**The line map was the first big gain.** The RGB median composite is what removes the
+players, but it also averages away a 1-2 px line. Detecting lines per frame — where they
+are sharp — and compositing the *response* took alignment from 0.096 to 0.26 and median
+error from 118 px to 15 px.
 
-| evidence image | model points on a line (<=3 px) | median distance |
-| :-- | --: | --: |
-| RGB median composite | 0.096 | 118 px |
-| **warped line-response map** | **0.26** | 15-46 px |
+**The centre-circle anchor was the second.** A circle of known radius (9.15 m) seen by a
+calibrated camera determines the plane, so it pins normal, height and centre at once:
 
-**But 0.26 is not a success.** The camera height pins at its 1-2 m bound, L or W sit on
-bounds too, and different restarts reach different local optima. Parameters resting on
-bounds are the standard tell that a fit is exploiting a degeneracy rather than finding
-the pitch. Do not read 0.26 as nearly matching PnLCalib's 0.29 — both are failures, and
-this one is not even physically plausible.
+| | 8-D search | centre-circle anchor |
+| :-- | :-- | :-- |
+| camera height | 1-2 m, **on the bound** | **6.71 m** — plausible for a pole |
+| ground normal | unconstrained | **0.87° off vertical** — matches wave correction |
+| parameters on bounds | several, every run | **none** |
+| pitch size | on bounds | **104.3 x 69.6 m**, read off the line offsets |
+| centre circle fit | — | **median 0.0 px, 68 % within 3 px** |
 
-**Two real defects were found and fixed along the way** (both had been silently
-degrading everything): `pitch_model` was scaling the penalty areas with the pitch, which
-destroys the only thing that breaks the scale degeneracy; and the objective was
-piecewise constant, so Nelder-Mead was descending a staircase.
+**But no standard pitch aligns with the rest.** An exhaustive 0.5° rotation scan over a
+grid of L and W, pose held fixed, never gets the outline above ~25 % within 3 px
+(touchlines 16-42 px, goal lines 17-36 px, halfway 17-31 px) while the circle stays at
+0.0 px.
+
+**It is not panorama distortion** — the obvious suspect, so it was measured: line
+half-width grows only **1.17x** from centre to edge (1.96 → 2.30 px). The panorama
+registers to a few pixels throughout.
+
+**It looks like the multi-pitch complex.** Only **one** touchline-parallel line sits at a
+pitch-like distance from the fitted circle (-34.9 m, found nine times); a real pitch
+centre would have two, symmetric at ±W/2.
+
+Two degeneracies were found and fixed by unit-testing against synthetic ground truth,
+not by reading output: letting `h` float has a **trivial global optimum at h=0** (all
+rays collapse to the camera centre; both scipy optimisers drove straight to it), and the
+parameters span 0.05-200 in magnitude so the solve needs an explicit `x_scale`.
 
 ---
 
@@ -187,7 +194,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
 | G6 | Ingest artifacts → `analysis_mode="ml"` | ⏸ | `ml_ingest.py` does not exist yet |
 | D-A | Panorama + line map (frame → panorama) | ◐ | **BUILT** 2026-09-20: panorama 4414x1190 125.4° FOV; line map shows centre circle, halfway, both touchlines, both penalty areas. Loop closure 0.97 px |
-| D-A3 | Ray-space pitch pose fit | ✗ | **Attempted, does not converge.** Best 0.26 on-line but camera height pinned at a 1-2 m bound. **No metres.** Next: anchor on the centre circle |
+| D-A3 | Ray-space pitch pose fit | ✗ | **Pose now plausible** (h=6.71 m, normal 0.87° off vertical, nothing on bounds) and the centre circle fits to 0.0 px / 68%. **But no pitch outline fits** (16-42 px). **No metres.** Next: use Veo events to isolate our pitch's lines |
 | D-0 | Camera motion as the event signal | ✗ | **Falsified 2026-09-20.** Premise "stoppage = static camera" is false; kickoff detector 0/8. Yielded the 10.6x chaining-drift constraint on D-A |
 | G7 | Jersey recognition | ⏸ | Last. **No roster available**, so open-set with abstention, or Veo-label leakage that must be declared. Honest ceiling ~25-40% vs Veo's 75% |
 

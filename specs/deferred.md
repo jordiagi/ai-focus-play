@@ -55,16 +55,35 @@ not. Full record: `backend/src/services/pipeline/gpu_job/mosaic/README.md`.
 | 2b. fit the pitch pose | ✗ **attempted, does not converge — still no metric coordinates** |
 | 3. propagate to every frame | ☐ blocked on 2b; `frame → panorama` itself is solved (per-frame R and focal) |
 
-**Step 2b failed; the diagnosis is the next step.** Best fits reach 0.26 of model points
-on a detected line but pin the camera height at its 1-2 m bound — not plausible for a
-pole-mounted Veo camera, and bound-resting parameters mean the optimiser is exploiting a
-degeneracy. Great-circle RANSAC recovers only 3-4 *distinct* lines, so the plane normal
-is weakly determined (orthogonality R = 0.84 at vertical vs 0.89 at optimum).
-**Anchor on the centre circle**: its centroid fixes the pitch-centre ray and its known
-9.15 m radius against its apparent size fixes the camera height, cutting the search from
-8 free parameters to ~4. Verified correct and reusable: the spherical projection (matches
-OpenCV's warper to the pixel) and the closed-form ray-space solution (recovers synthetic
-ground truth exactly).
+**Step 2b: the pose is now solved, the pitch is not.** Anchoring on the centre circle
+removed every parameter degeneracy — camera height **6.71 m** (was pinned at a 1-2 m
+bound), ground normal **0.87° off vertical** (matches wave correction), **nothing on
+bounds**, pitch **104.3 x 69.6 m** read off the line offsets, and the circle itself fits
+to **median 0.0 px, 68 % within 3 px**.
+
+But an exhaustive 0.5° rotation scan over a grid of L and W, with that pose held fixed,
+never gets the pitch outline above ~25 % within 3 px (touchlines 16-42 px, goal lines
+17-36 px, halfway 17-31 px). **Still no metric coordinates.**
+
+It is **not** panorama distortion — measured, not assumed: line half-width in the
+accumulated map grows only **1.17x** from centre to edge (1.96 → 2.30 px). The evidence
+points at the **multi-pitch complex**: only *one* touchline-parallel line sits at a
+pitch-like distance from the fitted circle (-34.9 m, detected nine times), where a real
+pitch centre would have two symmetric at ±W/2.
+
+**Next: use Veo's own events to isolate our pitch.** Every one of the 447 events carries
+a video timestamp, and `frame → panorama` is solved. The virtual camera follows the ball,
+so projecting each event frame's centre into the panorama traces where play actually
+happened; that point cloud outlines *our* pitch and the rest of the lines can be dropped
+before fitting. No annotation, no ball detection, ground truth already on disk.
+
+Verified correct and reusable: the spherical projection (matches OpenCV's warper to the
+pixel), the closed-form ray-space line solution, and the pose-from-circle solver (both
+recover synthetic ground truth exactly). Two traps found by unit-testing rather than by
+reading output: letting camera height float has a **trivial global optimum at h = 0**
+where all rays collapse to the camera centre and both scipy optimisers drive straight to
+it; and the parameters span 0.05-200 in magnitude, so the solve needs an explicit
+`x_scale` or it walks to the bounds from every start.
 
 **Before starting step 2:** the pan spans **129.5°**, so **no single homography maps the
 panorama to the pitch plane** — no pinhole image can contain this pitch, which is

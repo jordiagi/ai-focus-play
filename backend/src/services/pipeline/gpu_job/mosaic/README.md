@@ -21,7 +21,8 @@ All CPU, on the local 720p proxy.
 | `build_mosaic.py` | planar mosaic — **failed**, kept because the failure is the reason for the next script |
 | `build_panorama.py` | rotating-camera panorama — **works** |
 | `build_line_map.py` | line evidence, composited from the sharp source frames — **works** |
-| `calibrate_panorama.py` | ray-space pitch pose — **does not converge**, see below |
+| `calibrate_panorama.py` | ray-space pitch pose, 8-D search — **degenerate**, kept for why |
+| `calibrate_from_circle.py` | pose anchored on the centre circle — **circle fits exactly, pitch does not** |
 
 ## Step 0 — the planar model holds (so drift is fixable)
 
@@ -132,16 +133,60 @@ offset of 62 camera-heights. With so few independent constraints the orthogonali
 criterion barely discriminates: R = 0.84 at exact vertical against 0.89 at its optimum,
 with several comparable peaks.
 
-## The next step, and why it should work
+## Step 3b — centre-circle anchor: the degeneracies are gone, the pitch still will not fit
 
-**Anchor the fit on the centre circle.** It is now crisply and unambiguously detected in
-the line map, and it removes exactly the degeneracies being exploited:
+Anchoring on the centre circle worked exactly as intended for the *pose*. A circle of
+known radius (9.15 m, fixed by the Laws at every pitch size) seen by a calibrated camera
+determines the plane, so it pins the ground normal, the camera height and the pitch
+centre in one solve.
 
-- its centroid fixes the ray to the pitch centre, giving `tx, ty` once the normal is
-  chosen, and
-- its known 9.15 m radius against its apparent angular size fixes the **camera height**,
-  which is the parameter currently running to its bound.
+| | 8-D search (3) | centre-circle anchor (3b) |
+| :-- | :-- | :-- |
+| camera height | 1.0-2.0 m, **on the bound** | **6.71 m** — plausible for a pole |
+| ground normal | unconstrained | **0.87° off vertical** — matches wave correction |
+| parameters on bounds | several, every run | **none** |
+| pitch size | 87-115 m, on bounds | **104.3 x 69.6 m**, read off the line offsets |
+| centre circle fit | — | **median 0.0 px, 68 % within 3 px** |
 
-That leaves roughly four free parameters instead of eight, over a well-conditioned
-search. The halfway line — unambiguous, vertical, at the panorama centre — then fixes the
-in-plane rotation.
+Two degeneracies had to be removed first, and both were found by unit-testing against
+synthetic ground truth rather than by reading output:
+
+- Letting `h` float gives a **trivial global optimum at h = 0**, where every ray
+  collapses to the camera centre and any centre at distance r fits with exactly zero
+  residual. Both scipy optimisers drove straight to it. Fix: fix h = 1, let the radius
+  float, recover h = 9.15/rho.
+- The parameters span 0.05 to 200 in magnitude, so the solve needs an explicit
+  `x_scale`. Without it, it walked to the bounds from every start.
+
+**But no standard pitch aligns with the rest of the lines.** An exhaustive scan — every
+in-plane rotation at 0.5°, over a grid of L and W, with the circle-derived pose held
+fixed — never gets the outline above about 25 % within 3 px:
+
+| element | median error | within 3 px |
+| :-- | --: | --: |
+| centre circle | **0.0 px** | **0.68** |
+| halfway line | 17-31 px | 0.06-0.20 |
+| touchlines | 16-42 px | 0.04-0.25 |
+| goal lines | 17-36 px | 0.00-0.19 |
+
+**It is not panorama distortion.** That was the obvious suspect — perfect at the centre,
+bad at the edges — so it was measured: line half-width in the accumulated map grows only
+**1.17x** from centre to edge (1.96 px to 2.30 px). The panorama registers to a few
+pixels throughout, which cannot explain a 20-40 px misalignment.
+
+**The evidence points at the multi-pitch complex.** Only **one** touchline-parallel line
+is found at a pitch-like distance from the fitted circle (-34.9 m, detected nine times
+over); a genuine pitch centre would have two, symmetric at +/-W/2. The detected lines
+appear to span more than one field — which is the same structural problem that defeated
+the three earlier calibration attempts, reappearing after the panorama removed the
+"too little pitch per frame" problem.
+
+## The next step
+
+**Use Veo's own events to decide which lines are ours.** The 447-event ground truth
+carries a video timestamp for every event, and `frame -> panorama` is solved (per-frame
+R and focal). The virtual camera follows the ball, so projecting each event frame's
+centre into the panorama traces where play actually happened. That point cloud outlines
+**our** pitch; lines outside it belong to adjacent fields and can be dropped before
+fitting. It needs no annotation and no ball detection, and it uses ground truth already
+on disk.
