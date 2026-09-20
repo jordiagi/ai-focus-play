@@ -423,3 +423,176 @@ overfitted; if anything period 1 is the harder half.
   evidence, but it makes the detector depend on the tracker's weakness: improve the
   tracker and this feature weakens.
 - Macro-F1 over the benchmark is still **1 of 14 types, 14 % of event mass**.
+
+## D-B step 9 — an occupancy-derived coordinate frame, and what it is not
+
+Restart types differ by **where the ball was**, so typing them needs a pitch-relative
+coordinate. Neither panorama axis is one on its own: `u` mixes length with pan and `v`
+mixes width with depth, because the pitch is a trapezoid here. `derive_pitch_frame.py`
+fits two weighted quadratics through per-`u`-bin percentiles of the **player occupancy
+cloud alone** — 14,607 foot points, no Veo coordinate anywhere — and normalises between
+them:
+
+    xi(u)    = (u - u_lo) / (u_hi - u_lo)
+    eta(u,v) = (v - v_far(u)) / (v_near(u) - v_far(u))
+
+The quadratic is not decoration: the far boundary is V-shaped (412 px at u=650, 371 at
+u=1950, 433 at u=3750) because the panorama is spherical, and a straight line fits it
+**2.8x worse** (residual 20.3 px vs **7.39**).
+
+**The boundaries are not the touchlines, and this was measured rather than assumed.**
+Scored against the line-evidence map exactly as the pitch region was, both fitted curves
+land on a detected line *no more often than a random horizontal curve*:
+
+| curve | on a detected line |
+| :-- | --: |
+| fitted far boundary | 0.028 |
+| fitted near boundary | 0.010 |
+| **random horizontal curve (chance)** | **0.040** |
+
+So it is a monotone re-parameterisation that correlates with pitch position, and that is
+all it is claimed to be. The near edge is visibly the worse of the two — its own fit
+residual is **50.1 px** against the far edge's 7.4, because substitutes, staff and the
+far crowd are in the cloud. Every threshold built on this frame is therefore **fitted on
+period 1**, never read off as geometry.
+
+What does support it is external and measured: `corr(veo_z, v) = -0.727` against
+`corr(veo_z, u) = -0.331`, and `corr(veo_x, u) = +0.832` against `corr(veo_x, v) =
++0.113` — the two axes separate. And all **8 kickoffs land inside xi [0.39,0.50],
+eta [0.52,0.60]**, a box no other restart type enters.
+
+## D-B step 10 — the dead-ball restart family
+
+Step 8 noted that every OutOfPlay is followed by a restart, and proposed the OutOfPlay
+detector as their candidate generator. Measuring first showed that is the wrong way
+round: **the restart has a stronger and more direct signature than the stoppage**, and
+needs nothing from the OutOfPlay detector.
+
+Medians over each type against 800 random in-play times, in panorama px/s:
+
+| type | n | speed [-4,-0.5]s | speed [0,+1.5]s | post/pre ratio |
+| :-- | --: | --: | --: | --: |
+| ThrowIn | 38 | 13.0 | 202.2 | 5.0 |
+| GoalKick | 16 | 1.8 | 101.7 | 105.8 |
+| CornerKick | 9 | 1.3 | 52.8 | 38.6 |
+| FreeKick | 15 | 2.1 | 285.4 | 23.9 |
+| KickOff | 8 | 1.5 | 240.5 | 52.8 |
+| interception | 89 | **149.5** | 111.5 | 0.8 |
+| tackle | 84 | **124.8** | 92.5 | 0.8 |
+| dribble | 41 | **144.6** | 112.2 | 1.0 |
+| *random* | 800 | 30.9 | 23.5 | 0.9 |
+
+The five dead-ball types sit at 1-13 px/s beforehand; every in-play type sits at
+125-150. That is not a tuned margin, it is the difference between a stationary ball and
+a moving one — so **one detector covers all five**, 86 events against OutOfPlay's 64.
+
+### Detection — the family as one class, timing only
+
+Config chosen by period-1 F1 over a 36-cell sweep (pre window x post window x
+coverage-feature x min-sep); threshold fitted on period 1 and applied unchanged.
+
+| | n_pred | n_ref | tp | precision | recall | chance | F1 |
+| :-- | --: | --: | --: | --: | --: | --: | --: |
+| period 1 (dev) | 40 | 40 | 19 | 0.475 | 0.475 | 0.049 | 0.475 |
+| **period 2 (held out)** | 43 | 46 | 17 | **0.395** | **0.370** | **0.053** | **0.382** |
+| both periods | 83 | 86 | 36 | 0.434 | 0.419 | 0.099 | 0.426 |
+
+Dev-to-held-out gap **+0.093**, so unlike step 8 this one *is* mildly optimistic on dev —
+36 configs were tried on period 1. Held-out precision 0.395 is still markedly better
+than step 8's 0.359 on a larger type set.
+
+### Type, from position
+
+`xi` and `eta` at the top-confidence ball candidate in [-2, +0.5] s. Given **true** event
+times the classifier is right **61 %** of the time (84 of 86 events have a position at
+all), which is the ceiling everything below is multiplied down from by detection recall:
+
+| true \ predicted | KickOff | GoalKick | ThrowIn | Corner |
+| :-- | --: | --: | --: | --: |
+| **KickOff** (8) | **8** | | | |
+| **GoalKick** (16) | | **14** | 2 | |
+| **ThrowIn** (37) | | 4 | **26** | 7 |
+| **CornerKick** (8) | | 2 | 3 | **3** |
+| *FreeKick* (15) | 1 | 1 | 13 | |
+
+ThrowIn is the catch-all, and that is a measured choice, not laziness: four positive-cue
+rules were tried and every one lost on period-1 F1 (`eta>0.25` → 0.207, `eta>0.25 or
+|xi-.5|<0.28` → 0.238, `eta>0.35` → 0.160, `|xi-.5|<0.30` → 0.158, catch-all → **0.261**).
+
+**FreeKick is not attempted**, declared in the manifest before scoring: its `eta` cloud
+(median 0.64) sits inside ThrowIn's bimodal one (0.05 / 0.67) with no cue between them.
+Its 15 events therefore arrive as ThrowIn false positives, which is most of why ThrowIn's
+precision is 0.21.
+
+### End-to-end, per type (team-agnostic; `score-benchmark.py` reproduces every row)
+
+| type | n_ref | n_pred | tp | precision | recall | chance | F1 | held-out F1 |
+| :-- | --: | --: | --: | --: | --: | --: | --: | --: |
+| **KickOff** | 8 | 4 | 4 | **1.000** | 0.500 | 0.004 | **0.667** | **0.800** |
+| GoalKick | 16 | 13 | 4 | 0.308 | 0.250 | 0.013 | 0.276 | 0.267 |
+| ThrowIn | 38 | 52 | 11 | 0.212 | 0.289 | 0.049 | 0.244 | 0.235 |
+| CornerKick | 9 | 11 | 1 | 0.091 | 0.111 | 0.011 | 0.100 | 0.000 |
+
+**KickOff is the first detector in this project with perfect precision** — 4 predictions,
+4 correct, against a chance recall of 0.004. It is also the easiest: the centre spot is
+one place, and the frame locates it tightly.
+
+### The negative control, which is what makes those numbers mean anything
+
+20 trials per type, same `n_pred`, times drawn uniformly in play:
+
+| type | real F1 | random mean | random max | a result? |
+| :-- | --: | --: | --: | :-- |
+| KickOff | 0.667 | 0.000 | 0.000 | yes |
+| GoalKick | 0.276 | 0.010 | 0.069 | yes |
+| ThrowIn | 0.244 | 0.044 | 0.111 | yes |
+| **CornerKick** | **0.100** | 0.020 | **0.100** | **no** |
+| macro | **0.322** | 0.019 | | |
+
+**CornerKick exactly ties the control's best trial, so it is not a result** — consistent
+with its held-out F1 of 0.000 and with 7 of its 9 events being in period 1. It is
+reported because it was attempted and declared, not because it worked.
+
+A rounding bug nearly hid that: the verdict compared a 4-dp real F1 against an unrounded
+control maximum, and `0.1 > 0.09999999999999999` read True. Both sides are now compared
+unrounded, with a margin, because a tie is not a win.
+
+### Two things worth keeping
+
+1. **The consequence relation ran backwards.** Step 8's plan was OutOfPlay → restart.
+   Measuring the restart first showed it is the stronger, cheaper signal and needs no
+   OutOfPlay detector at all. The stoppage is inferred from the restart, not the reverse.
+2. **Fitting a rule on 7 examples buys dev macro-F1 and nothing else.** Adding the
+   CornerKick rule raised period-1 macro-F1 from 0.280 to 0.314 and moved held-out macro
+   by -0.005. The protocol selected it; the held-out half said it was noise.
+
+### Where the benchmark now stands
+
+**5 of 14 types attempted, 135 of 447 events — 30 % of event mass**, up from 1 type and
+14 %. Macro-F1 over the five, team-agnostic: **0.325** against a random control's 0.040.
+Team is still not predicted for any type, so the repo's primary team-aware metric remains
+**0 by construction** for all five.
+
+### Reproducing steps 9-10 from the stored artifacts
+
+Seconds, CPU only, no gpu-box — everything they read is already in
+`backend/.local/artifacts/mosaic/`:
+
+```sh
+A=backend/.local/artifacts/mosaic
+V=backend/.venv/bin/python
+M=backend/src/services/pipeline/gpu_job/mosaic
+
+$V $M/derive_pitch_frame.py --occupancy $A/occupancy_points.json \
+    --line-map $A/line_map.png --out $A/pitch_frame.json
+
+$V $M/detect_restarts.py --track $A/ball_track.json --candidates $A/ball5_pano.json \
+    --frame $A/pitch_frame.json --pred $A/pred_restarts.json \
+    --manifest $A/manifest_restarts.json --out $A/score_restarts.json
+
+# independent confirmation, and the repo's current headline over all 5 types
+$V scripts/local/score-benchmark.py --pred $A/pred_all.json --manifest $A/manifest_all.json
+```
+
+`pred_all.json` / `manifest_all.json` are `pred_oop.json` merged with
+`pred_restarts.json`; `score_all.json` is the harness's report over the five.

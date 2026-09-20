@@ -4,9 +4,10 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-20 · by Claude Opus 5 · **FIRST SCORED TIER A DETECTOR:
-FootballOutOfPlay, held-out recall 0.41 vs 0.05 chance (F1 0.384).** D-0 falsified,
-D-A has no metres, D-B is delivering. gpu-box in use
+**Last updated:** 2026-09-20 · by Claude Opus 5 · **FIVE SCORED TIER A TYPES, 30 % OF
+EVENT MASS.** The dead-ball restart family joins OutOfPlay; macro-F1 0.325 team-agnostic
+against a random control's 0.040, and **KickOff is the first detector here with perfect
+precision** (4/4, chance recall 0.004). D-0 falsified, D-A has no metres, D-B delivering.
 
 ---
 
@@ -37,6 +38,9 @@ read the repo. It holds roughly 25 minutes of GPU + CPU work:
 | `ball_track.json` | the Viterbi ball track, 10,994 points | ~15 min GPU + reg |
 | `occupancy_points.json` | 14,607 player foot points in panorama space | ~20 min |
 | `pred_oop.json`, `score_oop.json` | the OutOfPlay detector output and its score | seconds |
+| `pitch_frame.json` | the occupancy-derived `(xi, eta)` frame | seconds |
+| `pred_restarts.json`, `score_restarts.json` | the 4 restart types and their scores | seconds |
+| `pred_all.json`, `manifest_all.json`, `score_all.json` | all 5 types pooled — the repo's current headline | seconds |
 
 Cheap to regenerate from these: the 80 anchor frames (`f1280`, one ffmpeg pass at the
 times in `cameras.json`). **`/workspace` on gpu-box is tmpfs and does not survive a
@@ -60,22 +64,77 @@ Work is **mid-flight, not parked**. Everything below is committed and reproducib
 
 ## Recommended next step
 
-**Extend from OutOfPlay to the restarts it already implies.** Every one of the 64
-OutOfPlay events is followed by a restart — 38 throw-ins, 16 goal kicks, 9 corners — a
-median 17 s later. The detector we have is therefore a candidate generator for three
-more types covering 63 further events, and distinguishing them needs only *where* the
-ball went out, which the panorama track gives coarsely (throw-in on a touchline, goal
-kick / corner on a goal line).
+**Team.** Every one of the five scored types predicts no team, so the repo's *primary*
+metric — team-aware macro-F1 — is still **0 by construction** across the board. Nothing
+else on the list moves that number, and until it moves, the honest headline has to carry
+"team-agnostic" every time it is quoted. For a restart the team is decidable in
+principle: a throw-in is taken by whoever did not put it out, a goal kick by the
+defending side. That needs a side-of-pitch notion, which the (xi, eta) frame gives
+coarsely, plus possession — which is G4's HMM, currently deferred.
 
-Two things worth fixing on the existing detector first, in this order:
+Cheaper things worth doing first, in this order:
 
-1. **Precision is 0.289** — 64 of 90 predictions are wrong. It is a candidate generator,
-   not an event list.
-2. **Team is not predicted**, so under the repo's primary (team-aware) metric this type
-   scores **0**. Team for a restart is decidable from which side the ball left and who
-   takes it; until then, quote the team-agnostic figure and say so.
+1. **ThrowIn precision is 0.212** and most of the loss is structural: FreeKick is not
+   attempted, so its 15 events land in ThrowIn as false positives (13 of 15 do). Either
+   attempt FreeKick or accept the ceiling and say so.
+2. **The ball track caps everything.** Coverage 0.586, so a restart the tracker never
+   sees cannot be found *or* typed. Both the detector and the classifier read the same
+   track; improving it lifts all five types at once — and would weaken step 8's coverage
+   feature, which is a detector failure used as evidence.
+3. **CornerKick is not a result** (F1 0.100, exactly the random control's best trial,
+   held-out 0.000). Either find a real corner cue or withdraw the type.
 
 Full record: `backend/src/services/pipeline/gpu_job/mosaic/README.md`.
+
+---
+
+## D-B result (2026-09-20) — the dead-ball restart family: 5 types, 30 % of event mass
+
+**The consequence relation ran backwards.** Step 8 proposed the OutOfPlay detector as a
+candidate generator for the restarts that follow it. Measuring the restart first showed
+it is the *stronger* signal and needs no OutOfPlay detector at all — the ball is
+stationary at 1-13 px/s beforehand, where every in-play event sits at 125-150. One
+detector covers all five dead-ball types, 86 events against OutOfPlay's 64.
+
+**Detection (family pooled, timing only):**
+
+| | n_pred | n_ref | tp | precision | recall | chance | F1 |
+| :-- | --: | --: | --: | --: | --: | --: | --: |
+| period 1 (dev) | 40 | 40 | 19 | 0.475 | 0.475 | 0.049 | 0.475 |
+| **period 2 (held out)** | 43 | 46 | 17 | **0.395** | **0.370** | **0.053** | **0.382** |
+| both periods | 83 | 86 | 36 | 0.434 | 0.419 | 0.099 | 0.426 |
+
+Unlike step 8 this one *is* mildly optimistic on dev (gap +0.093) — 36 configs were tried
+on period 1. Held-out precision 0.395 still beats step 8's 0.359 over a larger type set.
+
+**Per type, end to end** (team-agnostic; `score-benchmark.py` reproduces every row):
+
+| type | n_ref | n_pred | tp | precision | recall | chance | F1 | held-out F1 | vs random control |
+| :-- | --: | --: | --: | --: | --: | --: | --: | --: | :-- |
+| **KickOff** | 8 | 4 | 4 | **1.000** | 0.500 | 0.004 | **0.667** | **0.800** | result |
+| GoalKick | 16 | 13 | 4 | 0.308 | 0.250 | 0.013 | 0.276 | 0.267 | result |
+| ThrowIn | 38 | 52 | 11 | 0.212 | 0.289 | 0.049 | 0.244 | 0.235 | result |
+| CornerKick | 9 | 11 | 1 | 0.091 | 0.111 | 0.011 | 0.100 | 0.000 | **not a result** |
+
+The control is 20 trials per type at the same `n_pred`, times drawn uniformly in play:
+macro-F1 **0.019** against the real 0.322. **CornerKick exactly ties the control's best
+trial**, which is why it is marked not a result rather than quoted as a small one.
+
+**FreeKick is declared not attempted** in the manifest, before scoring: its position
+cloud sits inside ThrowIn's with no cue between them. Given *true* event times the
+classifier is right 61 % of the time — that is the ceiling the rows above are multiplied
+down from by detection recall.
+
+**Benchmark coverage is now 5 of 14 types, 135 of 447 events (30 % of mass)**, up from 1
+type and 14 %. Macro-F1 over the five, team-agnostic: **0.325**.
+
+**Caveats that travel with it.** Team is not predicted for any type, so the team-aware
+metric is 0 for all five. ThrowIn is the catch-all — four positive-cue rules were tried
+and every one lost on period-1 F1. Both the detector and the classifier read the same
+Viterbi track (coverage 0.586). And the (xi, eta) frame is *not* calibrated: its
+boundaries land on a detected line no more often than a random curve (0.028 / 0.010 vs
+0.040 chance), so it is a monotone re-parameterisation and every threshold on it is
+fitted, not geometric.
 
 ---
 
@@ -152,7 +211,7 @@ is fine.
 | 2. occupancy in panorama space | ☑ **95.7 % registered**, 14,607 foot points, 92 % in one blob |
 | 3. pitch region polygon | ◐ **derived and tested — 2.35x chance, not a sharp boundary** |
 | 4. ball in panorama space | ☐ not started |
-| 5. Tier A detectors + scoring | ☐ not started |
+| 5. Tier A detectors + scoring | ☑ 5 types, 30 % of event mass |
 
 **The premise is now measured, not assumed.** Inverting the same 14,607 points onto the
 fitted ground plane gives an oriented box of **105.8 x 104.5 m, aspect 1.01** — a square,
@@ -358,7 +417,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | G0 | Rebuild `benchmarks/veo_reference.json`; fix `scripts/config.env` time base; decode Veo's x/z convention | ☑ | `c38d62f`. Coords decoded: x=length, z=width, absolute. Centre spot lands 2 m off ideal — Veo's own bias, recorded not corrected |
 | G1 | **Measure ball-detection rate** — the go/no-go gate | ☑ | **Both halves measured.** tiled 0.833 / 0.828 — **gate passes**. full-frame 0.677 / 0.716 — fails one half. Caveat below: this is candidate presence, not correctness |
 | G2 | Pitch calibration | ⏸ **STOPPED** | Three approaches measured and failed (1854 m → 10-15 m → 88-110 m). Cause is structural, not tuning: all pretrained models are broadcast-trained and each of our frames shows too little pitch. Parked as **D-A** in `specs/deferred.md` |
-| G3 | Tier A detectors (7 types) | ⏸ | |
+| G3 | Tier A detectors (7 types) | ◐ | **5 of 14 types scored via D-B** (OutOfPlay + 4 restarts), 30 % of event mass, macro-F1 0.325 team-agnostic. Team unpredicted throughout, so team-aware is 0 |
 | G4 | Possession HMM → Tier B (4 types + Pass count) | ⏸ | Conditional on G1 gate |
 | G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
 | G6 | Ingest artifacts → `analysis_mode="ml"` | ⏸ | `ml_ingest.py` does not exist yet |
@@ -378,7 +437,10 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | B4 | Ball in panorama space | ☑ | 5 fps, 23,874 frames, **candidate rate 0.8344** over the whole match (G1 measured 0.833/0.828 on slices). 94.1% registered, 36,291 candidates mapped |
 | B5 | Ball trajectory (Viterbi + miss state) | ☑ | **Impossible steps 13.6% → 0.1-0.9%.** 58.6% coverage, 10,994 points. Accuracy vs the centre spot at kickoff **5.7 m** (±0.6 s window, n=8) against a 24.5 m control |
 | B6 | **FootballOutOfPlay detector** | ☑ | **Held-out (period 2) F1 0.384, recall 0.412 vs chance 0.048 — ~8x chance.** Both periods F1 0.338, confirmed by `score-benchmark.py`. Team not predicted, so team-aware is 0 by construction |
-| B7 | Remaining Tier A types | ☐ | Throw-in 38 / GoalKick 16 / Corner 9 all follow an OutOfPlay by a median 17 s — the detector above is their candidate generator |
+| B7 | **Dead-ball restart family** (ThrowIn / GoalKick / Corner / KickOff) | ☑ | **KickOff F1 0.667 at precision 1.000** (held-out 0.800); GoalKick 0.276; ThrowIn 0.244; Corner 0.100 = **not a result** (ties the random control). Family timing held-out F1 0.382. `detect_restarts.py` |
+| B8 | `(xi, eta)` frame from occupancy | ☑ | `derive_pitch_frame.py`. Quadratic beats linear 2.8x (7.4 vs 20.3 px). **Not the touchlines** — 0.028/0.010 on-line vs 0.040 chance, so all thresholds fitted, none geometric |
+| B9 | FreeKick (15) | ⏸ **not attempted, declared** | Position cloud sits inside ThrowIn's with no separating cue; its events land as ThrowIn false positives |
+| B10 | Team for the restart types | ☐ | **The only work that moves the repo's primary metric off 0.** Needs side-of-pitch (have it, coarsely) + possession (G4, deferred) |
 
 ### Track 2 — UI / route parity — ☑ **COMPLETE**
 
