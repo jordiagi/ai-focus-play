@@ -4,9 +4,9 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-20 · by Claude Opus 5 · **D-0 falsified; D-A panorama + line map +
-play region BUILT; pose converges across methods but the pitch outline does not fit —
-STILL NO METRES.** Tailscale re-authed
+**Last updated:** 2026-09-20 · by Claude Opus 5 · **D-0 falsified; D-A panorama built but
+NO METRES; switched to D-B — player occupancy gives a coarse pitch region, not a sharp
+boundary.** Tailscale re-authed, gpu-box in use
 
 ---
 
@@ -39,26 +39,54 @@ that attacks the root cause, and D-0 sharpened its design.
 
 ## Recommended next step
 
-**Switch to D-B, and treat calibration as a separate open problem.**
+**Sharpen the D-B pitch boundary, then build the first Tier A detector.**
 
-Five approaches to metric calibration have now been measured and none has delivered a
-validated pitch (ball correspondences 1854 m then 10-15 m; PnLCalib pretrained
-88-110 m; 8-D ray-space search degenerate; centre-circle anchor — pose plausible but
-outline unfitted; event azimuths — γ and L only). **There are still no metric
-coordinates**, and the remaining gap is narrow but stubborn.
+D-B is started. Player occupancy in panorama pixel space now gives a *derived* pitch
+region (no annotation, no metres) holding 86 % of players, but its boundary beats chance
+by only **2.35x** and just 8 % of it lands on a detected line. That is enough for the
+coarse zone uses and **not** enough for "ball crosses a boundary", which is what
+corner / throw-in / goal kick need. The obvious next move is to fit a smooth
+quadrilateral to the occupancy instead of trusting a ragged density contour.
 
-**D-B needs no metres at all** and is still untouched: pixel-space Tier A detection
-covers 7 of 14 event types, ~196 of 447 events, 44 % of the benchmark mass, and 5 of
-the 13 stat rows — all scoreable against the real benchmark with the harness that
-already exists. That is a much better return than a sixth calibration attempt.
+After that, the first scored detector needs the **ball in panorama space**: `frame →
+panorama` is solved and `detect_players.py` shows the remote detection loop costs
+seconds, so the missing piece is tiled ball detection (G1 measured 0.83 candidate
+presence tiled vs 0.68-0.72 full-frame) plus trajectory association.
 
-**If calibration is picked up again**, the one thing to establish first is whether our
-pitch's own touchlines are present in the line evidence at all. Every fit so far has
-assumed they are, and they are exactly what is hardest to see here: the far touchline
-sits on the horizon, and the near one may fall outside the panorama or be buried under
-the foreground field's markings. Do not start a sixth fit before answering that.
+**Metric calibration stays parked.** Five approaches measured, none validated — and D-B
+step 3 added an independent reason to leave it: inverting the player cloud onto the
+fitted plane yields a **square** pitch (105.8 x 104.5 m, aspect 1.01) because near the
+horizon a few pixels is tens of metres.
 
-Full diagnosis: `backend/src/services/pipeline/gpu_job/mosaic/README.md`.
+---
+
+## D-B result (2026-09-20) — zones derived, but coarse
+
+| step | state |
+| :-- | :-- |
+| 1. player detection (gpu-box) | ☑ 600 in-play frames, **15,380 persons**, 16.5 s on one H100 |
+| 2. occupancy in panorama space | ☑ **95.7 % registered**, 14,607 foot points, 92 % in one blob |
+| 3. pitch region polygon | ◐ **derived and tested — 2.35x chance, not a sharp boundary** |
+| 4. ball in panorama space | ☐ not started |
+| 5. Tier A detectors + scoring | ☐ not started |
+
+**The premise is now measured, not assumed.** Inverting the same 14,607 points onto the
+fitted ground plane gives an oriented box of **105.8 x 104.5 m, aspect 1.01** — a square,
+where a pitch is ~1.5 — with a 124 m depth spread. Metres are not merely unnecessary
+here, they are unusable; pixel space is fine.
+
+**The zone test, run because containing the players is not the same as being the pitch:**
+
+| density pct | area frac | players inside | boundary on a line | chance | lift |
+| --: | --: | --: | --: | --: | --: |
+| 70 | 0.159 | 0.922 | 0.034 | 0.033 | 1.03 |
+| **80** | 0.109 | 0.864 | **0.083** | 0.036 | **2.35** |
+
+Usable as a soft "on the playing surface" test; **not** a touchline. Of D-B's three zone
+uses it serves the coarse one (Goal) and not the sharp one (corner / throw-in / goal
+kick).
+
+---
 
 ---
 
@@ -255,6 +283,16 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | D-A4 | Play region from Veo events | ☑ | 213/220 event frames located (96.8%). Settles which field is ours; foreground lines are a different pitch. Frame centre tracks the ball in **azimuth only** |
 | D-0 | Camera motion as the event signal | ✗ | **Falsified 2026-09-20.** Premise "stoppage = static camera" is false; kickoff detector 0/8. Yielded the 10.6x chaining-drift constraint on D-A |
 | G7 | Jersey recognition | ⏸ | Last. **No roster available**, so open-set with abstention, or Veo-label leakage that must be declared. Honest ceiling ~25-40% vs Veo's 75% |
+
+### Track 3 — D-B, pitch-relative detection without metres
+
+| ID | Work | Status | Notes |
+| :-- | :-- | :-- | :-- |
+| B1 | Player detection on gpu-box | ☑ | 600 in-play frames, 15,380 persons, 16.5 s on one H100. `detect_players.py` |
+| B2 | Occupancy map in panorama space | ☑ | 95.7% registered, 14,607 foot points, 92% in one blob |
+| B3 | Pitch region polygon, derived + tested | ◐ | 86% of players inside, boundary **2.35x chance** (8% on-line). Coarse, not a touchline |
+| B4 | Ball in panorama space | ☐ | Needs tiled detection (G1: 0.83 tiled vs 0.68-0.72 full-frame) + trajectory association |
+| B5 | Tier A detectors + benchmark scoring | ☐ | The actual deliverable; harness already exists |
 
 ### Track 2 — UI / route parity — ☑ **COMPLETE**
 

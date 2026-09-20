@@ -152,8 +152,28 @@ and the metric half of Tier B.
 
 ## D-B. Pixel-space Tier A detection (no metres required)
 
-**Status:** not started. This is the pragmatic path to real event detection *without*
-solving calibration.
+**Status:** **started 2026-09-20.** Zones are derived and tested; the ball and the
+detectors are not built. Record:
+`backend/src/services/pipeline/gpu_job/mosaic/README.md`.
+
+| step | state |
+| :-- | :-- |
+| 1. player detection | ☑ 600 in-play frames, 15,380 persons, 16.5 s on one H100 |
+| 2. occupancy in panorama space | ☑ 95.7 % registered, 14,607 foot points, 92 % in one blob |
+| 3. pitch region polygon | ◐ derived + tested: 86 % of players inside, boundary **2.35x chance** |
+| 4. ball in panorama space | ☐ |
+| 5. Tier A detectors + scoring | ☐ |
+
+**The premise is now measured.** Inverting the 14,607 player points onto the fitted
+ground plane gives an oriented box of **105.8 x 104.5 m, aspect 1.01** — a square, where
+a pitch is ~1.5. Near the horizon a few pixels is tens of metres. Metres here are not
+just unnecessary, they are unusable; pixel space is fine.
+
+**But the derived boundary is coarse.** Only 8 % of the polygon boundary lands on a
+detected line (2.35x chance), and the lower edge is ragged. That serves the coarse zone
+use (**Goal**) and not the sharp one (**corner / throw-in / goal kick**, which need the
+ball *crossing* a boundary). Next: fit a smooth quadrilateral to the occupancy rather
+than trusting a density contour.
 
 **The insight.** Most Tier A detection does not need metres — it needs pitch-relative
 **regions**:

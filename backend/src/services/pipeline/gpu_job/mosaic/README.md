@@ -235,3 +235,57 @@ the far one sits on the horizon and the near one may fall outside the panorama o
 buried under the foreground field's markings. Before another fitting attempt, it is
 worth establishing whether our pitch's own touchlines are present in the evidence at
 all — because every fit so far has assumed they are.
+
+---
+
+# D-B — pitch-relative zones without metres
+
+D-B ships Tier A detection in **pixel space**, so it needs the pitch region and a few
+zones but no calibration. The standing rule is that zones are **derived, not drawn**.
+
+| script | question it answers |
+| :-- | :-- |
+| `../detect_players.py` (gpu-box) | where are the players? 600 frames, 15,380 persons, 16.5 s on one H100 |
+| `build_occupancy_map.py` | where do they stand in panorama space? |
+| `derive_zones.py` | is the resulting region actually the pitch? |
+
+## The premise is now measured, not assumed
+
+D-B argues that metres are unnecessary. This run shows they are also **unusable**.
+Inverting the 14,607 mapped player foot points onto the fitted ground plane gives an
+oriented bounding box of **105.8 x 104.5 m — aspect 1.01**, a square, where a pitch is
+about 1.5, with a 124 m spread in depth. Near the horizon the far half of the pitch
+compresses into a few pixels, so a small pixel error is tens of metres. The same cloud
+in panorama pixels is perfectly well behaved. That is the case for D-B, made with a
+measurement rather than an argument.
+
+## What the occupancy map gives
+
+600 in-play frames (halftime excluded — the pitch is empty and the warm-up clusters in
+one corner), **95.7 % registered** into the panorama at the >=100-inlier gate, **14,607
+player points** mapped, 92 % of them in a single blob. The foot point is the
+bottom-centre of the box, because that is the point on the ground; the box centre floats
+half a body above it by a distance that varies with range.
+
+## And what it does NOT give: a precise boundary
+
+A region containing the players is not the same as the pitch, so the derivation was
+tested: what fraction of the polygon's boundary lands on a detected line pixel, against
+the fraction a random boundary of the same length achieves.
+
+| density pct | area frac | players inside | boundary on a line | chance | lift |
+| --: | --: | --: | --: | --: | --: |
+| 60 | 0.229 | 0.974 | 0.021 | 0.033 | 0.64 |
+| 70 | 0.159 | 0.922 | 0.034 | 0.033 | 1.03 |
+| **80** | 0.109 | 0.864 | **0.083** | 0.036 | **2.35** |
+
+**2.35x chance is real but weak.** The region is usable as a soft "is this on the playing
+surface" test — it holds 86 % of players and the centre circle sits inside it — but its
+boundary is *not* the touchline. Only 8 % of it lies on a detected line, and the lower
+edge is visibly ragged.
+
+So of D-B's three zone uses, occupancy supports the coarse one and not the sharp one:
+**Goal** needs only coarse position and is served; **corner / throw-in / goal kick**
+need the ball *crossing a boundary*, and an 8 %-aligned ragged contour is not that
+boundary. Sharpening it is the next question, and the obvious candidate is to fit a
+smooth quadrilateral to the occupancy rather than trusting a density contour.
