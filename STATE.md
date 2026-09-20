@@ -12,28 +12,49 @@ D-A has no metres, D-B is delivering. gpu-box in use
 
 ## Resume in 60 seconds
 
-1. `PLAN.md` — the roadmap and the reasoning. `context.md` — environment + traps.
-   `OPUS2.md` — the 9 defects already closed and how they were verified.
-   Current probe baseline: **`pass=9 fail=0 skip=0`**, 35 tests.
-2. **Ground truth is now on disk** at `benchmarks/raw/` (see below). It does **not**
-   need re-capturing unless the match changes.
-3. Check blockers below before touching gpu-box.
-4. `bash scripts/local/verify.sh all` should print `pass=9 fail=0 skip=0`. If it
-   doesn't, something regressed — fix that before new work.
+1. Read this file, then **`backend/src/services/pipeline/gpu_job/mosaic/README.md`** —
+   that is the full record of the panorama, the calibration attempts and D-B. Then
+   `context.md` (environment + traps) and `PLAN.md` (roadmap).
+2. `bash scripts/local/verify.sh all` must print **`pass=9 fail=0 skip=0`**. If it does
+   not, fix that before new work.
+3. Ground truth is on disk at `benchmarks/raw/` — 447 events. Never re-derive event
+   times from match-clock strings.
+4. **gpu-box is the compute, for CPU work too** — 128 cores / 251 GB against this box's
+   8 / 15. See `context.md` §5a; ignoring it OOM'd the local machine and silently
+   capped a sampling rate.
+
+### Artifacts already computed — do NOT regenerate blindly
+
+`backend/.local/artifacts/mosaic/` is **gitignored**, so it is invisible if you only
+read the repo. It holds roughly 25 minutes of GPU + CPU work:
+
+| file | what it is | cost to rebuild |
+| :-- | :-- | :-- |
+| `panorama.png` | 4414x1190, 125.4° FOV, players dissolved | ~5 min CPU |
+| `line_map.png` | per-frame line response warped + accumulated | ~2 min |
+| `cameras.json` | per-frame R and focal; **the `frame → panorama` mapping** | the BA above |
+| `graph30.json` | 2798 gated homography edges over 186 frames | ~8 min |
+| `ball_track.json` | the Viterbi ball track, 10,994 points | ~15 min GPU + reg |
+| `occupancy_points.json` | 14,607 player foot points in panorama space | ~20 min |
+| `pred_oop.json`, `score_oop.json` | the OutOfPlay detector output and its score | seconds |
+
+Cheap to regenerate from these: the 80 anchor frames (`f1280`, one ffmpeg pass at the
+times in `cameras.json`). **`/workspace` on gpu-box is tmpfs and does not survive a
+reboot** — treat the local artifacts directory as the only durable copy.
 
 ---
 
-## Status: consolidated 2026-09-20
+## Status 2026-09-20 — D-B is live and delivering
 
-Work is **stopped at a deliberate stopping point**, not abandoned mid-flight. Everything
-below is committed, verified and reproducible. Metric pitch calibration was attempted
-three times, failed each time for a diagnosed structural reason, and is parked as **D-A**
-in `specs/deferred.md` along with the pragmatic alternative **D-B** (pixel-space Tier A
-detection, which needs no metres). Pick either up when the feature is wanted.
+Work is **mid-flight, not parked**. Everything below is committed and reproducible.
 
-**D-0 was then tried and falsified** (2026-09-20, below). Four approaches to recovering
-pitch geometry have now been measured and rejected; the fifth, D-A, is the only one left
-that attacks the root cause, and D-0 sharpened its design.
+- **Metric calibration (D-A): abandoned for now, after five measured failures.** Ball
+  correspondences (1854 m, then 10-15 m), PnLCalib pretrained (88-110 m), 8-D ray-space
+  search (degenerate), centre-circle anchor (pose plausible, outline unfitted), event
+  azimuths (γ and L only). **There are no metric coordinates.**
+- **D-0 (camera motion as the event signal): falsified.**
+- **D-B (pixel-space, no metres): working.** Panorama, line map, player occupancy, ball
+  track and the first scored detector all exist. See the D-B result below.
 
 ---
 
