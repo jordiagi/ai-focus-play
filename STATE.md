@@ -4,7 +4,7 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-19 · by Claude Opus 5 · G2: PnLCalib measured (26% well-aligned); hybrid anchor+propagate plan next
+**Last updated:** 2026-09-19 · by Claude Opus 5 · G2: PnLCalib fails end-to-end (88-110 m); pivoting to mosaic stitching
 
 ---
 
@@ -71,7 +71,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | :-- | :-- | :-- | :-- |
 | G0 | Rebuild `benchmarks/veo_reference.json`; fix `scripts/config.env` time base; decode Veo's x/z convention | ☑ | `c38d62f`. Coords decoded: x=length, z=width, absolute. Centre spot lands 2 m off ideal — Veo's own bias, recorded not corrected |
 | G1 | **Measure ball-detection rate** — the go/no-go gate | ☑ | **Both halves measured.** tiled 0.833 / 0.828 — **gate passes**. full-frame 0.677 / 0.716 — fails one half. Caveat below: this is candidate presence, not correctness |
-| G2 | Pitch calibration | ◐ | **PnLCalib installed and measured**: at 0.15/0.30 it calibrates 27/46 frames, 12 of them well-aligned (26%). The 85% at looser thresholds is mostly wrong. **Next: use well-aligned frames as verified anchors and propagate via SIFT registration** (proven at 0.31-3.93 px, gate >=100) |
+| G2 | Pitch calibration | ◐ | **PnLCalib pretrained FAILS end-to-end** (4.5% of event frames well-aligned; median error 88-110 m). All pretrained models are broadcast-trained. **Next: stitch a pitch mosaic and calibrate that**, since single crops show too little pitch |
 | G3 | Tier A detectors (7 types) | ☐ | |
 | G4 | Possession HMM → Tier B (4 types + Pass count) | ☐ | Conditional on G1 gate |
 | G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
@@ -211,18 +211,54 @@ Caveats that may understate true accuracy: the pitch model is fixed at 105x68 an
 field is likely ~100x64, so part of the misalignment could be model mismatch rather than
 camera error; and faint or worn lines may fall outside the white mask.
 
-### The plan that follows: PnLCalib for anchors, SIFT to propagate
+### End-to-end metric test: PnLCalib pretrained FAILS on this footage
 
-Two measured facts combine neatly:
-- **PnLCalib calibrates ~26% of frames well** — sparse, but genuinely metric.
-- **SIFT registration transfers a frame to another at 0.31-3.93 px when inliers >= 100.**
+The decisive measurement — metres, not proxy scores. For each of 355 Veo events:
+calibrate the frame, keep it only if independently well-aligned, detect the ball, invert
+onto the ground plane, compare against Veo's own (x,z).
 
-So: use the well-aligned PnLCalib frames as **verified anchors**, and propagate their
-calibration to neighbouring frames by registration. This is the anchor idea from before,
-except the anchors are now chosen because they are *provably calibrated* rather than
-picked by time, and the ball-correspondence step that failed twice is removed entirely.
+| stage | count |
+| :-- | --: |
+| event frames tried | 355 |
+| calibrated | 253 |
+| **independently well-aligned (>=0.5)** | **16 (4.5%)** |
+| scored | 10 |
 
-Both halves are already measured, so this is assembly rather than research.
+**Median error 88 m (restarts) / 110 m (open play)** on a 105 m pitch. Essentially
+random. Note the well-aligned rate collapsed from 26% on wide frames to 4.5% on *event*
+frames, which are action close-ups showing little pitch structure.
+
+**Conclusion: PnLCalib's pretrained weights do not transfer here.** Fair test, fair
+failure. The Roboflow `football-field-detection` model shares the problem — it was
+trained on 317 frames from TV matches.
+
+### Why, and what it implies
+
+Every available pretrained pitch-calibration model is trained on **broadcast TV**
+footage. Ours is amateur, low, extremely oblique, set in a multi-pitch complex, and is
+itself a *virtual pan-and-zoom crop* with heavy zoom variation.
+
+And the framing of the whole problem was wrong. **Veo is not solving our problem.** Veo
+calibrates its own camera rig against the *full panorama* — known intrinsics, known
+mounting, whole pitch in view. We are trying to calibrate from a ball-following crop of
+that panorama, which discards exactly the context that makes calibration tractable. "Veo
+can do it from an upload" is true, but Veo holds the raw camera feed and we hold a
+derived crop.
+
+### Next: rebuild the panorama by stitching, then calibrate THAT
+
+The individual frames fail because each shows too little pitch. But registration between
+frames is already proven (0.31-3.93 px above 100 inliers). So:
+
+1. **Stitch frames into a pitch mosaic** — recovering, approximately, the panorama Veo
+   will not export.
+2. **Calibrate the mosaic once.** It shows the whole pitch, which is far closer to the
+   broadcast-style input the pretrained models expect.
+3. **Propagate**: every frame inherits metric coordinates through
+   `frame → mosaic (registration) → pitch (one homography)`.
+
+This attacks the root cause rather than the symptom, and both ingredients are measured
+rather than assumed.
 
 ### The reframe — still useful as a fallback
 
