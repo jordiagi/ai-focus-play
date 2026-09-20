@@ -4,8 +4,9 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-20 · by Claude Opus 5 · **D-0 falsified; D-A panorama + line map
-BUILT; calibration pose now PLAUSIBLE but the pitch still does not fit.** Tailscale re-authed
+**Last updated:** 2026-09-20 · by Claude Opus 5 · **D-0 falsified; D-A panorama + line map +
+play region BUILT; pose converges across methods but the pitch outline does not fit —
+STILL NO METRES.** Tailscale re-authed
 
 ---
 
@@ -38,19 +39,75 @@ that attacks the root cause, and D-0 sharpened its design.
 
 ## Recommended next step
 
-**Use Veo's own events to decide which lines belong to our pitch.** Calibration is still
-unsolved — **there are no metric coordinates** — but the failure has narrowed to one
-specific thing: the detected lines appear to span more than one field of this multi-pitch
-complex.
+**Switch to D-B, and treat calibration as a separate open problem.**
 
-The 447-event ground truth carries a video timestamp for every event, and
-`frame → panorama` is solved (per-frame R and focal). The virtual camera follows the
-ball, so projecting each event frame's centre into the panorama traces where play
-actually happened. That point cloud outlines **our** pitch; lines outside it belong to
-adjacent fields and can be dropped before fitting. No annotation, no ball detection, and
-it uses ground truth already on disk.
+Five approaches to metric calibration have now been measured and none has delivered a
+validated pitch (ball correspondences 1854 m then 10-15 m; PnLCalib pretrained
+88-110 m; 8-D ray-space search degenerate; centre-circle anchor — pose plausible but
+outline unfitted; event azimuths — γ and L only). **There are still no metric
+coordinates**, and the remaining gap is narrow but stubborn.
+
+**D-B needs no metres at all** and is still untouched: pixel-space Tier A detection
+covers 7 of 14 event types, ~196 of 447 events, 44 % of the benchmark mass, and 5 of
+the 13 stat rows — all scoreable against the real benchmark with the harness that
+already exists. That is a much better return than a sixth calibration attempt.
+
+**If calibration is picked up again**, the one thing to establish first is whether our
+pitch's own touchlines are present in the line evidence at all. Every fit so far has
+assumed they are, and they are exactly what is hardest to see here: the far touchline
+sits on the horizon, and the near one may fall outside the panorama or be buried under
+the foreground field's markings. Do not start a sixth fit before answering that.
 
 Full diagnosis: `backend/src/services/pipeline/gpu_job/mosaic/README.md`.
+
+---
+
+## D-A result (2026-09-20) — panorama YES, calibration NO
+
+| step | state |
+| :-- | :-- |
+| 0. is a consistent mosaic possible? | ☑ 3-frame loop closure **0.97 px**, flat in span |
+| 1. stitch the panorama | ☑ **4414x1190, 125.4° FOV**, players dissolved |
+| 2. line evidence map | ☑ centre circle, halfway, touchlines, penalty areas |
+| 3a. which field is ours | ☑ **213/220 event frames located (96.8 %)** |
+| 3b. fit the pitch pose | ✗ **pose converges, outline does not** — no metres |
+
+**The pose now agrees across independent methods:**
+
+| quantity | value | agreeing sources |
+| :-- | :-- | :-- |
+| camera height | **6.71 m** | centre circle (known 9.15 m radius) |
+| ground normal | **0.87° off vertical** | centre circle; matches wave correction |
+| in-plane rotation γ | **168.6-171.1°** | three routes within 2.5° |
+| pitch width W | **68.5-69.8 m** | touchline offset, line-evidence scan |
+| centre circle fit | **0.0 px median, 68 % within 3 px** | event cloud confirms it is ours |
+
+**But the outline does not fit:** touchlines 24-39 px out, goal lines 31-51 px, halfway
+24 px (<=3 px fractions 0-14 %), while the circle stays at 0.0 px. L stays unstable
+(101-120 m, often on a bound).
+
+**Two measurements that removed whole hypotheses:**
+
+- **Not panorama distortion.** Line half-width in the accumulated map grows only
+  **1.17x** centre to edge (1.96 → 2.30 px); the panorama registers to a few px
+  throughout.
+- **Frame centre tracks the ball in azimuth only.** The event cloud is a narrow
+  elevation band barely taller than the centre circle — the virtual camera pans and
+  zooms but hardly tilts. corr(veo_x, azimuth) = **+0.904** and monotone across all ten
+  deciles; corr(veo_z, azimuth) = +0.08. Azimuth-only fit residual **4.9°** against a
+  39.9° baseline.
+- **Which field is ours is now settled.** The bright foreground curves along the bottom
+  of the panorama — which every line fit had been chasing — fall *outside* the play
+  region. They belong to a nearer field.
+
+Three degeneracies were found by unit-testing against synthetic ground truth rather
+than by reading output: `pitch_model` scaled the penalty areas with the pitch (which is
+the only thing breaking the similarity degeneracy); the objective was piecewise
+constant, so Nelder-Mead descended a staircase; and letting camera height float has a
+**trivial global optimum at h = 0** where all rays collapse to the camera centre — both
+scipy optimisers drove straight to it.
+
+---
 
 ---
 
@@ -194,7 +251,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
 | G6 | Ingest artifacts → `analysis_mode="ml"` | ⏸ | `ml_ingest.py` does not exist yet |
 | D-A | Panorama + line map (frame → panorama) | ◐ | **BUILT** 2026-09-20: panorama 4414x1190 125.4° FOV; line map shows centre circle, halfway, both touchlines, both penalty areas. Loop closure 0.97 px |
-| D-A3 | Ray-space pitch pose fit | ✗ | **Pose now plausible** (h=6.71 m, normal 0.87° off vertical, nothing on bounds) and the centre circle fits to 0.0 px / 68%. **But no pitch outline fits** (16-42 px). **No metres.** Next: use Veo events to isolate our pitch's lines |
+| D-A3 | Ray-space pitch pose fit | ✗ | **Pose converges across 3 independent methods** (h=6.71 m, normal 0.87° off vertical, γ within 2.5°, W 68.5-69.8 m; circle fits 0.0 px / 68%). **But the outline does not** (24-51 px). **No metres.** Recommend D-B instead |
+| D-A4 | Play region from Veo events | ☑ | 213/220 event frames located (96.8%). Settles which field is ours; foreground lines are a different pitch. Frame centre tracks the ball in **azimuth only** |
 | D-0 | Camera motion as the event signal | ✗ | **Falsified 2026-09-20.** Premise "stoppage = static camera" is false; kickoff detector 0/8. Yielded the 10.6x chaining-drift constraint on D-A |
 | G7 | Jersey recognition | ⏸ | Last. **No roster available**, so open-set with abstention, or Veo-label leakage that must be declared. Honest ceiling ~25-40% vs Veo's 75% |
 

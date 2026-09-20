@@ -23,6 +23,8 @@ All CPU, on the local 720p proxy.
 | `build_line_map.py` | line evidence, composited from the sharp source frames — **works** |
 | `calibrate_panorama.py` | ray-space pitch pose, 8-D search — **degenerate**, kept for why |
 | `calibrate_from_circle.py` | pose anchored on the centre circle — **circle fits exactly, pitch does not** |
+| `locate_play_region.py` | which field is ours, from Veo's 447 events — **works** |
+| `fit_pose_from_events.py` | pose from event azimuths — **constrains γ and L, not W** |
 
 ## Step 0 — the planar model holds (so drift is fixable)
 
@@ -181,12 +183,55 @@ appear to span more than one field — which is the same structural problem that
 the three earlier calibration attempts, reappearing after the panorama removed the
 "too little pitch per frame" problem.
 
-## The next step
+## Step 3c/3d — Veo's events: which field is ours, and the pose from azimuth
 
-**Use Veo's own events to decide which lines are ours.** The 447-event ground truth
-carries a video timestamp for every event, and `frame -> panorama` is solved (per-frame
-R and focal). The virtual camera follows the ball, so projecting each event frame's
-centre into the panorama traces where play actually happened. That point cloud outlines
-**our** pitch; lines outside it belong to adjacent fields and can be dropped before
-fitting. It needs no annotation and no ball detection, and it uses ground truth already
-on disk.
+`locate_play_region.py` registers the frame at 220 event times into the panorama
+(**213 located, 96.8 %**, gate >=100 inliers) and projects the frame centre. Two results:
+
+**It confirms which field is ours.** The cloud straddles the fitted centre circle, and
+the bright foreground structures — the big curves and V shapes along the bottom of the
+panorama, which every line fit had been trying to match — fall **outside** it. They
+belong to a nearer field. Masking to the play region keeps 44.6 % of line pixels.
+
+**It also kills an assumption worth recording.** The cloud is a narrow elevation band
+barely taller than the centre circle itself (v 427-591 of 1190). Veo's virtual camera
+pans and zooms but hardly tilts, so frame-centre elevation is almost constant wherever
+the ball is. **The frame centre is useless as a proxy for the ball's ground position in
+elevation.** In azimuth it is excellent: corr(veo_x, azimuth) = **+0.904**, rising
+monotonically across all ten deciles of pitch length, against corr(veo_z, azimuth) =
++0.08.
+
+So `fit_pose_from_events.py` fits azimuth only — which is also scale-invariant, so it
+cannot trade against camera height the way the line fit did. Residual **4.9° median**
+against a 39.9° baseline for a meaningless pose.
+
+## Where this leaves it: the pose converges, the outline does not
+
+Independent methods now agree on most of the pose:
+
+| quantity | value | agreeing sources |
+| :-- | :-- | :-- |
+| camera height | **6.71 m** | centre circle (radius 9.15 m) |
+| ground normal | **0.87° off vertical** | centre circle; matches wave correction |
+| in-plane rotation γ | **168.6-171.1°** | line offsets, circle anchor, event azimuths — three routes within 2.5° |
+| pitch width W | **68.5-69.8 m** | touchline offset (69.8), line-evidence scan (68.5) |
+| centre circle | **0.0 px median, 68 % within 3 px** | and the event cloud confirms it is on OUR pitch |
+
+**And yet the pitch outline still will not fit.** Touchlines land 24-39 px out, goal
+lines 31-51 px, halfway 24 px, with <=3 px fractions of 0-14 % — while the circle stays
+at 0.0 px. Pitch length L remains unstable (101-120 m, often against a bound), because
+azimuth constrains it only weakly and the goal lines are near the horizon.
+
+**There are still no trustworthy metric coordinates.** Five approaches have now been
+measured and none delivers a validated pitch: ball correspondences (1854 m, then
+10-15 m), PnLCalib pretrained (88-110 m), 8-D ray-space search (degenerate),
+centre-circle anchor (pose plausible, outline unfitted), and event azimuths (γ and L
+only).
+
+**Honest read of the remaining gap.** Everything that is locally anchored — the circle,
+the camera height, the plane, the bearing — agrees across independent methods. Only the
+pitch *outline* fails, and the touchlines are exactly what is hardest to observe here:
+the far one sits on the horizon and the near one may fall outside the panorama or be
+buried under the foreground field's markings. Before another fitting attempt, it is
+worth establishing whether our pitch's own touchlines are present in the evidence at
+all — because every fit so far has assumed they are.

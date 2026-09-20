@@ -71,11 +71,23 @@ points at the **multi-pitch complex**: only *one* touchline-parallel line sits a
 pitch-like distance from the fitted circle (-34.9 m, detected nine times), where a real
 pitch centre would have two symmetric at ±W/2.
 
-**Next: use Veo's own events to isolate our pitch.** Every one of the 447 events carries
-a video timestamp, and `frame → panorama` is solved. The virtual camera follows the ball,
-so projecting each event frame's centre into the panorama traces where play actually
-happened; that point cloud outlines *our* pitch and the rest of the lines can be dropped
-before fitting. No annotation, no ball detection, ground truth already on disk.
+**Step 2c/2d (done): Veo's events settle which field is ours, and give the bearing.**
+213 of 220 event frames located in the panorama (96.8 %). The foreground curves every
+line fit had been chasing fall *outside* the play region — a different pitch. The frame
+centre tracks the ball in **azimuth only** (corr with veo_x **+0.904**, monotone across
+all ten deciles; with veo_z +0.08), because the virtual camera pans and zooms but hardly
+tilts. Azimuth-only pose fit: **4.9° median residual** against a 39.9° baseline.
+
+**The pose now converges across independent methods** — camera height **6.71 m**, normal
+**0.87° off vertical**, γ agreeing to **2.5°** over three routes, W **68.5-69.8 m**, and
+the centre circle fitting to **0.0 px median / 68 % within 3 px**. **The outline still
+does not**: touchlines 24-39 px, goal lines 31-51 px, halfway 24 px.
+
+**Recommendation: stop here and do D-B instead.** Five approaches have been measured
+without a validated pitch. If calibration is resumed, first establish whether our
+pitch's own touchlines are present in the evidence at all — every fit has assumed they
+are, and they are the hardest thing to see here (the far one is on the horizon, the near
+one may be outside the panorama or buried under the foreground field's markings).
 
 Verified correct and reusable: the spherical projection (matches OpenCV's warper to the
 pixel), the closed-form ray-space line solution, and the pose-from-circle solver (both
