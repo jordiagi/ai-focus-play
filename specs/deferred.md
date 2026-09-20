@@ -44,7 +44,23 @@ exposes it. See **D-A**, which this makes stricter.
 
 ## D-A. Rebuild the pitch panorama by stitching, then calibrate that
 
-**Status:** not started. This is the root-cause fix for metric pitch coordinates.
+**Status:** **step 2 of 3 done (2026-09-20).** The panorama is built; calibrating it is
+not. Full record: `backend/src/services/pipeline/gpu_job/mosaic/README.md`.
+
+| step | state |
+| :-- | :-- |
+| 0. is a consistent mosaic possible? | ☑ **yes** — 3-frame loop closure 0.97 px median, flat in loop span, 181/186 frames in one component |
+| 1. stitch the panorama | ☑ **4414x1190, 125.4° FOV**, whole pitch, both goals, players dissolved by median compositing |
+| 2. calibrate it once | ☐ **not started — no metric coordinates yet** |
+| 3. propagate to every frame | ☐ blocked on step 2; `frame → panorama` itself is solved (per-frame R and focal) |
+
+**Before starting step 2:** the pan spans **129.5°**, so **no single homography maps the
+panorama to the pitch plane** — no pinhole image can contain this pitch, which is
+precisely why Veo ships a panorama and calibrates with known intrinsics instead. Fit the
+ground plane in *ray* space: every panorama pixel is a ray, the pitch is the plane those
+rays strike, and the free parameters are the plane normal (2), in-plane rotation and 2D
+offset (3), and scale (1). Score with the white-line alignment metric already built in
+`../pitch/score_alignment.py`.
 
 **Why it is needed.** Metric (metre-space) pitch coordinates are currently unavailable —
 three approaches failed, documented in `STATE.md`. The cause is structural: every
