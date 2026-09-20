@@ -178,6 +178,32 @@ machine: 1080p h264 decodes at 244 fps single-threaded, 749 fps on 8 cores. The 
 185,003 frames take ~4 min on 8 cores, so ~1 min on gpu-box's 128. The Colab notebook's
 decode cost was *Python* (`cap.read()` per frame, discarding 5 of 6), not CPU decoding.
 
+### 5a. gpu-box is a CPU machine too — send the CPU work there as well
+
+**This was already recorded in the table above on 2026-09-18 ("128 cores, 251 GB RAM").
+It was not unknown, it was unused** — which is why it is being written out again as a
+rule rather than a fact. Local is **8 cores / 15 GB**; gpu-box is **128 / 251**, with
+OpenCV 5.0.0 already in its venv.
+
+The registration that this pipeline leans on (SIFT + RANSAC per frame, ~0.5 s each,
+embarrassingly parallel) is **CPU** work — the H100s do not accelerate it. That made it
+easy to assume it belonged locally. It does not: 16x the cores and 16x the RAM are 16x
+the cores and RAM whether or not a GPU is involved.
+
+Two concrete costs of getting this wrong:
+
+- Caching 80 anchors' SIFT features in each of 8 workers exhausted 15 GB and the OS
+  killed processes. On a 251 GB box it would not have mattered.
+- Worse, it silently constrained the *method*: ball detection was run at 2 fps partly
+  because local registration at 5 fps would have taken ~35 minutes. At 2 fps the ball
+  can travel ~285 px between frames, which directly degrades trajectory association.
+  A capacity limit quietly became a modelling decision.
+
+**Rule: if a step is minutes of local CPU, it belongs on gpu-box.** Push the small
+artifacts it needs (`cameras2.json` is 23 KB, the 80 anchor frames are 15 MB) rather
+than pulling the big ones down. There is also a GPU option for feature matching that is
+unmeasured here: this OpenCV build exposes `cv2.detail.LightGlueFeaturesMatcher`.
+
 ### 5b. The camera PANS - settled visually 2026-09-18
 
 Four frames pulled from video t=700 / 2000 / 4000 / 5500 show **four completely

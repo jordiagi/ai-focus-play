@@ -289,3 +289,57 @@ So of D-B's three zone uses, occupancy supports the coarse one and not the sharp
 need the ball *crossing a boundary*, and an 8 %-aligned ragged contour is not that
 boundary. Sharpening it is the next question, and the obvious candidate is to fit a
 smooth quadrilateral to the occupancy rather than trusting a density contour.
+
+## D-B steps 4-6 — the ball
+
+`../detect_ball.py` (gpu-box) reuses G1's measured tiling. Over the **whole match at
+5 fps, 23,874 frames, candidate rate 0.8344** — G1 measured 0.833 / 0.828 on two
+isolated 600 s slices, so the gate was not a windowing artefact. `map_ball_to_panorama.py`
+registers 94.1 % of those frames and maps 36,291 candidates into panorama space;
+`associate_ball.py` picks a track by Viterbi.
+
+### A test-design error, and the correction
+
+The association was first scored by correlating the chosen candidate's panorama azimuth
+with Veo's pitch-length coordinate `x`, against the camera's own aim as baseline. Every
+variant lost:
+
+| selector | corr with veo_x |
+| :-- | --: |
+| top confidence | 0.824 |
+| Viterbi track | 0.833 |
+| nearest to frame centre | 0.846 |
+| conf >= 0.55, top confidence | 0.882 |
+| **camera aim (frame centre)** | **0.909** |
+
+**That test is contaminated and should not be used.** Veo's virtual camera aim and Veo's
+event coordinates are both outputs of Veo's own internal ball tracking, so the baseline
+and the target share a source. It asks an independent detector to beat Veo at
+reproducing Veo, which it cannot do however good it is. The consistency of the ~0.82-0.88
+band across completely different selectors was the clue.
+
+### The uncontaminated test: the ball at kickoff
+
+A kickoff puts the ball **on the centre spot**, whose panorama position comes from the
+fitted centre circle — no Veo tracker involved. Reporting the **top-confidence**
+candidate, because that is what a detector actually outputs (nearest-of-five would be
+oracle selection):
+
+| | median distance from the centre spot |
+| :-- | --: |
+| top-confidence candidate (n=8) | **94 px = 3.0 m** |
+| ... with top-conf >= 0.45 (n=6) | **58 px = 1.9 m** |
+| ... with top-conf < 0.45 (n=2) | 135 px = 4.4 m |
+| arbitrary candidate, any time (control) | 619 px = **20 m** |
+
+So the detector does find the ball, and confidence carries information — but read this
+with three caveats. **n = 8.** Confidence is not a guarantee: two of the six confident
+kickoffs were still 3.6 m and 4.4 m out. And at 5 fps a ±0.1 s timing offset moves a
+just-kicked ball a metre or two, so part of the residual is sampling, not detection.
+
+### Where the ball layer actually stands
+
+Usable signal, unusable trajectory. The Viterbi track still has **13.6 % of steps above
+plausible ball speed**, and a confidence gate trades hard: conf >= 0.45 keeps 47 % of
+frames, conf >= 0.55 keeps 38 %. Shot detection needs speed and direction, and a track
+with one step in seven impossible cannot supply them yet.

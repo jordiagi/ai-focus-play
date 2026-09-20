@@ -39,24 +39,58 @@ that attacks the root cause, and D-0 sharpened its design.
 
 ## Recommended next step
 
-**Sharpen the D-B pitch boundary, then build the first Tier A detector.**
+**Clean the ball trajectory, then ship the first scored detector.** The ball layer now
+exists and carries real signal, but **13.6 % of track steps exceed plausible ball
+speed**, and Shot detection needs speed and direction. Options, cheapest first: raise
+the confidence gate (conf>=0.45 keeps 47 % of frames, >=0.55 keeps 38 %), add a motion
+model with an explicit miss state so the tracker can decline a frame instead of picking
+a wrong candidate, and interpolate short gaps.
 
-D-B is started. Player occupancy in panorama pixel space now gives a *derived* pitch
-region (no annotation, no metres) holding 86 % of players, but its boundary beats chance
-by only **2.35x** and just 8 % of it lands on a detected line. That is enough for the
-coarse zone uses and **not** enough for "ball crosses a boundary", which is what
-corner / throw-in / goal kick need. The obvious next move is to fit a smooth
-quadrilateral to the occupancy instead of trusting a ragged density contour.
+Then the first detector should be **Goal (6 events)** — D-B's own analysis says it needs
+only coarse position, which is exactly what the occupancy region and a gated ball track
+provide. Score it with `scripts/local/score-benchmark.py`, which prints the
+expected-by-chance recall beside every number.
 
-After that, the first scored detector needs the **ball in panorama space**: `frame →
-panorama` is solved and `detect_players.py` shows the remote detection loop costs
-seconds, so the missing piece is tiled ball detection (G1 measured 0.83 candidate
-presence tiled vs 0.68-0.72 full-frame) plus trajectory association.
+**Do not reuse the azimuth-vs-Veo correlation as a validation metric** — see below, it
+is contaminated.
 
-**Metric calibration stays parked.** Five approaches measured, none validated — and D-B
-step 3 added an independent reason to leave it: inverting the player cloud onto the
-fitted plane yields a **square** pitch (105.8 x 104.5 m, aspect 1.01) because near the
-horizon a few pixels is tens of metres.
+---
+
+## D-B result (2026-09-20) — zones coarse, ball real but trajectory dirty
+
+**A test-design error worth remembering.** Ball association was first scored by
+correlating the chosen candidate's azimuth with Veo's pitch-length `x`, against the
+camera's aim as baseline. Every selector lost (top-conf 0.824, Viterbi 0.833, nearest-
+to-centre 0.846, conf-gated 0.882, camera aim **0.909**). **That test is contaminated:**
+Veo's camera aim and Veo's event coordinates are both outputs of Veo's own ball tracker,
+so it asks an independent detector to beat Veo at reproducing Veo. The suspiciously
+tight 0.82-0.88 band across unrelated selectors was the clue.
+
+**The uncontaminated test.** A kickoff puts the ball on the centre spot, whose panorama
+position comes from the fitted centre circle — no Veo tracker involved. Top-confidence
+candidate (not nearest-of-five, which would be oracle selection):
+
+| | median distance from the centre spot |
+| :-- | --: |
+| top-confidence candidate (n=8) | **94 px = 3.0 m** |
+| ... conf >= 0.45 (n=6) | **58 px = 1.9 m** |
+| arbitrary candidate, any time (control) | 619 px = **20 m** |
+
+Caveats that travel with it: **n = 8**; two of the six confident kickoffs were still
+3.6 m and 4.4 m out, so confidence is not a guarantee; and at 5 fps a ±0.1 s timing
+offset moves a just-kicked ball a metre or two, so part of the residual is sampling.
+
+**Zones (steps 1-3).** Player occupancy gives a derived pitch region holding 86 % of
+players, but its boundary beats chance by only **2.35x** (8 % on a detected line). Good
+enough for coarse zone use (Goal), not for "ball crosses a boundary" (corner / throw-in
+/ goal kick).
+
+**And the measurement that justifies D-B at all:** inverting the 14,607 player points
+onto the fitted ground plane gives a **105.8 x 104.5 m box, aspect 1.01** — a square.
+Near the horizon a few pixels is tens of metres. Metres here are unusable; pixel space
+is fine.
+
+---
 
 ---
 
@@ -291,8 +325,9 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | B1 | Player detection on gpu-box | ☑ | 600 in-play frames, 15,380 persons, 16.5 s on one H100. `detect_players.py` |
 | B2 | Occupancy map in panorama space | ☑ | 95.7% registered, 14,607 foot points, 92% in one blob |
 | B3 | Pitch region polygon, derived + tested | ◐ | 86% of players inside, boundary **2.35x chance** (8% on-line). Coarse, not a touchline |
-| B4 | Ball in panorama space | ☐ | Needs tiled detection (G1: 0.83 tiled vs 0.68-0.72 full-frame) + trajectory association |
-| B5 | Tier A detectors + benchmark scoring | ☐ | The actual deliverable; harness already exists |
+| B4 | Ball in panorama space | ☑ | 5 fps, 23,874 frames, **candidate rate 0.8344** over the whole match (G1 measured 0.833/0.828 on slices). 94.1% registered, 36,291 candidates mapped |
+| B5 | Ball trajectory (Viterbi) | ◐ | Finds the ball — **1.9 m median from the centre spot at kickoff** (conf>=0.45, n=6) vs a 20 m control — but **13.6% of track steps exceed plausible ball speed** |
+| B6 | Tier A detectors + benchmark scoring | ☐ | The actual deliverable; harness already exists |
 
 ### Track 2 — UI / route parity — ☑ **COMPLETE**
 

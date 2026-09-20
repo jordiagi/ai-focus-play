@@ -41,6 +41,13 @@ def main():
     ap.add_argument("--vmax-px-s", type=float, default=900.0,
                     help="panorama px/s; ~30 m/s at 40 m is ~850 px/s at this scale")
     ap.add_argument("--w-conf", type=float, default=1.0)
+    ap.add_argument("--ball-frame", default=None,
+                    help="ball.json in FRAME coords; enables the frame-centre prior")
+    ap.add_argument("--w-centre", type=float, default=0.0,
+                    help="weight on distance from frame centre. The export is a "
+                         "ball-following crop, so the camera's aim is evidence about "
+                         "where the ball is -- ignoring it threw away the strongest "
+                         "signal available, and the first run lost to it 0.833 vs 0.908")
     ap.add_argument("--max-gap-s", type=float, default=3.0,
                     help="beyond this the sequence is cut; continuity means nothing")
     ap.add_argument("--event-tol-s", type=float, default=1.0)
@@ -54,6 +61,19 @@ def main():
     M = json.loads(Path(a.mapped).read_text())
     fr = [f for f in M["tracks"] if f["c"]]
     fr.sort(key=lambda f: f["t"])
+
+    # frame-centre prior: candidate order is preserved by the mapping step, so the
+    # i-th panorama candidate is the i-th frame-space candidate
+    prior = {}
+    if a.ball_frame and a.w_centre > 0:
+        B = json.loads(Path(a.ball_frame).read_text())
+        fw, fh = B["config"]["frame_wh"]
+        for d in B["detections"]:
+            if not d["c"]:
+                continue
+            prior[round(d["t"], 3)] = [
+                math.hypot(c[0] - fw / 2.0, c[1] - fh / 2.0) / (fw / 2.0)
+                for c in d["c"]]
 
     # split into runs with no long gap
     runs, cur = [], []
@@ -70,8 +90,14 @@ def main():
         n = len(run)
         cost = [None] * n
         back = [None] * n
-        c0 = np.array([-math.log(max(c[3], 1e-6)) for c in run[0]["c"]]) * a.w_conf
-        cost[0] = c0
+        def emis_of(f):
+            e = np.array([-math.log(max(c[3], 1e-6)) for c in f["c"]]) * a.w_conf
+            pv = prior.get(round(f["t"], 3))
+            if pv is not None and len(pv) == len(e):
+                e = e + a.w_centre * np.asarray(pv) ** 2
+            return e
+
+        cost[0] = emis_of(run[0])
         for k in range(1, n):
             dt = max(run[k]["t"] - run[k - 1]["t"], 1e-3)
             prev = np.array([[c[0], c[1]] for c in run[k - 1]["c"]])
@@ -80,7 +106,7 @@ def main():
             # Huber on displacement normalised by the plausible travel in dt
             z = d / max(a.vmax_px_s * dt, 1e-6)
             trans = np.where(z <= 1.0, z ** 2, 2 * z - 1.0)
-            emis = np.array([-math.log(max(c[3], 1e-6)) for c in run[k]["c"]]) * a.w_conf
+            emis = emis_of(run[k])
             tot = trans + cost[k - 1][None, :]
             back[k] = np.argmin(tot, axis=1)
             cost[k] = tot[np.arange(len(curp)), back[k]] + emis
@@ -130,6 +156,7 @@ def main():
 
     doc = {
         "job": "D-B step 6: ball association by Viterbi, and its test",
+        "w_centre": a.w_centre, "w_conf": a.w_conf,
         "frames_with_candidates": len(fr), "runs": len(runs),
         "track_points": len(track),
         "step_px_per_s": {
