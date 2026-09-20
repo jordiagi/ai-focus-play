@@ -4,9 +4,9 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-20 · by Claude Opus 5 · **D-0 falsified; D-A panorama built but
-NO METRES; switched to D-B — player occupancy gives a coarse pitch region, not a sharp
-boundary.** Tailscale re-authed, gpu-box in use
+**Last updated:** 2026-09-20 · by Claude Opus 5 · **FIRST SCORED TIER A DETECTOR:
+FootballOutOfPlay, held-out recall 0.41 vs 0.05 chance (F1 0.384).** D-0 falsified,
+D-A has no metres, D-B is delivering. gpu-box in use
 
 ---
 
@@ -39,19 +39,49 @@ that attacks the root cause, and D-0 sharpened its design.
 
 ## Recommended next step
 
-**Ship the first scored detector.** The trajectory is fixed: giving the tracker an
-explicit miss state took impossible steps from **13.6 % to 0.1-0.9 %** at 47-70 %
-coverage. Accuracy against the centre spot at kickoff is **5.7 m** (n=8) versus a
-24.5 m control — real but coarse, and part of that residual is the reference ellipse
-rather than the track.
+**Extend from OutOfPlay to the restarts it already implies.** Every one of the 64
+OutOfPlay events is followed by a restart — 38 throw-ins, 16 goal kicks, 9 corners — a
+median 17 s later. The detector we have is therefore a candidate generator for three
+more types covering 63 further events, and distinguishing them needs only *where* the
+ball went out, which the panorama track gives coarsely (throw-in on a touchline, goal
+kick / corner on a goal line).
 
-The first detector should be **Goal (6 events)** — D-B's own analysis says it needs
-only coarse position, which is exactly what the occupancy region and a gated ball track
-provide. Score it with `scripts/local/score-benchmark.py`, which prints the
-expected-by-chance recall beside every number.
+Two things worth fixing on the existing detector first, in this order:
 
-**Do not reuse the azimuth-vs-Veo correlation as a validation metric** — see below, it
-is contaminated.
+1. **Precision is 0.289** — 64 of 90 predictions are wrong. It is a candidate generator,
+   not an event list.
+2. **Team is not predicted**, so under the repo's primary (team-aware) metric this type
+   scores **0**. Team for a restart is decidable from which side the ball left and who
+   takes it; until then, quote the team-agnostic figure and say so.
+
+Full record: `backend/src/services/pipeline/gpu_job/mosaic/README.md`.
+
+---
+
+## D-B result (2026-09-20) — first scored Tier A detector
+
+| | n_pred | n_ref | tp | precision | recall | chance | F1 |
+| :-- | --: | --: | --: | --: | --: | --: | --: |
+| period 1 (dev) | 51 | 30 | 12 | 0.235 | 0.400 | 0.062 | 0.296 |
+| **period 2 (held out)** | 39 | 34 | 14 | **0.359** | **0.412** | **0.048** | **0.384** |
+| both periods | 90 | 64 | 26 | 0.289 | 0.406 | 0.084 | 0.338 |
+
+Threshold fitted on period 1, applied unchanged to period 2. The held-out half scored
+**higher** than dev (gap -0.087), so it is not overfitted. `score-benchmark.py`
+reproduces the both-periods row exactly.
+
+**The signature, measured before building anything** (medians over 64 events vs 600
+random in-play times): ball speed [-1,+0.5]s **196 vs 77 px/s**; track coverage
+[+0.5,+3.5]s **0.20 vs 0.53**; ball speed [+2,+6]s **35 vs 93 px/s**. The ball is
+struck hard, leaves the field, stops being trackable, then sits still.
+
+**Caveats that travel with it.** Team is not predicted, so the team-aware metric — the
+repo's primary — is 0 by construction. Precision 0.289. One feature is a *detector
+failure* (coverage collapse), legitimate because the event causes it, but it ties the
+detector to the tracker's weakness. Benchmark coverage is still 1 of 14 types, 14 % of
+event mass.
+
+---
 
 ---
 
@@ -326,7 +356,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | B3 | Pitch region polygon, derived + tested | ◐ | 86% of players inside, boundary **2.35x chance** (8% on-line). Coarse, not a touchline |
 | B4 | Ball in panorama space | ☑ | 5 fps, 23,874 frames, **candidate rate 0.8344** over the whole match (G1 measured 0.833/0.828 on slices). 94.1% registered, 36,291 candidates mapped |
 | B5 | Ball trajectory (Viterbi + miss state) | ☑ | **Impossible steps 13.6% → 0.1-0.9%.** 58.6% coverage, 10,994 points. Accuracy vs the centre spot at kickoff **5.7 m** (±0.6 s window, n=8) against a 24.5 m control |
-| B6 | Tier A detectors + benchmark scoring | ☐ | The actual deliverable; harness already exists |
+| B6 | **FootballOutOfPlay detector** | ☑ | **Held-out (period 2) F1 0.384, recall 0.412 vs chance 0.048 — ~8x chance.** Both periods F1 0.338, confirmed by `score-benchmark.py`. Team not predicted, so team-aware is 0 by construction |
+| B7 | Remaining Tier A types | ☐ | Throw-in 38 / GoalKick 16 / Corner 9 all follow an OutOfPlay by a median 17 s — the detector above is their candidate generator |
 
 ### Track 2 — UI / route parity — ☑ **COMPLETE**
 

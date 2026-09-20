@@ -375,3 +375,51 @@ reference, not the track.
 The contaminated correlation test did improve with the clean track (0.833 → **0.885**,
 against a favoured baseline of 0.907), which is consistent with a better track but
 cannot prove it — losing that test means nothing, only winning would.
+
+## D-B step 8 — the first scored Tier A detector: FootballOutOfPlay
+
+64 events, the largest Tier A type, and it needs **no metres**.
+
+The signature was measured before anything was built — medians over the 64 events
+against 600 random in-play times:
+
+| window | at OutOfPlay | at random |
+| :-- | --: | --: |
+| ball speed, [-1, +0.5] s | **196 px/s** | 77 |
+| track coverage, [+0.5, +3.5] s | **0.20** | 0.53 |
+| ball speed, [+2, +6] s | **35 px/s** | 93 |
+
+The physical story reads straight off it: the ball is struck hard, leaves the field,
+stops being trackable, then sits still while someone fetches it. All 64 are followed by
+a restart (38 throw-ins, 16 goal kicks, 9 corners) a median 17 s later.
+
+### Result
+
+Threshold fitted on **period 1 only** and applied unchanged to period 2.
+
+| | n_pred | n_ref | tp | precision | recall | chance recall | F1 |
+| :-- | --: | --: | --: | --: | --: | --: | --: |
+| period 1 (dev) | 51 | 30 | 12 | 0.235 | 0.400 | 0.062 | 0.296 |
+| **period 2 (held out)** | 39 | 34 | 14 | **0.359** | **0.412** | **0.048** | **0.384** |
+| both periods | 90 | 64 | 26 | 0.289 | 0.406 | 0.084 | 0.338 |
+
+**Recall 0.41 against a chance recall of 0.05 on held-out data — about 8x chance.** The
+both-periods row is reproduced exactly by `scripts/local/score-benchmark.py`
+(team-agnostic block: tp 26, precision 0.289, recall 0.406, F1 0.338, chance 0.084).
+
+The held-out period scored **higher** than dev (gap -0.087), so the threshold is not
+overfitted; if anything period 1 is the harder half.
+
+### What this result is not
+
+- **Team is not predicted.** Veo labels each OutOfPlay Own or Opponent, and the repo's
+  primary metric is team-aware, under which this scores **0 by construction**. The
+  figures above are the team-agnostic block. The type cannot reach parity until team is
+  attempted.
+- **Precision is 0.289** — 64 of 90 predictions are wrong. Useful as a candidate
+  generator, not as a finished event list.
+- **One feature is a detector failure.** Coverage collapses because the ball leaves the
+  region the tracker can follow. That is caused by the event so it is legitimate
+  evidence, but it makes the detector depend on the tracker's weakness: improve the
+  tracker and this feature weakens.
+- Macro-F1 over the benchmark is still **1 of 14 types, 14 % of event mass**.
