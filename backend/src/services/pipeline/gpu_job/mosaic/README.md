@@ -6,8 +6,10 @@ original (confirmed by the user). Every per-frame calibration attempt failed bec
 single frame of this footage shows too little pitch. D-A's answer: **reconstruct the
 panorama**, then calibrate that once.
 
-**Status: the panorama is built. It is not yet calibrated** — metric coordinates are
-still unavailable, and that is the next step.
+**Status: the panorama is built and the line evidence is good. The pose fit is NOT
+solved** — there are still no metric coordinates. Step 3 was attempted and failed; the
+failure is diagnosed below rather than hidden, because the diagnosis names the next
+step.
 
 All CPU, on the local 720p proxy.
 
@@ -18,6 +20,8 @@ All CPU, on the local 720p proxy.
 | `measure_loop_closure.py` | is a globally consistent mosaic even possible here? |
 | `build_mosaic.py` | planar mosaic — **failed**, kept because the failure is the reason for the next script |
 | `build_panorama.py` | rotating-camera panorama — **works** |
+| `build_line_map.py` | line evidence, composited from the sharp source frames — **works** |
+| `calibrate_panorama.py` | ray-space pitch pose — **does not converge**, see below |
 
 ## Step 0 — the planar model holds (so drift is fixable)
 
@@ -75,3 +79,69 @@ local scale at the image centre is `f_j/f_i`, giving one linear equation per edg
 space. Solving all 2798 at once is drift-free for the same reason the mosaic is — it
 uses every loop rather than a chain — and the result is handed to Ray, which then only
 has to solve rotations.
+
+
+## Step 3 — ray-space calibration: attempted, NOT solved
+
+Because the pan spans 125 degrees, **no single homography maps the panorama to the
+pitch plane** — no pinhole image can contain this pitch. Every earlier attempt in this
+repo assumed a homography, and that assumption was wrong before any tuning started. The
+right object is the ray: each panorama pixel is a direction, the pitch is the plane those
+rays strike, and the calibration is 8 numbers (normal tilt/roll, camera height, in-plane
+rotation, 2D offset, pitch L and W).
+
+**What is verified correct.** The spherical projection matches OpenCV's own
+`PyRotationWarper.warpPoint` to the pixel. The closed-form solution — two parallel
+ground lines give the vanishing direction, a perpendicular one gives the plane normal —
+recovers all 8 parameters *exactly* from synthetic ground truth. The geometry is not the
+problem.
+
+**Two real defects were found and fixed on the way**, both of which had been silently
+degrading everything:
+
+- `pitch_model` scaled a 105x68 template, which stretched the penalty areas with the
+  pitch. Their sizes are fixed by the Laws (16.5, 40.32, 5.5, 18.32, 9.15) and that
+  fixedness is the *only* thing breaking the scale degeneracy — a pure similarity of the
+  whole pitch reprojects identically. Scaling them removed the information the fit needs.
+- The objective was piecewise constant (nearest-neighbour sampling plus an 8 px recall
+  grid), so Nelder-Mead was descending a staircase and doing nothing. Now bilinear.
+
+**Step 3a, the line map, is a large measured gain.** Calibrating against the RGB median
+composite was hopeless because the median is what removes the players but also averages
+away a 1-2 px line. Detecting lines per frame — where they are sharp — and compositing
+the *response* instead gives a map where the centre circle, halfway line, both
+touchlines and both penalty areas are all clearly present:
+
+| evidence image | model points on a line (<=3 px) | median distance |
+| :-- | --: | --: |
+| RGB median composite | 0.096 | 118 px |
+| **warped line-response map** | **0.26** | 15-46 px |
+
+**But the fit still does not converge.** Best runs reach 0.26 with the camera height
+pinned at the 1-2 m bound and L or W on a bound too. A Veo camera is on a pole; 1 m is
+not a plausible answer, and parameters resting on bounds are the standard tell that the
+optimiser is exploiting a degeneracy rather than finding the pitch. Different restarts
+land on different local optima (median distance 15 px vs 46 px). **Do not read the 0.26
+as nearly matching PnLCalib's 0.29 — both are failures, and this one is not even
+physically plausible.**
+
+**Why it fails, specifically.** Great-circle RANSAC resolves only three or four
+*distinct* physical lines (circles 0/2/5 are the same line found three times, offsets
+agreeing to 3 decimals), and the near-horizon ones are ill-conditioned — one returned an
+offset of 62 camera-heights. With so few independent constraints the orthogonality
+criterion barely discriminates: R = 0.84 at exact vertical against 0.89 at its optimum,
+with several comparable peaks.
+
+## The next step, and why it should work
+
+**Anchor the fit on the centre circle.** It is now crisply and unambiguously detected in
+the line map, and it removes exactly the degeneracies being exploited:
+
+- its centroid fixes the ray to the pitch centre, giving `tx, ty` once the normal is
+  chosen, and
+- its known 9.15 m radius against its apparent angular size fixes the **camera height**,
+  which is the parameter currently running to its bound.
+
+That leaves roughly four free parameters instead of eight, over a well-conditioned
+search. The halfway line — unambiguous, vertical, at the panorama centre — then fixes the
+in-plane rotation.

@@ -51,8 +51,20 @@ not. Full record: `backend/src/services/pipeline/gpu_job/mosaic/README.md`.
 | :-- | :-- |
 | 0. is a consistent mosaic possible? | ☑ **yes** — 3-frame loop closure 0.97 px median, flat in loop span, 181/186 frames in one component |
 | 1. stitch the panorama | ☑ **4414x1190, 125.4° FOV**, whole pitch, both goals, players dissolved by median compositing |
-| 2. calibrate it once | ☐ **not started — no metric coordinates yet** |
-| 3. propagate to every frame | ☐ blocked on step 2; `frame → panorama` itself is solved (per-frame R and focal) |
+| 2a. line evidence map | ☑ centre circle, halfway line, both touchlines, both penalty areas — composited from the SHARP source frames, not the median panorama |
+| 2b. fit the pitch pose | ✗ **attempted, does not converge — still no metric coordinates** |
+| 3. propagate to every frame | ☐ blocked on 2b; `frame → panorama` itself is solved (per-frame R and focal) |
+
+**Step 2b failed; the diagnosis is the next step.** Best fits reach 0.26 of model points
+on a detected line but pin the camera height at its 1-2 m bound — not plausible for a
+pole-mounted Veo camera, and bound-resting parameters mean the optimiser is exploiting a
+degeneracy. Great-circle RANSAC recovers only 3-4 *distinct* lines, so the plane normal
+is weakly determined (orthogonality R = 0.84 at vertical vs 0.89 at optimum).
+**Anchor on the centre circle**: its centroid fixes the pitch-centre ray and its known
+9.15 m radius against its apparent size fixes the camera height, cutting the search from
+8 free parameters to ~4. Verified correct and reusable: the spherical projection (matches
+OpenCV's warper to the pixel) and the closed-form ray-space solution (recovers synthetic
+ground truth exactly).
 
 **Before starting step 2:** the pan spans **129.5°**, so **no single homography maps the
 panorama to the pitch plane** — no pinhole image can contain this pitch, which is
