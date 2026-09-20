@@ -393,22 +393,33 @@ The physical story reads straight off it: the ball is struck hard, leaves the fi
 stops being trackable, then sits still while someone fetches it. All 64 are followed by
 a restart (38 throw-ins, 16 goal kicks, 9 corners) a median 17 s later.
 
-### Result
+### Result — RESTATED 2026-09-20, the original figures did not reproduce
 
-Threshold fitted on **period 1 only** and applied unchanged to period 2.
+**The numbers first published here (period 1 n=51 tp=12 F1 0.296; period 2 n=39 tp=14
+F1 0.384; both n=90 tp=26 F1 0.338) cannot be regenerated.** The committed script run
+against the stored `ball_track.json` does not produce them at any setting tried: an
+8-cell `min_sep` sweep, a 5-cell `fps` sweep and a 48-cell sweep over NaN-rank handling,
+candidate cap and `min_sep` together. The invocation was never recorded and the stored
+`pred_oop.json` / `score_oop.json` were overwritten before the gap was noticed. See the
+incident note in `STATE.md`.
+
+What is reproducible, with `min_sep` selected by period-1 F1 over 2,3,4,5,6,8,10,12
+(5.0 wins at 0.265) and the threshold then fitted on period 1:
 
 | | n_pred | n_ref | tp | precision | recall | chance recall | F1 |
 | :-- | --: | --: | --: | --: | --: | --: | --: |
-| period 1 (dev) | 51 | 30 | 12 | 0.235 | 0.400 | 0.062 | 0.296 |
-| **period 2 (held out)** | 39 | 34 | 14 | **0.359** | **0.412** | **0.048** | **0.384** |
-| both periods | 90 | 64 | 26 | 0.289 | 0.406 | 0.084 | 0.338 |
+| period 1 (dev) | 106 | 30 | 18 | 0.170 | 0.600 | 0.125 | 0.265 |
+| **period 2 (held out)** | 81 | 34 | 22 | **0.272** | **0.647** | **0.097** | **0.383** |
+| both periods | 187 | 64 | 40 | 0.214 | 0.625 | 0.209 | 0.319 |
 
-**Recall 0.41 against a chance recall of 0.05 on held-out data — about 8x chance.** The
-both-periods row is reproduced exactly by `scripts/local/score-benchmark.py`
-(team-agnostic block: tp 26, precision 0.289, recall 0.406, F1 0.338, chance 0.084).
+Held-out F1 **0.383** is within 0.001 of the figure originally published, which is a
+coincidence worth naming rather than leaning on: the *profile* is quite different —
+recall 0.647 where the old row said 0.412, precision 0.272 where it said 0.359, and 187
+predictions where it said 90. **Held-out recall is 6.7x chance, not the ~8x first
+claimed.** The held-out half again scores higher than dev (gap -0.118).
 
-The held-out period scored **higher** than dev (gap -0.087), so the threshold is not
-overfitted; if anything period 1 is the harder half.
+`scripts/local/score-benchmark.py` reproduces the both-periods row from
+`pred_all.json` (team-agnostic block: F1 0.319).
 
 ### What this result is not
 
@@ -566,14 +577,63 @@ unrounded, with a margin, because a tie is not a win.
    CornerKick rule raised period-1 macro-F1 from 0.280 to 0.314 and moved held-out macro
    by -0.005. The protocol selected it; the held-out half said it was noise.
 
+## D-B step 11 — team, and the repo's primary metric off zero
+
+Every detector up to here scored **0 on the team-aware metric by construction**, because
+none predicted a side. For two of the restart types the laws of the game decide it: a
+**goal kick is taken by the side defending that end**, a **corner by the side attacking
+it**. So "which side defends which end" settles both — and that is a *single bit*,
+because the sides swap at half time.
+
+The bit is fitted on period-1 goal-kick team labels (`in period 1 the xi<0.5 end is
+defended by Own`) and period 2 follows from the swap, which makes period 2 a real test:
+if the swap were wrong, or if Veo's Own/Opponent were camera-relative rather than
+team-relative, period-2 accuracy would collapse to ~0.
+
+**On true event times the rule is right 24 of 24:**
+
+| | correct / of |
+| :-- | --: |
+| GoalKick, period 1 (where the bit was fitted) | 8 / 8 |
+| **GoalKick, period 2 (held out — this tests the swap)** | **8 / 8** |
+| CornerKick, period 1 | 7 / 7 |
+| CornerKick, period 2 | 1 / 1 |
+
+Two checks that this is the frame working and not a coincidence: our `xi` side agrees
+with Veo's own pitch-length coordinate on **14 of 14** goal kicks that carry one, and
+goal-kick team is separable by (our `xi` side, period) on **16 of 16** — with the sign
+flipping at half time exactly as the swap predicts.
+
+**What is not attempted, and why it was not guessed at.** ThrowIn team is ~50/50 in
+every (end, period) cell — it needs possession, which is G4. KickOff team is whoever
+conceded; the one positional cue available, which way the ball drifts over [+4,+12] s,
+does not separate (Own kickoffs drifted -0.171, -0.150, **+0.383**). Both are declared
+unpredicted in the manifest rather than filled in.
+
+**This is one bit of label supervision and is named as such.** Without a roster or a
+shirt-colour-to-label mapping it cannot be had for free — even colour clustering would
+still need one bit to say which cluster is "Own".
+
 ### Where the benchmark now stands
 
 **5 of 14 types attempted, 135 of 447 events — 30 % of event mass**, up from 1 type and
-14 %. Macro-F1 over the five, team-agnostic: **0.325** against a random control's 0.040.
-Team is still not predicted for any type, so the repo's primary team-aware metric remains
-**0 by construction** for all five.
+14 %.
 
-### Reproducing steps 9-10 from the stored artifacts
+| metric | before | now |
+| :-- | --: | --: |
+| types attempted | 1 | **5** |
+| event mass | 14 % | **30 %** |
+| macro-F1, team-agnostic | 0.338 | **0.321** |
+| **macro-F1, team-aware (the repo's primary)** | **0.000** | **0.075** |
+
+The team-aware number is off zero for the first time: GoalKick **0.276** and CornerKick
+0.100 score *identically* team-aware and team-agnostic, because every one of their true
+positives carries the right side. The other three types contribute 0 by construction.
+
+Team-agnostic macro slipped 0.338 → 0.321 only because step 8 was restated to a figure
+that actually reproduces; nothing regressed.
+
+### Reproducing steps 8-11 from the stored artifacts
 
 Seconds, CPU only, no gpu-box — everything they read is already in
 `backend/.local/artifacts/mosaic/`:
@@ -586,13 +646,23 @@ M=backend/src/services/pipeline/gpu_job/mosaic
 $V $M/derive_pitch_frame.py --occupancy $A/occupancy_points.json \
     --line-map $A/line_map.png --out $A/pitch_frame.json
 
+$V $M/detect_out_of_play.py --track $A/ball_track.json \
+    --pred $A/pred_oop.json --manifest $A/manifest_oop.json --out $A/score_oop.json
+
 $V $M/detect_restarts.py --track $A/ball_track.json --candidates $A/ball5_pano.json \
     --frame $A/pitch_frame.json --pred $A/pred_restarts.json \
     --manifest $A/manifest_restarts.json --out $A/score_restarts.json
+
+$V $M/merge_predictions.py \
+    --pred $A/pred_oop.json $A/pred_restarts.json \
+    --manifest $A/manifest_oop.json $A/manifest_restarts.json \
+    --out-pred $A/pred_all.json --out-manifest $A/manifest_all.json
 
 # independent confirmation, and the repo's current headline over all 5 types
 $V scripts/local/score-benchmark.py --pred $A/pred_all.json --manifest $A/manifest_all.json
 ```
 
-`pred_all.json` / `manifest_all.json` are `pred_oop.json` merged with
-`pred_restarts.json`; `score_all.json` is the harness's report over the five.
+Every script writes the **exact command that produced it** into its own output
+(`command`). That exists because step 8's original figures could not be reproduced
+afterwards: the invocation was never written down. Do not remove it, and do not report a
+figure whose `command` field does not match how you ran it.

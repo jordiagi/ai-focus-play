@@ -29,16 +29,27 @@ Type then comes from **where** the ball was, in the occupancy-derived (xi, eta) 
 (`derive_pitch_frame.py`). Read that file's caveat first: the frame's boundaries are not
 the touchlines, so every threshold here is fitted on period 1 rather than assumed.
 
+**Team** is predicted for GoalKick and CornerKick, because the laws of the game decide
+it once you know which side defends which end: a goal kick is taken by the defending
+side, a corner by the attacking one. That is a single bit, since the sides swap at half
+time. On true event times the rule is right **24 of 24** -- including 8 of 8 on held-out
+period-2 goal kicks, which is what tests the swap. ThrowIn and KickOff get no team and
+are declared so in the manifest.
+
 **Protocol.** Detector window/NMS config chosen by period-1 F1 over a 36-cell sweep;
 detection threshold and all class thresholds fitted on period 1; period 2 is scored
-once, unchanged. Team is not predicted for any type, so the repo's team-aware metric is
-0 by construction and the honest headline is team-agnostic.
+once, unchanged.
 
-**Leakage to declare:** the period boundaries come from the ground-truth time base, and
-two of the eight kickoffs *are* those boundaries. KickOff is therefore reported twice --
-all 8, and the 6 post-goal ones whose timing is not given away.
+**Leakage to declare, twice over:**
+
+1. The period boundaries come from the ground-truth time base, and two of the eight
+   kickoffs *are* those boundaries. KickOff is reported twice -- all 8, and the 6
+   post-goal ones whose timing is not given away.
+2. The team bit is fitted from **period-1 goal-kick team labels**. It is one bit and it
+   cannot be had for free without a roster or a colour-to-label mapping, but it is
+   supervision and is named as such rather than presented as geometry.
 """
-import argparse, csv, json
+import argparse, csv, json, sys
 from pathlib import Path
 
 import numpy as np
@@ -141,7 +152,8 @@ def main():
     for r in csv.DictReader(open(bench)):
         if r["event_type"] in FAMILY:
             events.append({"t": int(r["video_time_ms"]) / 1000.0,
-                           "type": r["event_type"], "period": int(r["period_id"])})
+                           "type": r["event_type"], "period": int(r["period_id"]),
+                           "team": r["team"]})
     events.sort(key=lambda e: e["t"])
     ref_all = np.array([e["t"] for e in events])
     in1 = lambda x: (x >= a.p1[0]) & (x <= a.p1[1])
@@ -210,14 +222,50 @@ def main():
             return "FootballGoalKick", b
         return "FootballThrowIn", b
 
+    # ---- team, for the two types where the laws of the game decide it ------------------
+    # A goal kick is taken by the side DEFENDING that end; a corner by the side attacking
+    # it. So "which team defends which end" settles both -- and that is one bit, because
+    # the sides swap at half time. The bit is fitted on period-1 goal kicks (their team
+    # labels are ground truth, so this IS one bit of label supervision and is declared as
+    # such); period 2 then follows from the swap, which makes it a real test: if the swap
+    # were wrong, or Veo's Own/Opponent were camera-relative rather than team-relative,
+    # period-2 team accuracy would collapse to ~0 instead of holding.
+    #
+    # ThrowIn and KickOff get NO team and are declared so. Throw-in team is ~50/50 in
+    # every (end, period) cell -- it needs possession, which is G4. Kickoff team is
+    # whoever conceded, and the one positional cue available (which way the ball drifts
+    # over [+4,+12]s) does not separate: Own kickoffs drifted -0.171, -0.150, +0.383.
+    TEAM_TYPES = ("FootballGoalKick", "FootballCornerKick")
+    gk_p1 = []
+    for e in events:
+        if e["type"] != "FootballGoalKick" or not in1(e["t"]):
+            continue
+        b = ball_at(e["t"])
+        if b is not None:
+            gk_p1.append((b[0], e["team"]))
+    lo_votes = [t for xi_, t in gk_p1 if xi_ < 0.5]
+    defends_lo_p1 = max(set(lo_votes), key=lo_votes.count) if lo_votes else "Own"
+    other = lambda t: "Opponent" if t == "Own" else "Own"
+
+    def defender_of(xi, t):
+        """Which side defends the end this xi sits at, at time t."""
+        team = defends_lo_p1 if xi < 0.5 else other(defends_lo_p1)
+        return team if in1(t) else other(team)      # they swap at half time
+
     preds = []
     for t in pred_t:
-        et, b = classify(float(t))
+        t = float(t)
+        et, b = classify(t)
         if et is None:
             continue                      # no position -> no type -> not emitted
-        preds.append({"video_s": round(float(t), 2), "event_type": et,
-                      "xi": round(b[0], 3), "eta": round(b[1], 3),
-                      "ball_conf": round(b[2], 3)})
+        # `period` is what lets the scoring harness split dev from held-out on its own
+        # side; without it its per-period blocks see zero predictions and report 0.0
+        p = {"video_s": round(t, 2), "event_type": et, "period": 1 if in1(t) else 2,
+             "xi": round(b[0], 3), "eta": round(b[1], 3), "ball_conf": round(b[2], 3)}
+        if et in TEAM_TYPES:
+            d = defender_of(b[0], t)
+            p["team"] = d if et == "FootballGoalKick" else other(d)
+        preds.append(p)
 
     # ---- scoring ----------------------------------------------------------------------
     def block(pt, rt):
@@ -227,6 +275,7 @@ def main():
                 "recall_expected_by_chance": round(chance(len(pt)), 4)}
 
     doc = {"job": "D-B step 10: dead-ball restart family -- detect, then classify",
+           "command": " ".join(sys.argv),
            "protocol": {
                "detector_config_selected_on": "period1 F1, 36-cell sweep",
                "detection_threshold_fitted_on": "period1",
@@ -257,6 +306,71 @@ def main():
                                      rt[~in1(rt)] if len(rt) else rt),
             "both_periods": block(pt, rt)}
     doc["per_type"] = per_type
+
+    # team-aware per type: a TP now needs the right type, the right time AND the right
+    # side. This is the repo's primary metric, which every detector so far scored 0 on.
+    per_type_team = {}
+    for et in ATTEMPTED:
+        tp_sum = n_pred = 0
+        blocks = {}
+        for key, sel in (("period1_dev", lambda x: in1(x)),
+                         ("period2_heldout", lambda x: ~in1(x)),
+                         ("both_periods", lambda x: np.ones(len(x), bool))):
+            tp, npd, nrf = 0, 0, 0
+            for team in ("Own", "Opponent"):
+                pt = np.array([p["video_s"] for p in preds
+                               if p["event_type"] == et and p.get("team") == team])
+                rt = np.array([e["t"] for e in events
+                               if e["type"] == et and e["team"] == team])
+                pt = pt[sel(pt)] if len(pt) else pt
+                rt = rt[sel(rt)] if len(rt) else rt
+                tp += prf(pt, rt)[3]
+                npd += len(pt)
+                nrf += len(rt)
+            # n_pred counts every prediction of this type, teamed or not: a type that
+            # declines to predict team is charged for it here rather than excused
+            n_all = len([p for p in preds if p["event_type"] == et
+                         and sel(np.array([p["video_s"]]))[0]])
+            n_ref = len([e for e in events if e["type"] == et
+                         and sel(np.array([e["t"]]))[0]])
+            pr = tp / n_all if n_all else 0.0
+            rc = tp / n_ref if n_ref else 0.0
+            blocks[key] = {"n_pred": n_all, "n_ref": n_ref, "tp": int(tp),
+                           "precision": round(pr, 4), "recall": round(rc, 4),
+                           "f1": round(2 * pr * rc / (pr + rc) if pr + rc else 0.0, 4),
+                           "team_predicted": et in TEAM_TYPES}
+        per_type_team[et] = blocks
+    doc["per_type_team_aware"] = per_type_team
+    doc["macro_f1_team_aware"] = {
+        k: round(float(np.mean([per_type_team[et][k]["f1"] for et in ATTEMPTED])), 4)
+        for k in ("period1_dev", "period2_heldout", "both_periods")}
+
+    # is the swap real? measured on TRUE event times, so it isolates the team rule from
+    # the detector. Period 1 is where the bit was fitted; period 2 is the test.
+    team_check = {}
+    for et in TEAM_TYPES:
+        for per, sel in (("period1_fitted", True), ("period2_heldout", False)):
+            ok = tot = 0
+            for e in events:
+                if e["type"] != et or in1(e["t"]) != sel:
+                    continue
+                b = ball_at(e["t"])
+                if b is None:
+                    continue
+                d = defender_of(b[0], e["t"])
+                tot += 1
+                ok += int((d if et == "FootballGoalKick" else other(d)) == e["team"])
+            team_check[f"{et}_{per}"] = {"correct": ok, "of": tot,
+                                         "accuracy": round(ok / tot, 4) if tot else None}
+    doc["team_rule_on_true_times"] = {
+        "what": "the team rule alone, given true event times -- separates it from the "
+                "detector's own recall",
+        "fitted_bit": f"in period 1 the xi<0.5 end is defended by {defends_lo_p1}",
+        "supervision": "ONE bit, taken from period-1 goal-kick team labels. Declared, "
+                       "not hidden. Period 2 follows from the half-time swap and is "
+                       "therefore a genuine test of it.",
+        "per_type": team_check}
+
     doc["macro_f1_over_attempted"] = {
         k: round(float(np.mean([per_type[et][k]["f1"] for et in ATTEMPTED])), 4)
         for k in ("period1_dev", "period2_heldout", "both_periods")}

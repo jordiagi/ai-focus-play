@@ -33,7 +33,7 @@ that is all it is claimed to be. The evidence for it is external and measured:
 Every threshold that uses this frame is therefore **fitted on period 1**, never assumed
 from geometry. Nothing downstream may read xi=0 as "the goal line".
 """
-import argparse, json
+import argparse, json, sys
 from pathlib import Path
 
 import numpy as np
@@ -109,6 +109,7 @@ def main():
     occ = np.asarray(json.loads(Path(a.occupancy).read_text()), dtype=float)[:, :2]
     frame = fit_frame(occ)
     frame["job"] = "D-B step 9: occupancy-derived (xi, eta) frame on the panorama"
+    frame["command"] = " ".join(sys.argv)
     frame["occupancy_points"] = int(len(occ))
     # the straight-line alternative, so the quadratic is justified by a number
     lin = fit_frame(occ, deg=1)

@@ -4,14 +4,17 @@
 64 events, the largest Tier A type, and it needs **no metres**: what marks the ball
 going out is a pattern in the ball's own motion, measured in panorama pixels.
 
-The signature was measured before anything was built (medians over the 64 events
-against 600 random in-play times):
+The signature, re-measured 2026-09-20 from `ball_track.json` (medians over the 64
+events against 600 random in-play times). **An earlier run of this table recorded 196 /
+0.20 / 35 against 77 / 0.53 / 93; those numbers do not reproduce** and the script that
+produced them was not kept. Every contrast holds in the same direction and roughly the
+same size, so the signature is real and the detector below stands, but quote these:
 
-| window | at OutOfPlay | at random |
-| :-- | --: | --: |
-| ball speed, [-1, +0.5] s | **196 px/s** | 77 |
-| track coverage, [+0.5, +3.5] s | **0.20** | 0.53 |
-| ball speed, [+2, +6] s | **35 px/s** | 93 |
+| window | at OutOfPlay | at random | ratio |
+| :-- | --: | --: | --: |
+| ball speed, [-1, +0.5] s | **267 px/s** | 93 | 2.9x |
+| track coverage, [+0.5, +3.5] s | **0.13** | 0.47 | 0.28x |
+| ball speed, [+2, +6] s | **42 px/s** | 98 | 0.43x |
 
 Which is exactly the physical story: the ball is struck hard, leaves the field, stops
 being detectable, and then sits still while someone fetches it. Every one of the 64 is
@@ -22,12 +25,18 @@ because the ball has left the region the tracker can follow. That is legitimate 
 the collapse is caused by the event -- but it means the feature is only as stable as
 the tracker, and a better tracker would weaken it.
 
-**Protocol.** The threshold is fitted on period 1 and applied unchanged to period 2,
-which is reported separately; the manifest declares `tuned_on: period1`. Team is NOT
-predicted, so the team-aware figure is 0 by construction and the honest headline is the
-team-agnostic one.
+**Protocol.** `min_sep` is chosen by period-1 F1 over an 8-cell sweep (2,3,4,5,6,8,10,12
+-> 5.0 wins at 0.265); the threshold is then fitted on period 1 and applied unchanged to
+period 2, which is reported separately; the manifest declares `tuned_on: period1`. Team
+is NOT predicted, so the team-aware figure is 0 by construction and the honest headline
+is the team-agnostic one.
+
+**The output records the exact command that produced it** (`command` in the score doc).
+That is not decoration: the figures this detector reported on 2026-09-20 could not be
+reproduced afterwards because the invocation was never written down, and the stored
+outputs were overwritten before anyone noticed.
 """
-import argparse, csv, json, math
+import argparse, csv, json, math, sys
 from pathlib import Path
 
 import numpy as np
@@ -41,7 +50,7 @@ def main():
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--fps", type=float, default=5.0)
-    ap.add_argument("--min-sep", type=float, default=8.0)
+    ap.add_argument("--min-sep", type=float, default=5.0)  # selected on period 1
     ap.add_argument("--p1", type=float, nargs=2, default=[562.3, 2879.3])
     ap.add_argument("--p2", type=float, nargs=2, default=[3674.4, 6132.1])
     a = ap.parse_args()
@@ -150,6 +159,7 @@ def main():
 
     doc = {
         "job": "D-B step 8: FootballOutOfPlay detector",
+        "command": " ".join(sys.argv),
         "protocol": {"threshold_fitted_on": "period1", "applied_unchanged_to": "period2",
                      "tolerance_s": TOL, "min_sep_s": a.min_sep,
                      "team": "NOT predicted -- team-aware scoring is 0 by construction"},
@@ -168,8 +178,11 @@ def main():
                          "recall_expected_by_chance": round(chance(len(pred_t), len(ref)), 4)},
         "dev_heldout_gap_f1": round(f1_1 - f1_2, 4),
     }
+    # `period` is what lets the scoring harness split dev from held-out on its own side;
+    # without it its per-period blocks silently see zero predictions and report 0.0
     Path(a.pred).write_text(json.dumps({"events": [
-        {"video_s": round(float(t), 2), "event_type": "FootballOutOfPlay"}
+        {"video_s": round(float(t), 2), "event_type": "FootballOutOfPlay",
+         "period": 1 if in1(t) else 2}
         for t in pred_t]}, indent=1))
     Path(a.manifest).write_text(json.dumps({
         "attempted": ["FootballOutOfPlay"], "tuned_on": "period1",

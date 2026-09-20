@@ -4,10 +4,11 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-20 · by Claude Opus 5 · **FIVE SCORED TIER A TYPES, 30 % OF
-EVENT MASS.** The dead-ball restart family joins OutOfPlay; macro-F1 0.325 team-agnostic
-against a random control's 0.040, and **KickOff is the first detector here with perfect
-precision** (4/4, chance recall 0.004). D-0 falsified, D-A has no metres, D-B delivering.
+**Last updated:** 2026-09-20 · by Claude Opus 5 · **THE PRIMARY METRIC IS OFF ZERO.**
+Team-aware macro-F1 **0.075** (was 0.000 for every detector before this), from 5 types
+covering 30 % of event mass; team-agnostic macro 0.321. **KickOff has perfect precision**
+(4/4). **Step 8's originally published figures did not reproduce and have been restated —
+read the incident note before quoting any number.** D-0 falsified, D-A has no metres.
 
 ---
 
@@ -18,6 +19,11 @@ precision** (4/4, chance recall 0.004). D-0 falsified, D-A has no metres, D-B de
    `context.md` (environment + traps) and `PLAN.md` (roadmap).
 2. `bash scripts/local/verify.sh all` must print **`pass=9 fail=0 skip=0`**. If it does
    not, fix that before new work.
+2b. **Re-run before you extend.** Run the README's "Reproducing steps 8-11" block and
+   check the figures come back. Step 8's originally published numbers did *not*, and that
+   was found only by accident — see the incident log. Every score doc now carries the
+   `command` that produced it; if a figure's `command` does not match how you ran it, the
+   figure is not yours to quote.
 3. Ground truth is on disk at `benchmarks/raw/` — 447 events. Never re-derive event
    times from match-clock strings.
 4. **gpu-box is the compute, for CPU work too** — 128 cores / 251 GB against this box's
@@ -64,27 +70,56 @@ Work is **mid-flight, not parked**. Everything below is committed and reproducib
 
 ## Recommended next step
 
-**Team.** Every one of the five scored types predicts no team, so the repo's *primary*
-metric — team-aware macro-F1 — is still **0 by construction** across the board. Nothing
-else on the list moves that number, and until it moves, the honest headline has to carry
-"team-agnostic" every time it is quoted. For a restart the team is decidable in
-principle: a throw-in is taken by whoever did not put it out, a goal kick by the
-defending side. That needs a side-of-pitch notion, which the (xi, eta) frame gives
-coarsely, plus possession — which is G4's HMM, currently deferred.
+**Reproduce before you extend.** The first thing to do is run the chain in the README's
+"Reproducing steps 8-11" block and check the numbers below come back. Step 8's original
+figures did not, and that was only discovered by re-running them a day later.
 
-Cheaper things worth doing first, in this order:
+Then, in order:
 
-1. **ThrowIn precision is 0.212** and most of the loss is structural: FreeKick is not
-   attempted, so its 15 events land in ThrowIn as false positives (13 of 15 do). Either
-   attempt FreeKick or accept the ceiling and say so.
-2. **The ball track caps everything.** Coverage 0.586, so a restart the tracker never
-   sees cannot be found *or* typed. Both the detector and the classifier read the same
-   track; improving it lifts all five types at once — and would weaken step 8's coverage
-   feature, which is a detector failure used as evidence.
-3. **CornerKick is not a result** (F1 0.100, exactly the random control's best trial,
-   held-out 0.000). Either find a real corner cue or withdraw the type.
+1. **ThrowIn team (38 events, the largest unteamed type).** It is ~50/50 in every
+   (end, period) cell, so it needs possession — which is G4's HMM, deferred. This is the
+   single biggest remaining move on the primary metric.
+2. **OutOfPlay precision is 0.214** and it emits 187 predictions for 64 events. It is a
+   candidate generator, not an event list, and its chance recall (0.209) is now high
+   enough that the headline recall of 0.625 is only 3x chance.
+3. **The ball track caps everything.** Coverage 0.586; a restart the tracker never sees
+   cannot be found, typed, or teamed. All five types read the same track.
+4. **CornerKick is not a result** (F1 0.100 = the random control's best trial, held-out
+   0.000). Find a real corner cue or withdraw the type.
 
 Full record: `backend/src/services/pipeline/gpu_job/mosaic/README.md`.
+
+---
+
+## D-B result (2026-09-20) — step 11: team, and the primary metric off zero
+
+Every detector before this scored **0 team-aware by construction**. For two restart
+types the laws of the game decide the side: a goal kick is taken by the team **defending**
+that end, a corner by the team **attacking** it. That is one bit — which side defends
+which end — because the sides swap at half time.
+
+The bit is fitted on period-1 goal-kick team labels; period 2 follows from the swap,
+which makes period 2 a genuine test of it. **On true event times the rule is right
+24 of 24**, including **8 of 8 on held-out period-2 goal kicks**.
+
+Supporting measurements: our `xi` side agrees with Veo's own pitch-length coordinate on
+**14 of 14** goal kicks that carry one, and goal-kick team is separable by
+(our `xi` side, period) on **16 of 16**, flipping sign at half time.
+
+| metric | before | now |
+| :-- | --: | --: |
+| types attempted | 1 | **5** |
+| event mass | 14 % | **30 %** |
+| macro-F1, team-agnostic | 0.338 | **0.321** |
+| **macro-F1, team-aware (primary)** | **0.000** | **0.075** |
+
+GoalKick scores **0.276 identically** team-aware and team-agnostic — every true positive
+carries the right side. CornerKick likewise (0.100, but see the control). ThrowIn and
+KickOff are declared unteamed: throw-in needs possession, and kickoff needs to know who
+conceded — the one positional cue tried (ball drift over [+4,+12] s) does not separate.
+
+**This is one bit of label supervision, and it is named rather than hidden.** Without a
+roster or a shirt-colour mapping it cannot be had for free.
 
 ---
 
@@ -126,10 +161,12 @@ classifier is right 61 % of the time — that is the ceiling the rows above are 
 down from by detection recall.
 
 **Benchmark coverage is now 5 of 14 types, 135 of 447 events (30 % of mass)**, up from 1
-type and 14 %. Macro-F1 over the five, team-agnostic: **0.325**.
+type and 14 %. Macro-F1 over the five, team-agnostic: **0.321** (see step 11 for the
+team-aware figure, and the step-8 restatement for why this is 0.321 and not 0.325).
 
-**Caveats that travel with it.** Team is not predicted for any type, so the team-aware
-metric is 0 for all five. ThrowIn is the catch-all — four positive-cue rules were tried
+**Caveats that travel with it.** Team is predicted only for GoalKick and CornerKick
+(step 11); OutOfPlay, ThrowIn and KickOff score 0 team-aware by construction. ThrowIn is
+the catch-all — four positive-cue rules were tried
 and every one lost on period-1 F1. Both the detector and the classifier read the same
 Viterbi track (coverage 0.586). And the (xi, eta) frame is *not* calibrated: its
 boundaries land on a detected line no more often than a random curve (0.028 / 0.010 vs
@@ -138,25 +175,33 @@ fitted, not geometric.
 
 ---
 
-## D-B result (2026-09-20) — first scored Tier A detector
+## D-B result (2026-09-20) — step 8, RESTATED (the original figures did not reproduce)
+
+**The figures first published for this detector — period 1 n=51 tp=12 F1 0.296; period 2
+n=39 tp=14 F1 0.384; both n=90 tp=26 F1 0.338 — cannot be regenerated.** See the incident
+note below. What reproduces, with `min_sep` selected on period-1 F1 (8-cell sweep, 5.0
+wins) and the threshold then fitted on period 1:
 
 | | n_pred | n_ref | tp | precision | recall | chance | F1 |
 | :-- | --: | --: | --: | --: | --: | --: | --: |
-| period 1 (dev) | 51 | 30 | 12 | 0.235 | 0.400 | 0.062 | 0.296 |
-| **period 2 (held out)** | 39 | 34 | 14 | **0.359** | **0.412** | **0.048** | **0.384** |
-| both periods | 90 | 64 | 26 | 0.289 | 0.406 | 0.084 | 0.338 |
+| period 1 (dev) | 106 | 30 | 18 | 0.170 | 0.600 | 0.125 | 0.265 |
+| **period 2 (held out)** | 81 | 34 | 22 | **0.272** | **0.647** | **0.097** | **0.383** |
+| both periods | 187 | 64 | 40 | 0.214 | 0.625 | 0.209 | 0.319 |
 
-Threshold fitted on period 1, applied unchanged to period 2. The held-out half scored
-**higher** than dev (gap -0.087), so it is not overfitted. `score-benchmark.py`
-reproduces the both-periods row exactly.
+Held-out F1 0.383 lands within 0.001 of the old row, which is a coincidence and not a
+vindication: the profile differs throughout (recall 0.647 not 0.412, precision 0.272 not
+0.359, 187 predictions not 90), and **held-out recall is 6.7x chance, not the ~8x first
+claimed**. The held-out half again scores higher than dev (gap -0.118).
 
-**The signature, measured before building anything** (medians over 64 events vs 600
-random in-play times): ball speed [-1,+0.5]s **196 vs 77 px/s**; track coverage
-[+0.5,+3.5]s **0.20 vs 0.53**; ball speed [+2,+6]s **35 vs 93 px/s**. The ball is
-struck hard, leaves the field, stops being trackable, then sits still.
+**The signature** (medians over 64 events vs 600 random in-play times), re-measured
+2026-09-20 because the original figures (196/0.20/35 vs 77/0.53/93) did not reproduce
+either: ball speed [-1,+0.5]s **267 vs 93 px/s**; track coverage [+0.5,+3.5]s
+**0.13 vs 0.47**; ball speed [+2,+6]s **42 vs 98 px/s**. Every contrast holds in the same
+direction and roughly the same size — the ball is struck hard, leaves the field, stops
+being trackable, then sits still — so the signature is real and the detector stands.
 
-**Caveats that travel with it.** Team is not predicted, so the team-aware metric — the
-repo's primary — is 0 by construction. Precision 0.289. One feature is a *detector
+**Caveats that travel with it.** Team is not predicted for this type, so its team-aware
+score is 0 by construction. Precision 0.214. One feature is a *detector
 failure* (coverage collapse), legitimate because the event causes it, but it ties the
 detector to the tracker's weakness. Benchmark coverage is still 1 of 14 types, 14 % of
 event mass.
@@ -417,7 +462,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | G0 | Rebuild `benchmarks/veo_reference.json`; fix `scripts/config.env` time base; decode Veo's x/z convention | ☑ | `c38d62f`. Coords decoded: x=length, z=width, absolute. Centre spot lands 2 m off ideal — Veo's own bias, recorded not corrected |
 | G1 | **Measure ball-detection rate** — the go/no-go gate | ☑ | **Both halves measured.** tiled 0.833 / 0.828 — **gate passes**. full-frame 0.677 / 0.716 — fails one half. Caveat below: this is candidate presence, not correctness |
 | G2 | Pitch calibration | ⏸ **STOPPED** | Three approaches measured and failed (1854 m → 10-15 m → 88-110 m). Cause is structural, not tuning: all pretrained models are broadcast-trained and each of our frames shows too little pitch. Parked as **D-A** in `specs/deferred.md` |
-| G3 | Tier A detectors (7 types) | ◐ | **5 of 14 types scored via D-B** (OutOfPlay + 4 restarts), 30 % of event mass, macro-F1 0.325 team-agnostic. Team unpredicted throughout, so team-aware is 0 |
+| G3 | Tier A detectors (7 types) | ◐ | **5 of 14 types scored via D-B** (OutOfPlay + 4 restarts), 30 % of event mass. Macro-F1 **0.321 team-agnostic / 0.075 team-aware** — the primary metric off zero via GoalKick + Corner team |
 | G4 | Possession HMM → Tier B (4 types + Pass count) | ⏸ | Conditional on G1 gate |
 | G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
 | G6 | Ingest artifacts → `analysis_mode="ml"` | ⏸ | `ml_ingest.py` does not exist yet |
@@ -436,11 +481,13 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | B3 | Pitch region polygon, derived + tested | ◐ | 86% of players inside, boundary **2.35x chance** (8% on-line). Coarse, not a touchline |
 | B4 | Ball in panorama space | ☑ | 5 fps, 23,874 frames, **candidate rate 0.8344** over the whole match (G1 measured 0.833/0.828 on slices). 94.1% registered, 36,291 candidates mapped |
 | B5 | Ball trajectory (Viterbi + miss state) | ☑ | **Impossible steps 13.6% → 0.1-0.9%.** 58.6% coverage, 10,994 points. Accuracy vs the centre spot at kickoff **5.7 m** (±0.6 s window, n=8) against a 24.5 m control |
-| B6 | **FootballOutOfPlay detector** | ☑ | **Held-out (period 2) F1 0.384, recall 0.412 vs chance 0.048 — ~8x chance.** Both periods F1 0.338, confirmed by `score-benchmark.py`. Team not predicted, so team-aware is 0 by construction |
+| B6 | **FootballOutOfPlay detector** | ☑ **restated** | Original figures did not reproduce (see incident note). Reproducible: held-out F1 **0.383**, recall 0.647 vs chance 0.097 (**6.7x**); both periods F1 0.319 at precision 0.214, 187 predictions. Team not predicted |
 | B7 | **Dead-ball restart family** (ThrowIn / GoalKick / Corner / KickOff) | ☑ | **KickOff F1 0.667 at precision 1.000** (held-out 0.800); GoalKick 0.276; ThrowIn 0.244; Corner 0.100 = **not a result** (ties the random control). Family timing held-out F1 0.382. `detect_restarts.py` |
 | B8 | `(xi, eta)` frame from occupancy | ☑ | `derive_pitch_frame.py`. Quadratic beats linear 2.8x (7.4 vs 20.3 px). **Not the touchlines** — 0.028/0.010 on-line vs 0.040 chance, so all thresholds fitted, none geometric |
 | B9 | FreeKick (15) | ⏸ **not attempted, declared** | Position cloud sits inside ThrowIn's with no separating cue; its events land as ThrowIn false positives |
-| B10 | Team for the restart types | ☐ | **The only work that moves the repo's primary metric off 0.** Needs side-of-pitch (have it, coarsely) + possession (G4, deferred) |
+| B10 | Team for GoalKick + Corner | ☑ | **24/24 correct on true times, 8/8 held out.** One fitted bit (which side defends which end in period 1) + the half-time swap. **Takes team-aware macro-F1 from 0.000 to 0.075** — the primary metric off zero for the first time |
+| B11 | Team for ThrowIn (38) + KickOff (8) | ☐ **declared unattempted** | ThrowIn is ~50/50 in every (end, period) cell — needs possession (G4). KickOff needs who conceded; ball drift over [+4,+12]s does not separate (Own: -0.171, -0.150, **+0.383**) |
+| B12 | Reproducibility guard | ☑ | Every detector now writes the **exact command** into its own output. Added after step 8's figures proved unreproducible |
 
 ### Track 2 — UI / route parity — ☑ **COMPLETE**
 
@@ -647,6 +694,40 @@ failed twice.
 ---
 
 ## Incident log (read before touching worktrees)
+
+**2026-09-20 — step 8's published figures did not reproduce, and the evidence was
+overwritten before anyone checked.** `detect_out_of_play.py` was committed in `3a8d4a1`
+with its result recorded in this file and in the mosaic README. Re-running the committed
+script the next day against the same stored `ball_track.json` gave **187 predictions and
+both-periods F1 0.319**, not the recorded **90 and 0.338**; period-1 F1 topped out at
+0.265 where the record claimed 0.296. Three sweeps failed to find any setting that
+reproduces it — `min_sep` over 8 values, `fps` over 5, and a 48-cell sweep over
+NaN-rank handling x candidate cap x `min_sep`. The *signature* table did not reproduce
+either (267/0.13/42 where the record said 196/0.20/35), though every contrast holds in
+the same direction and size.
+
+**What made it unrecoverable.** `backend/.local/artifacts/` is gitignored, so
+`pred_oop.json` and `score_oop.json` were the only copies of the original output — and
+re-running the detector overwrote them before the discrepancy was noticed. The exact
+invocation was never written down anywhere.
+
+The likely cause is a script edited after the run that produced the artifacts, then
+committed once; but it cannot be established now, which is precisely the problem.
+
+Three things changed as a result:
+
+- **Every detector writes the exact command that produced it** into its own output
+  (`command` field in the score doc). Do not report a figure whose `command` does not
+  match how you ran it.
+- **Step 8 has been restated** to what reproduces, with `min_sep` selected under its own
+  stated protocol (period-1 F1) rather than left at an undocumented value.
+- The README's reproduce block covers **steps 8-11**, not just the new work, so the whole
+  chain can be re-run in one go from the stored artifacts.
+
+The lesson generalises past this repo: a result that lives only in a gitignored artifact
+plus a prose summary is a result you do not have. **Re-run before you extend** — this was
+caught only because the next step happened to re-run the previous one.
+
 
 **2026-09-19 — the worktree symlink that ate the venv.** I created `.venv`/`.local`
 symlinks inside each UI worktree so agents could run acceptance commands. `.gitignore`
