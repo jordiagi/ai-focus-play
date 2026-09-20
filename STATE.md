@@ -31,6 +31,16 @@ detection, which needs no metres). Pick either up when the feature is wanted.
 
 ---
 
+## Recommended next step
+
+**D-0 in `specs/deferred.md`** — recover the camera's own pan/zoom trajectory by
+frame-to-frame registration (already proven at 0.31–3.93 px) and read kickoffs, goals and
+stoppages off it. **No pitch calibration needed.** Run the halftime falsification test
+first: the trajectory must show the 795 s gap between video 2879.3 and 3674.4, or the
+idea is wrong.
+
+---
+
 ## Blockers
 
 | Blocker | Impact | Who clears it |

@@ -6,6 +6,43 @@ judge whether to pick it up without re-deriving any of it.
 
 ---
 
+## D-0. RECOMMENDED NEXT STEP — use the camera's own motion as the event signal
+
+**Status:** proposed, **untested**. Start here.
+
+**The idea.** This footage was produced by a ball-tracking system. Veo's virtual camera
+already followed the ball for 103 minutes, so its **pan and zoom encode where play is,
+which way each team attacks, and when play stops**. Every approach so far tried to
+recover that from pixels while discarding the camera motion that states it directly.
+
+**Why it is cheap.** Recovering camera motion needs only frame-to-frame registration,
+which is the one component already proven: **0.31–3.93 px round-trip above 100 RANSAC
+inliers** (below ~40 it is garbage — the gate is measured, see `STATE.md`). Registering
+~30k sampled frames is minutes of CPU. **No pitch calibration is required.**
+
+**What should fall out, with zero metric calibration:**
+
+| event | camera signature | n in the benchmark |
+| :-- | :-- | --: |
+| Kickoff | camera returns to the same central view and dwells | 8 |
+| Goal | camera at one end, then jumps back to centre and dwells | 6 |
+| Out of play / stoppage | camera goes static | 64 |
+| Attacking direction per half | which end the camera favours | — |
+
+**Run this falsification test FIRST, before building anything.** The camera's behaviour
+must change completely across the 795 s halftime gap: H1 ends at video **2879.3 s**, H2
+starts at **3674.4 s**. If the recovered camera trajectory does not show that gap
+clearly, the idea is wrong and it costs an hour to find out.
+
+**Then score it immediately.** `scripts/local/score-benchmark.py` and the 447-event
+ground truth already exist, with per-type tolerances. Even a poor result is informative
+because the harness prints the expected-by-chance baseline next to every recall.
+
+**Honest caveat.** This is an idea, not a measurement. The ball-correspondence
+calibration was also plausible before it was measured at 1854 m of error. Falsify first.
+
+---
+
 ## D-A. Rebuild the pitch panorama by stitching, then calibrate that
 
 **Status:** not started. This is the root-cause fix for metric pitch coordinates.
