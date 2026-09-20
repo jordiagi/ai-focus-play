@@ -4,7 +4,8 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-20 · by Claude Opus 5 · **CONSOLIDATED.** G2 stopped by decision; see `specs/deferred.md`
+**Last updated:** 2026-09-20 · by Claude Opus 5 · **D-0 tested and FALSIFIED.** G2 stopped by
+decision. Next step is now **D-A**; see `specs/deferred.md`
 
 ---
 
@@ -29,15 +30,57 @@ three times, failed each time for a diagnosed structural reason, and is parked a
 in `specs/deferred.md` along with the pragmatic alternative **D-B** (pixel-space Tier A
 detection, which needs no metres). Pick either up when the feature is wanted.
 
+**D-0 was then tried and falsified** (2026-09-20, below). Four approaches to recovering
+pitch geometry have now been measured and rejected; the fifth, D-A, is the only one left
+that attacks the root cause, and D-0 sharpened its design.
+
 ---
 
 ## Recommended next step
 
-**D-0 in `specs/deferred.md`** — recover the camera's own pan/zoom trajectory by
-frame-to-frame registration (already proven at 0.31–3.93 px) and read kickoffs, goals and
-stoppages off it. **No pitch calibration needed.** Run the halftime falsification test
-first: the trajectory must show the 795 s gap between video 2879.3 and 3674.4, or the
-idea is wrong.
+**D-A in `specs/deferred.md`** — rebuild the pitch panorama by stitching to anchors, then
+calibrate that once. D-0 was tried first and is falsified (below); it leaves D-A with one
+hard new constraint: **register every frame to an anchor, never chain frame-to-frame**,
+because chaining drifts by a measured 10.6x.
+
+D-B (pixel-space Tier A detection) remains the cheaper alternative if metres are not
+wanted yet.
+
+---
+
+## D-0 result (2026-09-20) — FALSIFIED, in ~30 min of CPU
+
+The falsification test `specs/deferred.md` demanded was run exactly as pre-registered.
+Scripts: `backend/src/services/pipeline/gpu_job/camera/` (README there is the full
+record). All CPU, on the local 720p proxy — **not blocked by the Tailscale outage**.
+
+| criterion | result | |
+| :-- | --: | :-- |
+| C1 ROC AUC of camera speed >= 0.80 | 0.613 | fail |
+| C2 median in-play speed >= 2x halftime | 1.70 | fail |
+| C3 both boundaries within +/-30 s | 0.7 s / 2825 s | fail |
+
+**The premise was wrong.** "Out of play → camera goes static" is false here: Veo's
+virtual camera keeps roaming through halftime at ~10 px/s, following warm-up activity on
+an empty pitch. A kickoff detector built on the surviving step signature scored **0/8**.
+
+**Three things worth keeping:**
+
+1. **Dense registration works.** 12,343 pairs at 2 fps over the full match, median
+   **612 inliers, 99.6 % above the gate**, 11 min of CPU. Registration is not the weak link.
+2. **Kickoffs are a free ground truth for a repeated view.** All 8 are centre-circle
+   restarts; registering those frames directly against each other gives a median offset
+   of **58 px** (max 122). No calibration, no annotation needed. D-0's positional claim
+   was right.
+3. **Chaining drifts 10.6x.** Integrating per-pair `dx` reports **616 px** median
+   (max 1490) between those same 58 px-apart frames — a third of the full 4578 px pan
+   range. Over a 30-minute window the chained trajectory looks bounded and fine; only the
+   full match exposes it. **Do not validate registration on a short window.**
+
+Caution for whoever picks this up: *sweep* (how far the camera ranged over the last W s)
+reaches AUC 0.80 at W=60 s and 0.91 at W=240 s, but that was selected post-hoc on the
+same window and the gain is just W fitting inside the 795 s halftime. It buys nothing at
+the few-second scale of the 64 `FootballOutOfPlay` events. Not a result.
 
 ---
 
@@ -96,6 +139,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | G4 | Possession HMM → Tier B (4 types + Pass count) | ⏸ | Conditional on G1 gate |
 | G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
 | G6 | Ingest artifacts → `analysis_mode="ml"` | ⏸ | `ml_ingest.py` does not exist yet |
+| D-0 | Camera motion as the event signal | ✗ | **Falsified 2026-09-20.** Premise "stoppage = static camera" is false; kickoff detector 0/8. Yielded the 10.6x chaining-drift constraint on D-A |
 | G7 | Jersey recognition | ⏸ | Last. **No roster available**, so open-set with abstention, or Veo-label leakage that must be declared. Honest ceiling ~25-40% vs Veo's 75% |
 
 ### Track 2 — UI / route parity — ☑ **COMPLETE**

@@ -6,42 +6,41 @@ judge whether to pick it up without re-deriving any of it.
 
 ---
 
-## D-0. RECOMMENDED NEXT STEP — use the camera's own motion as the event signal
+## D-0. FALSIFIED (2026-09-20) — camera motion is not the event signal
 
-**Status:** proposed, **untested**. Start here.
+**Status:** tested and **rejected**. Kept here because how it failed constrains D-A.
+Full record: `backend/src/services/pipeline/gpu_job/camera/README.md`.
 
-**The idea.** This footage was produced by a ball-tracking system. Veo's virtual camera
-already followed the ball for 103 minutes, so its **pan and zoom encode where play is,
-which way each team attacks, and when play stops**. Every approach so far tried to
-recover that from pixels while discarding the camera motion that states it directly.
+**The test it was given.** The pre-registered kill-test in this entry was run exactly as
+written: the recovered trajectory must show the 795 s halftime gap. It does not.
 
-**Why it is cheap.** Recovering camera motion needs only frame-to-frame registration,
-which is the one component already proven: **0.31–3.93 px round-trip above 100 RANSAC
-inliers** (below ~40 it is garbage — the gate is measured, see `STATE.md`). Registering
-~30k sampled frames is minutes of CPU. **No pitch calibration is required.**
+| criterion | result | |
+| :-- | --: | :-- |
+| C1 ROC AUC of camera speed >= 0.80 | 0.613 | fail |
+| C2 median in-play speed >= 2x halftime | 1.70 | fail |
+| C3 both boundaries recovered within +/-30 s | 0.7 s / 2825 s | fail |
 
-**What should fall out, with zero metric calibration:**
+**Why.** The premise "out of play → camera goes static" is **false on this footage**.
+Veo's virtual camera keeps roaming during halftime at a median ~10 px/s, following
+warm-up activity on an empty pitch, and play itself contains plenty of slow stretches.
 
-| event | camera signature | n in the benchmark |
-| :-- | :-- | --: |
-| Kickoff | camera returns to the same central view and dwells | 8 |
-| Goal | camera at one end, then jumps back to centre and dwells | 6 |
-| Out of play / stoppage | camera goes static | 64 |
-| Attacking direction per half | which end the camera favours | — |
+A kickoff detector built on the surviving step signature scored **0/8 at +/-3 s**,
+placing all 8 predictions in period 2 — the raw step score scales with camera speed and
+the second half is simply faster.
 
-**Run this falsification test FIRST, before building anything.** The camera's behaviour
-must change completely across the 795 s halftime gap: H1 ends at video **2879.3 s**, H2
-starts at **3674.4 s**. If the recovered camera trajectory does not show that gap
-clearly, the idea is wrong and it costs an hour to find out.
+**What was true.** Registration is not the weak link: 12,343 pairs at 2 fps over the full
+match, **median 612 inliers, 99.6 % above the gate**, 11 min of CPU. And D-0's other
+prediction — "kickoff = the camera returns to the same central view" — is **correct**.
+All 8 kickoffs are centre-circle restarts, and registering those frames directly against
+each other gives a median view offset of **58 px** (max 122). That is a free physical
+ground truth for a repeated view, needing no calibration and no annotation.
 
-**Then score it immediately.** `scripts/local/score-benchmark.py` and the 447-event
-ground truth already exist, with per-type tolerances. Even a poor result is informative
-because the harness prints the expected-by-chance baseline next to every recall.
-
-**Honest caveat.** This is an idea, not a measurement. The ball-correspondence
-calibration was also plausible before it was measured at 1854 m of error. Falsify first.
-
----
+**The finding that matters.** Integrating per-pair `dx` along the trajectory reports a
+median offset of **616 px** (max 1490) between those same kickoff frames — a **10.6x
+drift factor**, with the worst case a third of the camera's entire 4578 px pan range.
+Chained frame-to-frame registration cannot deliver absolute camera position over match
+timescales. Over a 30-minute window it looks bounded and fine; only the full match
+exposes it. See **D-A**, which this makes stricter.
 
 ## D-A. Rebuild the pitch panorama by stitching, then calibrate that
 
@@ -68,10 +67,20 @@ user), so the move is to *reconstruct* it.
 **Already proven, do not re-measure:**
 - Frame-to-frame registration works: **0.31–3.93 px** round-trip error when RANSAC
   inliers >= 100. Below ~40 inliers it is garbage (36–52 px). The gate is measured.
+- It also works **densely**: 12,343 pairs at 2 fps over the full match, median 612
+  inliers, **99.6 % above the gate**, 11 min of CPU on the local 720p proxy (D-0).
 - Inlier counts depend on **view overlap, not time separation**, so mosaic construction
   should be ordered by view, not chronologically.
 - 4 anchors at gate 100 cover 100% of sampled frames.
 - PnLCalib is installed on gpu-box at `/opt/PnLCalib` with weights, and runs.
+
+**Hard constraint measured by D-0 — build the mosaic on anchors, never by chaining.**
+Integrating per-pair `dx` accumulates a **10.6x drift factor**: between frames that are
+genuinely 58 px apart (kickoffs, verified by direct registration), chaining reports
+616 px median and 1490 px worst case — a third of the whole 4578 px pan range. So the
+anchor/set-cover design is **required, not one option of two**, and every frame must be
+registered to an anchor rather than to its predecessor. A short validation window will
+hide this: over 30 minutes the chained trajectory looks bounded and well-behaved.
 
 **Real risks.** Stitching a zooming virtual camera into one consistent mosaic is not
 trivial; accumulated drift, exposure changes across the match (mean brightness falls
