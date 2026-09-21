@@ -614,26 +614,97 @@ unpredicted in the manifest rather than filled in.
 shirt-colour-to-label mapping it cannot be had for free — even colour clustering would
 still need one bit to say which cluster is "Own".
 
+## D-B step 12 — FootballGoal, inferred backwards from its kickoff
+
+The same trick a third time. Step 10 found the restart easier to see than the stoppage
+it ends; this finds the **goal easier to see through its kickoff** than directly. A goal
+has no ball signature of its own — the ball is struck, which is what a shot looks like —
+but it is always followed by a kickoff, and the kickoff detector is the most precise
+thing in this repo.
+
+Goal → kickoff gaps: **37.2, 38.1, 38.2, 53.1** (period 1) and **28.0, 38.5** (period 2).
+Four of six sit within 0.4 s of 38.2, which at a 3 s tolerance is the whole game. The
+offset is the median of the *period-1* gaps (**38.13 s**); the two outliers are simply
+unreachable, and nothing here can fix that — a restart is taken when the players are
+ready.
+
+| | n_pred | n_ref | tp | precision | recall | chance | F1 |
+| :-- | --: | --: | --: | --: | --: | --: | --: |
+| period 1 (dev) | 1 | 4 | 1 | 1.000 | 0.250 | 0.001 | 0.400 |
+| **period 2 (held out)** | 2 | 2 | 1 | 0.500 | 0.500 | 0.002 | **0.500** |
+| both periods | 3 | 6 | 2 | 0.667 | 0.333 | 0.003 | **0.444** |
+
+**Team costs nothing here either** — the team-aware block is identical to the
+team-agnostic one, because both true positives carry the right scorer. A goal is scored
+at the end the *conceding* side defends, so the step-11 map names the conceder and the
+scorer is the other side; the same lookback that finds the goal also teams it. Random
+control: real 0.444 against 0.000 mean and 0.000 max over 20 trials.
+
+**Read it as low-n.** 6 reference events, 3 predictions. Recall is capped by the kickoff
+detector's recall — a goal whose kickoff is missed is invisible — and the two
+period-opening kickoffs have no goal behind them and are excluded rather than made to
+invent one.
+
+## A prediction budget, and what it fixed
+
+Restating step 8 exposed a second problem: its F1-optimal threshold sat at **187
+predictions for 64 events**, a chance recall of 0.209 at which the headline recall stops
+meaning much and nothing downstream can use the list. That is F1 being gameable at low
+precision — emitting more candidates lifts recall faster than it costs precision.
+
+The fix is a declared **prediction budget**: cap `n_pred` at K × `n_ref` on period 1, and
+take the **smallest K whose period-1 F1 is within 5 % of the unconstrained optimum**.
+Parsimony unless it actually costs you. K is chosen on period-1 data alone.
+
+| K | OutOfPlay period-1 F1 | n_pred |
+| :-- | --: | --: |
+| 1.0 | 0.143 | 12 |
+| 1.5 | 0.189 | 44 |
+| 2.0 | 0.189 | 44 |
+| **3.0 (selected)** | **0.257** | **71** |
+| unconstrained | 0.265 | 106 |
+
+Held out, OutOfPlay improves on every axis that matters:
+
+| | before | after |
+| :-- | --: | --: |
+| held-out F1 | 0.383 | **0.467** |
+| held-out precision | 0.272 | **0.375** |
+| held-out recall / chance | 6.7x | **9.1x** |
+| both-periods n_pred | 187 | **127** |
+
+**On the restart detector the same rule is a no-op** — its optimum already sits at 1.0x,
+40 predictions for 40 period-1 events, identical F1 at every cap. That is the evidence
+the budget is not quietly doing the detector's work: it bites only on the detector that
+was buying recall by shotgunning.
+
 ### Where the benchmark now stands
 
-**5 of 14 types attempted, 135 of 447 events — 30 % of event mass**, up from 1 type and
-14 %.
+**6 of 14 types attempted, 141 of 447 events — 32 % of event mass.**
 
-| metric | before | now |
+| type | n_ref | n_pred | F1 team-agnostic | F1 team-aware |
+| :-- | --: | --: | --: | --: |
+| OutOfPlay | 64 | 127 | 0.356 | 0.000 |
+| ThrowIn | 38 | 52 | 0.244 | 0.000 |
+| GoalKick | 16 | 13 | 0.276 | **0.276** |
+| CornerKick | 9 | 11 | 0.100 | 0.100 |
+| **KickOff** | 8 | 4 | **0.667** | **0.500** |
+| **Goal** | 6 | 3 | **0.444** | **0.444** |
+| **macro** | | | **0.348** | **0.220** |
+
+| | start of the day | now |
 | :-- | --: | --: |
-| types attempted | 1 | **5** |
-| event mass | 14 % | **30 %** |
-| macro-F1, team-agnostic | 0.338 | **0.321** |
-| **macro-F1, team-aware (the repo's primary)** | **0.000** | **0.075** |
+| types attempted | 1 | **6** |
+| event mass | 14 % | **32 %** |
+| macro-F1, team-agnostic | 0.338 | **0.348** |
+| **macro-F1, team-aware (primary)** | **0.000** | **0.220** |
+| **parity count (F1 ≥ 0.5)** | **0/14** | **1/14** |
 
-The team-aware number is off zero for the first time: GoalKick **0.276** and CornerKick
-0.100 score *identically* team-aware and team-agnostic, because every one of their true
-positives carries the right side. The other three types contribute 0 by construction.
+Period-2 macro (0.261) again exceeds period-1 (0.186). **KickOff is the first type to
+reach parity.** Every type that predicts team scores the same team-aware as
+team-agnostic — when these detectors find an event, they get the side right.
 
-Team-agnostic macro slipped 0.338 → 0.321 only because step 8 was restated to a figure
-that actually reproduces; nothing regressed.
-
-### Reproducing steps 8-11 from the stored artifacts
+### Reproducing steps 8-12 from the stored artifacts
 
 Seconds, CPU only, no gpu-box — everything they read is already in
 `backend/.local/artifacts/mosaic/`:
@@ -653,9 +724,12 @@ $V $M/detect_restarts.py --track $A/ball_track.json --candidates $A/ball5_pano.j
     --frame $A/pitch_frame.json --pred $A/pred_restarts.json \
     --manifest $A/manifest_restarts.json --out $A/score_restarts.json
 
+$V $M/detect_goals.py --restart-pred $A/pred_restarts.json --frame $A/pitch_frame.json \
+    --pred $A/pred_goals.json --manifest $A/manifest_goals.json --out $A/score_goals.json
+
 $V $M/merge_predictions.py \
-    --pred $A/pred_oop.json $A/pred_restarts.json \
-    --manifest $A/manifest_oop.json $A/manifest_restarts.json \
+    --pred $A/pred_oop.json $A/pred_restarts.json $A/pred_goals.json \
+    --manifest $A/manifest_oop.json $A/manifest_restarts.json $A/manifest_goals.json \
     --out-pred $A/pred_all.json --out-manifest $A/manifest_all.json
 
 # independent confirmation, and the repo's current headline over all 5 types

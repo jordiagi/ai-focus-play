@@ -96,6 +96,8 @@ def main():
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--fps", type=float, default=5.0)
+    ap.add_argument("--budgets", type=float, nargs="*", default=[1.0, 1.5, 2.0, 3.0])
+    ap.add_argument("--budget-tolerance", type=float, default=0.05)
     ap.add_argument("--p1", type=float, nargs=2, default=[562.3, 2879.3])
     ap.add_argument("--p2", type=float, nargs=2, default=[3674.4, 6132.1])
     a = ap.parse_args()
@@ -160,14 +162,35 @@ def main():
     dur = (a.p1[1] - a.p1[0]) + (a.p2[1] - a.p2[0])
     chance = lambda n: 1 - (1 - 2 * TOL / dur) ** max(n, 0)
 
-    # ---- fit the detection threshold on period 1 only -------------------------------
-    best = None
-    for thr in np.unique(np.round(cand_s, 3)):
-        p = cand_t[(cand_s >= thr) & in1(cand_t)]
-        _, _, f1, _ = prf(p, ref_all[in1(ref_all)])
-        if best is None or f1 > best[0]:
-            best = (f1, thr)
-    thr = float(best[1])
+    # ---- fit the detection threshold on period 1 only, under a prediction budget -----
+    # Same declared rule as step 8: cap n_pred at K x n_ref on period 1 and take the
+    # smallest K whose period-1 F1 is within `--budget-tolerance` of the unconstrained
+    # optimum, decided on period-1 data alone. Here it is a **no-op** -- the optimum
+    # already sits at 1.0x -- and that is the point: the rule only bites on a detector
+    # that was buying recall by emitting candidates, which this one was not.
+    def fit_threshold(cap):
+        best = None
+        for thr_ in np.unique(np.round(cand_s, 3)):
+            p = cand_t[(cand_s >= thr_) & in1(cand_t)]
+            if len(p) > cap:
+                continue
+            _, _, f1, _ = prf(p, ref_all[in1(ref_all)])
+            if best is None or f1 > best[0]:
+                best = (f1, float(thr_), len(p))
+        return best
+
+    unconstrained = fit_threshold(np.inf)
+    budget_sweep, chosen = [], None
+    n_ref1 = int(in1(ref_all).sum())
+    for K in a.budgets:
+        b = fit_threshold(K * n_ref1)
+        if b is None:
+            continue
+        budget_sweep.append({"K": K, "period1_f1": round(b[0], 4), "period1_n_pred": b[2]})
+        if chosen is None and b[0] >= (1 - a.budget_tolerance) * unconstrained[0]:
+            chosen = (K, b)
+    budget_K, best = chosen if chosen else (None, unconstrained)
+    thr = best[1]
     pred_t = cand_t[cand_s >= thr]
 
     # ---- where was the ball? ---------------------------------------------------------
@@ -235,7 +258,16 @@ def main():
     # every (end, period) cell -- it needs possession, which is G4. Kickoff team is
     # whoever conceded, and the one positional cue available (which way the ball drifts
     # over [+4,+12]s) does not separate: Own kickoffs drifted -0.171, -0.150, +0.383.
+    # KickOff closes a third loop. A kickoff (bar the two that open a period) follows a
+    # goal, and a goal is scored at the end the CONCEDING side defends -- so the same
+    # defend-end map gives the kickoff's taker, who is exactly that conceding side.
+    # Looking back [-45,-30] s from a kickoff lands on the goal: over the 6 post-goal
+    # kickoffs that window puts the ball at the right end **6 of 6**. The two
+    # period-opening kickoffs have no goal behind them (and no track there at all), so
+    # they are emitted with NO team rather than guessed -- which side kicks off first is
+    # a coin flip nothing in the footage settles.
     TEAM_TYPES = ("FootballGoalKick", "FootballCornerKick")
+    GOAL_LOOKBACK = (-45.0, -30.0)
     gk_p1 = []
     for e in events:
         if e["type"] != "FootballGoalKick" or not in1(e["t"]):
@@ -265,6 +297,12 @@ def main():
         if et in TEAM_TYPES:
             d = defender_of(b[0], t)
             p["team"] = d if et == "FootballGoalKick" else other(d)
+        elif et == "FootballKickOff":
+            g = ball_at(t, *GOAL_LOOKBACK)
+            if g is not None:
+                # the goal end -> its defender conceded -> the conceder restarts
+                p["team"] = defender_of(g[0], t)
+                p["goal_xi"] = round(g[0], 3)
         preds.append(p)
 
     # ---- scoring ----------------------------------------------------------------------
@@ -283,6 +321,10 @@ def main():
                "applied_unchanged_to": "period2",
                "tolerance_s": TOL, "min_sep_s": MIN_SEP,
                "pre_window_s": list(PRE), "post_window_s": list(POST),
+               "prediction_budget_K": budget_K,
+               "budget_sweep_period1": budget_sweep,
+               "period1_f1_unconstrained": round(unconstrained[0], 4),
+               "period1_n_pred_unconstrained": unconstrained[2],
                "team": "NOT predicted for any type -- team-aware scoring is 0 by "
                        "construction; these are the team-agnostic figures"},
            "detection_threshold": round(thr, 4)}
@@ -348,20 +390,29 @@ def main():
     # is the swap real? measured on TRUE event times, so it isolates the team rule from
     # the detector. Period 1 is where the bit was fitted; period 2 is the test.
     team_check = {}
-    for et in TEAM_TYPES:
+    for et in TEAM_TYPES + ("FootballKickOff",):
         for per, sel in (("period1_fitted", True), ("period2_heldout", False)):
-            ok = tot = 0
+            ok = tot = skipped = 0
             for e in events:
                 if e["type"] != et or in1(e["t"]) != sel:
                     continue
-                b = ball_at(e["t"])
-                if b is None:
-                    continue
-                d = defender_of(b[0], e["t"])
+                if et == "FootballKickOff":
+                    g = ball_at(e["t"], *GOAL_LOOKBACK)
+                    if g is None:          # period-opening kickoff: no goal behind it
+                        skipped += 1
+                        continue
+                    pred_team = defender_of(g[0], e["t"])
+                else:
+                    b = ball_at(e["t"])
+                    if b is None:
+                        continue
+                    d = defender_of(b[0], e["t"])
+                    pred_team = d if et == "FootballGoalKick" else other(d)
                 tot += 1
-                ok += int((d if et == "FootballGoalKick" else other(d)) == e["team"])
+                ok += int(pred_team == e["team"])
             team_check[f"{et}_{per}"] = {"correct": ok, "of": tot,
-                                         "accuracy": round(ok / tot, 4) if tot else None}
+                                         "accuracy": round(ok / tot, 4) if tot else None,
+                                         **({"no_goal_behind_it": skipped} if skipped else {})}
     doc["team_rule_on_true_times"] = {
         "what": "the team rule alone, given true event times -- separates it from the "
                 "detector's own recall",

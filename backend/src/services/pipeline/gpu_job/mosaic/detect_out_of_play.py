@@ -51,6 +51,10 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--fps", type=float, default=5.0)
     ap.add_argument("--min-sep", type=float, default=5.0)  # selected on period 1
+    ap.add_argument("--budgets", type=float, nargs="*", default=[1.0, 1.5, 2.0, 3.0],
+                    help="candidate n_pred/n_ref caps, smallest first")
+    ap.add_argument("--budget-tolerance", type=float, default=0.05,
+                    help="period-1 F1 we are willing to give up for a smaller budget")
     ap.add_argument("--p1", type=float, nargs=2, default=[562.3, 2879.3])
     ap.add_argument("--p2", type=float, nargs=2, default=[3674.4, 6132.1])
     a = ap.parse_args()
@@ -138,13 +142,44 @@ def main():
     in1 = lambda x: (x >= a.p1[0]) & (x <= a.p1[1])
     ref1, ref2 = ref[in1(ref)], ref[~in1(ref)]
 
-    # fit the threshold on PERIOD 1 only
-    best = None
-    for thr in np.unique(np.round(cand_s, 3)):
-        p1 = cand_t[(cand_s >= thr) & in1(cand_t)]
-        pr, rc, f1, tp = prf(p1, ref1)
-        if best is None or f1 > best[0]:
-            best = (f1, thr, pr, rc, tp, len(p1))
+    # Fit the threshold on PERIOD 1 only, under a declared PREDICTION BUDGET.
+    #
+    # Why a budget at all. F1 at a fixed tolerance is gameable when precision is low:
+    # emitting more candidates lifts recall faster than it costs precision, so the
+    # unconstrained optimum sat at 187 predictions for 64 events -- a chance recall of
+    # 0.209, at which the headline recall stops meaning much, and a list nothing
+    # downstream can use. The budget caps n_pred at K x n_ref on period 1.
+    #
+    # K is chosen from PERIOD-1 INFORMATION ONLY, by a rule fixed before period 2 was
+    # looked at: the smallest K whose period-1 F1 is within `--budget-tolerance` of the
+    # unconstrained optimum. Parsimony unless it actually costs you. On this detector
+    # that selects K=3 (period-1 F1 0.257 against an unconstrained 0.265, -3 %); on the
+    # restart detector the same rule is a no-op, because its optimum already sits at
+    # 1.0x -- which is the evidence that the rule is not doing the work of the detector.
+    def fit_threshold(cap):
+        best = None
+        for thr in np.unique(np.round(cand_s, 3)):
+            p1 = cand_t[(cand_s >= thr) & in1(cand_t)]
+            if len(p1) > cap:
+                continue
+            pr, rc, f1, tp = prf(p1, ref1)
+            if best is None or f1 > best[0]:
+                best = (f1, thr, pr, rc, tp, len(p1))
+        return best
+
+    unconstrained = fit_threshold(np.inf)
+    budget_sweep = []
+    chosen = None
+    for K in a.budgets:
+        b = fit_threshold(K * len(ref1))
+        if b is None:
+            continue
+        budget_sweep.append({"K": K, "period1_f1": round(b[0], 4), "period1_n_pred": b[5]})
+        if chosen is None and b[0] >= (1 - a.budget_tolerance) * unconstrained[0]:
+            chosen = (K, b)
+    if chosen is None:
+        chosen = (None, unconstrained)
+    budget_K, best = chosen
     f1_1, thr, pr1, rc1, tp1, n1 = best
 
     sel = cand_s >= thr
@@ -162,6 +197,13 @@ def main():
         "command": " ".join(sys.argv),
         "protocol": {"threshold_fitted_on": "period1", "applied_unchanged_to": "period2",
                      "tolerance_s": TOL, "min_sep_s": a.min_sep,
+                     "prediction_budget_K": budget_K,
+                     "budget_rule": ("smallest K with period-1 F1 within "
+                                     f"{a.budget_tolerance:.0%} of the unconstrained "
+                                     "optimum; chosen on period-1 data alone"),
+                     "budget_sweep_period1": budget_sweep,
+                     "period1_f1_unconstrained": round(unconstrained[0], 4),
+                     "period1_n_pred_unconstrained": unconstrained[5],
                      "team": "NOT predicted -- team-aware scoring is 0 by construction"},
         "threshold": round(float(thr), 4),
         "period1_dev": {"n_pred": int(n1), "n_ref": int(len(ref1)), "tp": int(tp1),
