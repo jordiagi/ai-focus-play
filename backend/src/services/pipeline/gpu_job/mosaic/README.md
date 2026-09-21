@@ -684,27 +684,27 @@ was buying recall by shotgunning.
 
 | type | n_ref | n_pred | F1 team-agnostic | F1 team-aware |
 | :-- | --: | --: | --: | --: |
-| OutOfPlay | 64 | 127 | 0.356 | 0.000 |
+| OutOfPlay | 64 | 127 | 0.356 | 0.052 |
 | ThrowIn | 38 | 52 | 0.244 | 0.000 |
 | GoalKick | 16 | 13 | 0.276 | **0.276** |
 | CornerKick | 9 | 11 | 0.100 | 0.100 |
 | **KickOff** | 8 | 4 | **0.667** | **0.500** |
 | **Goal** | 6 | 3 | **0.444** | **0.444** |
-| **macro** | | | **0.348** | **0.220** |
+| **macro** | | | **0.348** | **0.229** |
 
 | | start of the day | now |
 | :-- | --: | --: |
 | types attempted | 1 | **6** |
 | event mass | 14 % | **32 %** |
 | macro-F1, team-agnostic | 0.338 | **0.348** |
-| **macro-F1, team-aware (primary)** | **0.000** | **0.220** |
+| **macro-F1, team-aware (primary)** | **0.000** | **0.229** |
 | **parity count (F1 ≥ 0.5)** | **0/14** | **1/14** |
 
 Period-2 macro (0.261) again exceeds period-1 (0.186). **KickOff is the first type to
 reach parity.** Every type that predicts team scores the same team-aware as
 team-agnostic — when these detectors find an event, they get the side right.
 
-### Reproducing steps 8-12 from the stored artifacts
+### Reproducing steps 8-13 from the stored artifacts
 
 Seconds, CPU only, no gpu-box — everything they read is already in
 `backend/.local/artifacts/mosaic/`:
@@ -717,12 +717,15 @@ M=backend/src/services/pipeline/gpu_job/mosaic
 $V $M/derive_pitch_frame.py --occupancy $A/occupancy_points.json \
     --line-map $A/line_map.png --out $A/pitch_frame.json
 
-$V $M/detect_out_of_play.py --track $A/ball_track.json \
-    --pred $A/pred_oop.json --manifest $A/manifest_oop.json --out $A/score_oop.json
-
+# restarts FIRST: OutOfPlay takes its team by inverting theirs (step 13), and Goal
+# takes both its time and its team from the kickoffs among them (step 12)
 $V $M/detect_restarts.py --track $A/ball_track.json --candidates $A/ball5_pano.json \
     --frame $A/pitch_frame.json --pred $A/pred_restarts.json \
     --manifest $A/manifest_restarts.json --out $A/score_restarts.json
+
+$V $M/detect_out_of_play.py --track $A/ball_track.json \
+    --restart-pred $A/pred_restarts.json \
+    --pred $A/pred_oop.json --manifest $A/manifest_oop.json --out $A/score_oop.json
 
 $V $M/detect_goals.py --restart-pred $A/pred_restarts.json --frame $A/pitch_frame.json \
     --pred $A/pred_goals.json --manifest $A/manifest_goals.json --out $A/score_goals.json
@@ -740,3 +743,68 @@ Every script writes the **exact command that produced it** into its own output
 (`command`). That exists because step 8's original figures could not be reproduced
 afterwards: the invocation was never written down. Do not remove it, and do not report a
 figure whose `command` field does not match how you ran it.
+
+## D-B step 13 — OutOfPlay team by chaining, and two measured dead ends
+
+### The chain: OutOfPlay team is the restart's, inverted
+
+Veo labels an OutOfPlay with the side that put the ball out, and the restart goes to the
+other side. In this match that relation is **exact — 64 of 64**:
+
+| restart type | n | restart team vs the OutOfPlay before it |
+| :-- | --: | :-- |
+| ThrowIn | 39 | opposite, 39/39 |
+| GoalKick | 16 | opposite, 16/16 |
+| CornerKick | 9 | opposite, 9/9 |
+
+So any OutOfPlay followed by a restart we can team, we can team by inversion. Note the
+dependency runs **backwards through the step numbers** — step 8 now reads step 10's
+output. That is the same inversion steps 10 and 12 found: what happens *after* an event
+is repeatedly easier to see than the event itself.
+
+It is a thin channel, and the thinness is the honest part. Only GoalKick and Corner
+predictions carry a team, so only 41 of 127 OutOfPlay predictions get teamed; of those,
+8 are also true positives, and the team is right on **6 of 8**. A relation that is
+perfect in the ground truth degrades to what our own restart type-and-team predictions
+are worth. OutOfPlay team-aware F1 goes **0.000 → 0.052**.
+
+There is no downside to emitting it: an untimed prediction scores 0 team-aware anyway,
+so a wrong team costs nothing that was not already lost.
+
+### Dead end 1 — throw-in direction does not carry the taker
+
+The obvious cue: a throw-in is taken by one side, who then have the ball, so the ball
+should drift toward the end that side attacks. Measured over 35 throw-ins with both a
+ball position and a post-throw track:
+
+| | value |
+| :-- | --: |
+| direction rule correct | **17 / 35 = 0.486** |
+| drift median, taker attacking the `hi` end | **-0.000** |
+| drift median, taker attacking the `lo` end | -0.152 |
+
+**A coin flip.** The two distributions are not even ordered the right way round. A
+throw-in is as often played backwards to a defender as forward, so possession direction
+in the first seconds says nothing about who threw it. Together with the earlier finding
+that throw-in team is ~50/50 in every (end, period) cell, **position and direction are
+both exhausted: throw-in team needs possession, i.e. who touched the ball last.**
+
+### Dead end 2 — no local compute for the possession build
+
+Possession needs players assigned to teams, which needs shirt colour. **Colour
+separability is not the problem** — the kits were viewed rather than assumed, and they
+are white against dark navy, about as separable as a kit pair gets, on uniform green
+turf.
+
+The problem is compute. There is no `torch`, `ultralytics` or `sklearn` in the local
+venv (Python 3.14), and **gpu-box is unreachable again**: it pings at 17 ms with port 22
+open, but `sshd` answers with
+
+```
+# Tailscale SSH requires an additional check.
+# To authenticate, visit: https://login.tailscale.com/a/...
+```
+
+which is an interactive re-auth no agent can complete. Same blocker as 2026-09-20, same
+fix. Until it clears, the possession work cannot start — it is not a design question any
+more, just access.

@@ -4,11 +4,12 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-21 · by Claude Opus 5 · **PRIMARY METRIC 0.000 → 0.220, FIRST
-TYPE AT PARITY.** Team-aware macro-F1 **0.220** over 6 types covering 32 % of event mass;
-team-agnostic 0.348; **parity count 1/14** (KickOff, F1 0.500). Held-out macro (0.261)
-beats dev (0.186). **Step 8's originally published figures did not reproduce and have
-been restated — read the incident note before quoting any number.**
+**Last updated:** 2026-09-21 · by Claude Opus 5 · **PRIMARY METRIC 0.000 → 0.229, FIRST
+TYPE AT PARITY.** Team-aware macro-F1 **0.229** over 6 types covering 32 % of event mass;
+team-agnostic 0.348; **parity count 1/14** (KickOff, F1 0.500). Held-out macro (0.269)
+beats dev (0.196). **⊘ BLOCKED on gpu-box: Tailscale SSH needs interactive re-auth** —
+everything cheap is done; the remaining work needs possession, which needs that box.
+**Step 8's originally published figures did not reproduce and have been restated.**
 
 ---
 
@@ -71,25 +72,62 @@ Work is **mid-flight, not parked**. Everything below is committed and reproducib
 
 ## Recommended next step
 
-**ThrowIn team (38 events) is now the biggest single move left**, and it is the expensive
-one: throw-in team is ~50/50 in every (end, period) cell, so it genuinely needs
-possession — G4's HMM, which has no measured feasibility yet. Everything cheap that the
-defend-end map could reach has been taken.
+**⊘ Blocked, and the block is access, not design.** Everything reachable without new
+compute has been taken. What is left is **possession** — who touched the ball last —
+which is the only thing that can team ThrowIn (38) and OutOfPlay (64), the two types
+holding 102 of the 141 attempted events at 0 or near-0 team-aware.
 
-Ranked, with what each is worth:
+To unblock, a human must visit the Tailscale auth URL that `ssh root@gpu-box` prints:
 
-1. **ThrowIn team** — the largest unteamed type. Needs possession (G4). Would add its 11
-   true positives to the team-aware side, macro +0.04 or so. Large build.
-2. **The ball track caps everything** — coverage 0.586. A restart the tracker never sees
-   cannot be found, typed or teamed, and all six types read the same track. This is the
-   multiplier, and it would also weaken step 8's coverage-collapse feature.
-3. **OutOfPlay still has no team** and is the largest attempted type (64). Its team is
-   decidable in principle from which side put the ball out — again possession.
-4. **CornerKick is not a result** (F1 0.100 = the random control's best trial, held-out
-   0.000). Find a real corner cue or withdraw the type.
-5. **FreeKick (15) is declared unattempted** — its position cloud sits inside ThrowIn's.
+```
+ssh root@gpu-box          # prints: To authenticate, visit https://login.tailscale.com/a/...
+bash scripts/remote/doctor.sh   # must exit 0 before any GPU work
+```
+
+Then the possession build, in the order its gates should be measured:
+
+1. **Player boxes at the event times.** `detect_players.py` already exists; it needs
+   re-running at the ~100 restart/OutOfPlay times rather than the 600 sampled in-play
+   frames. The boxes were never pulled locally — only the derived occupancy points.
+2. **Shirt colour → team.** *Separability is already confirmed by eye, not assumed:*
+   white against dark navy on uniform green turf. Cluster into two, map cluster → Own
+   with **one bit fitted on period 1**, exactly as step 11 did for the defend-end map.
+3. **Nearest player to the ball at a restart = the taker.** This is the assumption to
+   test before building on it.
+4. Then ThrowIn team, and OutOfPlay team directly rather than through the thin chain.
+
+**Two cues are already measured and dead — do not retry them:** throw-in team by
+position (~50/50 in every (end, period) cell) and by post-throw ball direction
+(**17/35 = 0.486**, a coin flip, with the two drift distributions not even ordered the
+right way round).
 
 Full record: `backend/src/services/pipeline/gpu_job/mosaic/README.md`.
+
+---
+
+## D-B result (2026-09-21) — step 13: OutOfPlay team by chaining, and two dead ends
+
+**The chain.** Veo labels an OutOfPlay with the side that put the ball out and the
+restart goes to the other side — **exact on 64/64** (throw-ins 39/39, goal kicks 16/16,
+corners 9/9). So an OutOfPlay followed by a restart we can team, we can team by
+inversion. The dependency runs *backwards through the step numbers* — step 8 now reads
+step 10's output — which is the third time this inversion has paid.
+
+Thin channel, honestly: only GoalKick and Corner predictions carry a team, so 41 of 127
+OutOfPlay predictions get teamed, 8 of those are also true positives, and the team is
+right on **6 of 8**. A relation perfect in the ground truth degrades to what our own
+restart predictions are worth. **OutOfPlay team-aware 0.000 → 0.052**, macro 0.220 →
+**0.229**, micro 0.057 → **0.085**.
+
+**Dead end 1 — throw-in direction.** The obvious cue (the taker keeps the ball, so it
+drifts toward the end they attack) is a **coin flip: 17/35 = 0.486**, and the drift
+medians are not even ordered the right way (-0.000 attacking `hi` vs -0.152 attacking
+`lo`). A throw-in goes backwards as often as forwards. **Position and direction are now
+both exhausted for throw-in team.**
+
+**Dead end 2 — no local compute.** No `torch`/`ultralytics`/`sklearn` in the venv, and
+gpu-box needs interactive Tailscale re-auth. Colour separability itself is *not* in
+doubt — the kits were viewed: white vs dark navy on uniform green.
 
 ---
 
@@ -136,20 +174,20 @@ F1 at every cap) — which is the evidence it is not doing the detector's work.
 
 | type | n_ref | n_pred | F1 agnostic | F1 team-aware |
 | :-- | --: | --: | --: | --: |
-| OutOfPlay | 64 | 127 | 0.356 | 0.000 |
+| OutOfPlay | 64 | 127 | 0.356 | 0.052 |
 | ThrowIn | 38 | 52 | 0.244 | 0.000 |
 | GoalKick | 16 | 13 | 0.276 | **0.276** |
 | CornerKick | 9 | 11 | 0.100 | 0.100 |
 | **KickOff** | 8 | 4 | **0.667** | **0.500** |
 | **Goal** | 6 | 3 | **0.444** | **0.444** |
-| **macro** | | | **0.348** | **0.220** |
+| **macro** | | | **0.348** | **0.229** |
 
 | | start of 2026-09-20 | now |
 | :-- | --: | --: |
 | types attempted | 1 | **6** |
 | event mass | 14 % | **32 %** |
 | macro-F1 team-agnostic | 0.338 | **0.348** |
-| **macro-F1 team-aware (primary)** | **0.000** | **0.220** |
+| **macro-F1 team-aware (primary)** | **0.000** | **0.229** |
 | **parity count (F1 >= 0.5)** | **0/14** | **1/14** |
 
 Period-2 macro (0.261) again beats period-1 (0.186). **Every type that predicts team
@@ -494,7 +532,8 @@ the few-second scale of the 64 `FootballOutOfPlay` events. Not a result.
 
 | Blocker | Impact | Who clears it |
 | :-- | :-- | :-- |
-| ~~Tailscale SSH to gpu-box expired~~ | **CLEARED 2026-09-20.** `doctor.sh` exits 0: 4x H100, 63.9 GB min free, tmpfs mounted, torch 2.11.0+cu128, video sha256 `ef7552326b0ab24e` | done |
+| **Tailscale SSH to gpu-box expired AGAIN (2026-09-21)** | **⊘ HARD BLOCK on all remaining work.** Possession — the only route to ThrowIn (38) and OutOfPlay (64) team, i.e. 102 of 141 attempted events — needs player detection, and there is no `torch`/`ultralytics` locally. Box pings at 17 ms with port 22 open; `sshd` answers `Tailscale SSH requires an additional check. To authenticate, visit https://login.tailscale.com/a/...` | **A human**, in a browser. Run `ssh root@gpu-box`, open the URL it prints, then `bash scripts/remote/doctor.sh` must exit 0 |
+| ~~Tailscale SSH to gpu-box expired~~ (2026-09-20) | Cleared that day; recurred. **This expires repeatedly — budget for it** | see above |
 | Veo Bearer token is ephemeral (~minutes) | Only matters if ground truth needs re-capturing; it does not right now | Re-run the capture procedure in `PLAN.md` |
 
 Track 2 (frontend/UI) is **not** blocked by either. All D-0 and D-A work so far is CPU-only
@@ -542,7 +581,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | G0 | Rebuild `benchmarks/veo_reference.json`; fix `scripts/config.env` time base; decode Veo's x/z convention | ☑ | `c38d62f`. Coords decoded: x=length, z=width, absolute. Centre spot lands 2 m off ideal — Veo's own bias, recorded not corrected |
 | G1 | **Measure ball-detection rate** — the go/no-go gate | ☑ | **Both halves measured.** tiled 0.833 / 0.828 — **gate passes**. full-frame 0.677 / 0.716 — fails one half. Caveat below: this is candidate presence, not correctness |
 | G2 | Pitch calibration | ⏸ **STOPPED** | Three approaches measured and failed (1854 m → 10-15 m → 88-110 m). Cause is structural, not tuning: all pretrained models are broadcast-trained and each of our frames shows too little pitch. Parked as **D-A** in `specs/deferred.md` |
-| G3 | Tier A detectors (7 types) | ◐ | **6 of 14 types scored via D-B** (OutOfPlay + 4 restarts + Goal), 32 % of event mass. Macro-F1 **0.348 team-agnostic / 0.220 team-aware**, parity 1/14 |
+| G3 | Tier A detectors (7 types) | ◐ | **6 of 14 types scored via D-B** (OutOfPlay + 4 restarts + Goal), 32 % of event mass. Macro-F1 **0.348 team-agnostic / 0.229 team-aware**, parity 1/14 |
 | G4 | Possession HMM → Tier B (4 types + Pass count) | ⏸ | Conditional on G1 gate |
 | G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
 | G6 | Ingest artifacts → `analysis_mode="ml"` | ⏸ | `ml_ingest.py` does not exist yet |
@@ -569,7 +608,9 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | B11 | Team for KickOff (8) | ☑ | Solved by the goal-end lookback, not by drift: the kickoff after a goal is taken by the side that conceded. **6/6 on true times**; the 2 period-opening kickoffs are emitted unteamed |
 | B13 | **FootballGoal from its kickoff** | ☑ | **F1 0.444 (held-out 0.500), team-aware = team-agnostic.** Offset 38.13 s fitted on period 1. `detect_goals.py`. Low-n: 6 events, 3 predictions |
 | B14 | **Prediction budget** | ☑ | Smallest K with period-1 F1 within 5 % of unconstrained. Lifts OutOfPlay held-out F1 0.383 → **0.467** and its chance-lift 6.7x → **9.1x**; **no-op on the restart detector** |
-| B15 | Team for ThrowIn (38) + OutOfPlay (64) | ☐ | Both ~50/50 by position — need possession (G4, deferred). **The largest remaining move on the primary metric** |
+| B15 | Team for OutOfPlay (64), by chaining | ☑ partial | Restart team inverted — **exact 64/64 in ground truth**, but only 41/127 predictions get teamed and 6/8 of the scoreable ones are right. **Team-aware 0.000 → 0.052** |
+| B16 | Team for ThrowIn (38) | ⊘ **blocked** | Position ~50/50 **and** post-throw direction **17/35 = 0.486** — both measured dead. Needs possession → player team assignment → gpu-box |
+| B17 | Player team assignment by shirt colour | ⊘ **blocked on gpu-box** | **Separability confirmed by eye: white vs dark navy on uniform green.** Needs `detect_players.py` re-run at event times + 2-cluster colour + one bit fitted on period 1 |
 | B12 | Reproducibility guard | ☑ | Every detector now writes the **exact command** into its own output. Added after step 8's figures proved unreproducible |
 
 ### Track 2 — UI / route parity — ☑ **COMPLETE**

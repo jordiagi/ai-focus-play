@@ -46,6 +46,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--track", required=True)
     ap.add_argument("--bench", default=None)
+    ap.add_argument("--restart-pred", default=None,
+                    help="pred_restarts.json -- enables team, see below")
     ap.add_argument("--pred", required=True)
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--out", required=True)
@@ -55,6 +57,7 @@ def main():
                     help="candidate n_pred/n_ref caps, smallest first")
     ap.add_argument("--budget-tolerance", type=float, default=0.05,
                     help="period-1 F1 we are willing to give up for a smaller budget")
+    ap.add_argument("--restart-window", type=float, default=60.0)
     ap.add_argument("--p1", type=float, nargs=2, default=[562.3, 2879.3])
     ap.add_argument("--p2", type=float, nargs=2, default=[3674.4, 6132.1])
     a = ap.parse_args()
@@ -220,15 +223,50 @@ def main():
                          "recall_expected_by_chance": round(chance(len(pred_t), len(ref)), 4)},
         "dev_heldout_gap_f1": round(f1_1 - f1_2, 4),
     }
+    # ---- team, by chaining off the restart that follows ------------------------------
+    # Veo labels an OutOfPlay with the side that put the ball out, and the restart goes
+    # to the other side. In this match that relation is **exact: 64 of 64 restarts are
+    # the opposite team to the OutOfPlay before them** -- throw-ins 39/39, goal kicks
+    # 16/16, corners 9/9. So any OutOfPlay followed by a restart we can team, we can
+    # team too, by inversion.
+    #
+    # Note the dependency runs backwards through the step numbers: step 8 leans on step
+    # 10's output. That is the same inversion step 10 and step 12 found -- the thing that
+    # happens *after* an event is repeatedly easier to see than the event itself.
+    #
+    # It is a thin channel. Only GoalKick and Corner predictions carry a team, so only
+    # OutOfPlays followed by one of those get teamed, and the perfect ground-truth
+    # relation degrades to what our own restart type-and-team predictions are worth:
+    # 6 correct of the 8 teamed predictions that are also true positives.
+    events_out = [{"video_s": round(float(t), 2), "event_type": "FootballOutOfPlay",
+                   "period": 1 if in1(t) else 2} for t in pred_t]
+    team_stats = None
+    if a.restart_pred:
+        restarts = [q for q in json.loads(Path(a.restart_pred).read_text())["events"]
+                    if q.get("team")]
+        flip = {"Own": "Opponent", "Opponent": "Own"}
+        n_teamed = 0
+        for e in events_out:
+            nxt = [q for q in restarts if 0 < q["video_s"] - e["video_s"] <= a.restart_window]
+            if nxt:
+                e["team"] = flip[nxt[0]["team"]]
+                e["team_from_restart_s"] = nxt[0]["video_s"]
+                n_teamed += 1
+        team_stats = {"teamed": n_teamed, "of": len(events_out),
+                      "window_s": a.restart_window,
+                      "rule": "the OutOfPlay side is the opposite of the restart's; "
+                              "exact on 64/64 in the ground truth",
+                      "source": "GoalKick and CornerKick predictions, the only teamed ones"}
     # `period` is what lets the scoring harness split dev from held-out on its own side;
     # without it its per-period blocks silently see zero predictions and report 0.0
-    Path(a.pred).write_text(json.dumps({"events": [
-        {"video_s": round(float(t), 2), "event_type": "FootballOutOfPlay",
-         "period": 1 if in1(t) else 2}
-        for t in pred_t]}, indent=1))
+    doc["team"] = team_stats
+    Path(a.pred).write_text(json.dumps({"events": events_out}, indent=1))
     Path(a.manifest).write_text(json.dumps({
         "attempted": ["FootballOutOfPlay"], "tuned_on": "period1",
-        "note": ("team is not predicted for this type, so the team-aware score is 0 by "
+        "note": ("team is predicted only where a teamed restart follows within "
+                 f"{a.restart_window:.0f}s; the rest score 0 team-aware by construction"
+                 if a.restart_pred else
+                 "team is not predicted for this type, so the team-aware score is 0 by "
                  "construction; read the team-agnostic figure")}, indent=1))
     Path(a.out).write_text(json.dumps(doc, indent=1))
     print(json.dumps(doc, indent=1))
