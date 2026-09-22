@@ -49,6 +49,11 @@ class MatchDB(Base):
     journal_notes = Column(Text, default="")
     analysis_mode = Column(String, default="heuristic")       # "demo" | "heuristic" | "ml"
     analysis_confidence = Column(String, default="low")       # "low" | "medium" | "high"
+    # JSON {label: {status, count, reason}}. Persisted rather than recomputed because it
+    # records what a run *declared it attempted*, which cannot be recovered from the
+    # events that survived: "attempted and found none" and "never attempted" both leave
+    # zero events behind, and the whole point of the surface is to tell them apart.
+    event_capabilities = Column(Text, nullable=True)
     created_at = Column(Float, nullable=False)
 
     highlights = relationship("HighlightDB", back_populates="match", cascade="all, delete-orphan")
@@ -93,8 +98,13 @@ class EventDB(Base):
     player_jersey = Column(String, nullable=True)
     player_name = Column(String, nullable=True)
     description = Column(Text, nullable=False)
-    pitch_x = Column(Float, default=52.5)
-    pitch_y = Column(Float, default=34.0)
+    # NO column default. SQLAlchemy applies a scalar default when the value is None at
+    # INSERT time, so a detector writing None for "position unknown" was silently
+    # getting (52.5, 34.0) -- the centre spot -- written to the database. The model
+    # said None, the row said centre spot. Nullable with no default is the only way an
+    # uncalibrated detector can record that it has no position.
+    pitch_x = Column(Float, nullable=True)
+    pitch_y = Column(Float, nullable=True)
     confidence = Column(Float, default=0.8)
 
     match = relationship("MatchDB", back_populates="events")
@@ -206,6 +216,9 @@ def init_db():
                 conn.commit()
             if "analysis_confidence" not in columns:
                 conn.execute(text("ALTER TABLE matches ADD COLUMN analysis_confidence VARCHAR DEFAULT 'low'"))
+                conn.commit()
+            if "event_capabilities" not in columns:
+                conn.execute(text("ALTER TABLE matches ADD COLUMN event_capabilities TEXT"))
                 conn.commit()
             
             # Check events table for confidence column

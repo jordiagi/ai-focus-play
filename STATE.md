@@ -4,12 +4,12 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-21 · by Claude Opus 5 · **PRIMARY METRIC 0.278 as reported,
-0.253 conservative** (zeroing channels that fail their control), 6 types, 32 % of event
-mass; team-agnostic 0.348, micro 0.188, parity 1/14. Throw-in team from the thrower's
-shirt is a result at **p = 0.020**. **OutOfPlay team is not reachable — three routes
-measured dead**; its chained channel stays in, labelled, at p = 0.26. Every team claim
-must clear `control_team_shuffle.py` (permutation p-value).
+**Last updated:** 2026-09-22 · by Claude Opus 5 · **`analysis_mode="ml"` IS NOW REAL** —
+G6 ingests the 6 scored types (210 predictions) into the app with an honest 16-label
+capability surface. Primary metric **0.278 as reported, 0.253 conservative**, 32 % of
+event mass. Baseline is now **`pass=10 fail=0 skip=0`, 36 pytest tests, frontend builds**
+(new probe **d11**, negative-tested). Throw-in team is a result at p = 0.020; OutOfPlay
+team is not reachable (three routes dead).
 
 ---
 
@@ -18,8 +18,9 @@ must clear `control_team_shuffle.py` (permutation p-value).
 1. Read this file, then **`backend/src/services/pipeline/gpu_job/mosaic/README.md`** —
    that is the full record of the panorama, the calibration attempts and D-B. Then
    `context.md` (environment + traps) and `PLAN.md` (roadmap).
-2. `bash scripts/local/verify.sh all` must print **`pass=9 fail=0 skip=0`**. If it does
-   not, fix that before new work.
+2. `bash scripts/local/verify.sh all` must print **`pass=10 fail=0 skip=0`**, and
+   `backend/.venv/bin/python -m pytest backend/tests -q` **36 passed**. If not, fix that
+   before new work.
 2b. **Re-run before you extend.** Run the README's "Reproducing steps 8-14" block and
    check the figures come back. Step 8's originally published numbers did *not*, and that
    was found only by accident — see the incident log. Every score doc now carries the
@@ -76,76 +77,72 @@ Work is **mid-flight, not parked**. Everything below is committed and reproducib
 
 ## Recommended next step
 
-**The event-detection track has reached its natural limit with this ball track.** Every
-cheap channel is taken, and the two remaining ideas both reduce to the same bottleneck.
+**B21 — raise ball-track coverage / frame rate.** It is now the only item that moves
+several numbers at once: coverage 0.586 at 5 fps caps detection, typing *and* teaming,
+and it is the named cause of the OutOfPlay-team failure (a struck ball moves ~50 px per
+frame, so the contact frame is often never sampled). Re-detecting at 15 fps is ~30 min of
+GPU, then the whole chain re-runs from the README's reproduce block and every figure in
+this file gets restated. The ingest path is now stable, so the numbers churn once.
 
-1. **The ball track caps everything** — coverage 0.586, 5 fps. All six types read it, and
-   it is now the named cause of the biggest failure: OutOfPlay team needs the toucher of
-   a *moving* ball, which at 5 fps and ~50 px of travel per frame is not recoverable.
-   Raising coverage and frame rate lifts detection, typing **and** teaming at once. This
-   is the only thing left that moves several numbers.
-2. **OutOfPlay team is not reachable without that** — three routes measured dead
-   (below). Do not retry them.
-3. **CornerKick is still not a result**; **FreeKick (15) still unattempted** — its
-   position cloud sits inside ThrowIn's.
-4. **Jersey recognition (G7)** remains the declared-last item, with an honest ceiling of
-   ~25-40 % against Veo's 75 % and no roster available.
+After that: **FreeKick (15)** is still unattempted with no candidate cue, **CornerKick**
+is still not a result, and **jersey recognition (G7)** remains sequenced last with an
+honest ceiling of ~25-40 %.
 
-**Do not retry — all measured dead:**
-
-| idea | result |
-| :-- | :-- |
-| throw-in team by position | ~50/50 in every (end, period) cell |
-| throw-in team by post-throw ball direction | **17/35 = 0.486**, drift medians not even ordered right |
-| thrower by nearest player at the throw-in instant | ball inside a box in **2 of 36** |
-| OutOfPlay team by chaining off restart predictions | **p = 0.26**; coin flip at every pairing window from 10-60 s |
-| OutOfPlay team by last player contact | attribution 0.94 and **still a coin flip** (p2 0.64 = majority 0.64) |
-| OutOfPlay team by the strike frame | protocol-selected cells score **below** baseline held out (0.45, 0.48) |
+**Do not retry — all measured dead:** throw-in team by position or by post-throw ball
+direction (17/35); thrower by nearest player at the throw-in instant (2 of 36); OutOfPlay
+team by chaining off restarts (p = 0.26), by last player contact (attribution 0.94 and
+still a coin flip), or by the strike frame (below baseline held out).
 
 Full record: `backend/src/services/pipeline/gpu_job/mosaic/README.md`.
 
 ---
 
-## D-B result (2026-09-21) — step 16: OutOfPlay team, three routes, all dead
+## G6 done (2026-09-22) — `analysis_mode="ml"` is real
 
-64 events, the largest attempted type. The rule is simple — whoever last touched the ball
-put it out — and the step-15 thrower machinery looked like it should transfer. It does
-not. 960 frames at 5 fps across [-3.2,-0.2] s before every true OutOfPlay, 24,519
-persons, 35 s of GPU.
+`main.py` had advertised `"ml"` in `supported_analysis_modes` since the API was written
+and the DB had the column, but **nothing could ever produce it**. `ml_ingest.py` closes
+that: it reads `pred_all.json` + `manifest_all.json` + `score_all.json` and writes events,
+the capability surface and the mode. It does not touch `cv_engine.py`, which stays frozen.
 
-| route | attribution | period 1 | period 2 | verdict |
-| :-- | --: | --: | --: | :-- |
-| chain off our restart predictions | — | 0.54 | 0.64 | coin flip, **p = 0.26** |
-| last player contact before crossing | **0.94** | 0.70 | 0.64 | **ties** majority 0.64 |
-| player at the strike frame | 0.58 | **0.71** | **0.45** | **below** majority 0.60 |
+**210 events ingested** across 6 labels — Out of play 127, Throw-in 52, Goal kick 13,
+Corner 11, Kickoff 4, Goal 3 — with the other 10 labels marked `unavailable` and a
+*measured* reason each.
 
-The chain's ceiling with *true* restarts and *true* teams is **64/64 = 1.00**, so its
-whole loss is that the first teamed restart prediction within the window is usually not
-the restart that followed this OutOfPlay — restart precision is 0.21-0.31.
+**Four refusals, each of which would otherwise have been a lie:**
 
-Route 2 is the instructive one: attribution **0.94**, better than the throw-in's 0.79,
-and the team is a coin flip anyway. The ball is being associated to plenty of players,
-just not the right one.
+- **No positions.** `Event.pitch_x/pitch_y` are now `Optional` and written `None`.
+- **No analytics.** Possession / shot map / team stats come from the demo engine; any
+  existing row is **dropped** so the stats tab 404s rather than serving one pipeline's
+  numbers beside another's. Tier B (G4) is what would fill it.
+- **No team where team is not a result.** OutOfPlay fails its random-team control, so its
+  127 events carry `team="unknown"` rather than a guess (134 of 210 events in total).
+- **No ingest into the seeded demo match**, which the repository pins to
+  `analysis_mode="demo"`. Writing there would present ML events under a demo label, so
+  the ingest exits 2 with that explanation.
 
-**Why the throw-in worked and this cannot.** A throw-in has a **stationary ball held in
-the hands for 1-2 s** — a temporally extended, unambiguous association. An out-of-play's
-last touch is **instantaneous**: at 5 fps a struck ball moves ~50 px between frames so
-the contact frame may never be sampled, the ball passes near many players on its way out,
-and the touch is often a deflection that is ambiguous even to a human.
+**The bug this turned up, which only a database read could catch.** `pitch_x`/`pitch_y`
+carried a column default of **(52.5, 34.0) — the centre spot** — and SQLAlchemy applies a
+scalar default when the value is `None` at INSERT. The ingest passed `None` for "no
+metric calibration exists" and **all 210 rows came back on the centre spot**: the model
+said unknown, the database said centre spot. The defaults are removed, the ingest now
+**re-reads what it wrote and fails loudly** if a position, mode or count disagrees, and
+probe **d11** covers it (negative-tested: FAILS with the default restored, PASSES without).
 
-**This machinery works where the ball is held, not where it is struck.** Anything needing
-the toucher of a moving ball needs a higher frame rate or real tracking with possession.
+**A vocabulary gap fixed rather than worked around.** The app's event-type list had 15
+labels and **no "Out of play"** — though Veo reports it and it is the largest Tier A type
+at 64 of 447 events. A surface that cannot name a type cannot report it, so the
+vocabulary is now 16 labels (backend defaults, frontend union, sidebar list).
 
-**The headline, both ways.** The chained channel stays in the output, declared and
-labelled, as CornerKick does — but it fails its control, so:
+**Confidence is `"medium"`, not `"high"`:** 6 of 14 types, 32 % of event mass, per-type
+precision 0.21-1.00.
 
-| macro-F1, team-aware | value |
-| :-- | --: |
-| as reported | **0.278** |
-| **conservative — channels failing their control zeroed** | **0.253** |
-
-**0.024 of the headline rests on a channel indistinguishable from guessing.** Quote 0.253
-where one number is wanted.
+```sh
+backend/.venv/bin/python backend/src/services/pipeline/ml_ingest.py \
+    --pred  backend/.local/artifacts/mosaic/pred_all.json \
+    --manifest backend/.local/artifacts/mosaic/manifest_all.json \
+    --score backend/.local/artifacts/mosaic/score_all.json \
+    --match-id <a real match id> --report <report.json>      # --dry-run to preview
+```
 
 ---
 
@@ -701,7 +698,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | G3 | Tier A detectors (7 types) | ◐ | **6 of 14 types scored via D-B** (OutOfPlay + 4 restarts + Goal), 32 % of event mass. Macro-F1 **0.348 team-agnostic / 0.278 team-aware** (p = 0.025), micro 0.188, parity 1/14 |
 | G4 | Possession HMM → Tier B (4 types + Pass count) | ⏸ | Conditional on G1 gate |
 | G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
-| G6 | Ingest artifacts → `analysis_mode="ml"` | ⏸ | `ml_ingest.py` does not exist yet |
+| G6 | Ingest artifacts → `analysis_mode="ml"` | ☑ | **`ml_ingest.py`.** 210 events, 6 labels, 16-label honest surface. Refuses positions, analytics, unteamed guesses and the pinned demo match. Probe **d11**, negative-tested |
 | D-A | Panorama + line map (frame → panorama) | ◐ | **BUILT** 2026-09-20: panorama 4414x1190 125.4° FOV; line map shows centre circle, halfway, both touchlines, both penalty areas. Loop closure 0.97 px |
 | D-A3 | Ray-space pitch pose fit | ✗ | **Pose converges across 3 independent methods** (h=6.71 m, normal 0.87° off vertical, γ within 2.5°, W 68.5-69.8 m; circle fits 0.0 px / 68%). **But the outline does not** (24-51 px). **No metres.** Recommend D-B instead |
 | D-A4 | Play region from Veo events | ☑ | 213/220 event frames located (96.8%). Settles which field is ours; foreground lines are a different pitch. Frame centre tracks the ball in **azimuth only** |
@@ -740,7 +737,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | :-- | :-- | :-- | :-- |
 | U1 | Hash router; wire the 6 drawers to Veo's routes; real deep-link Share | ☑ | **codex**, merged `35a0659`. Verified behaviourally: loading `/#/events/` directly opens the panel |
 | U2 | Jersey numbers only, never invented names; jersey bar from `lineup` | ☑ | **agy/gemini-3.8-flash-high**, merged `c9054d9`. 36 tests, 0 invented names, follows Veo's blank-number convention |
-| U3 | Events drawer 15-type status surface **+ singular stat labels** | ☑ | **codex** (re-dispatch after claude hit a 429 quota limit). All 15 types declared; model validator refuses `detected` without a count or `unavailable` without a reason |
+| U3 | Events drawer type status surface **+ singular stat labels** | ☑ | **codex** (re-dispatch after claude hit a 429 quota limit). Model validator refuses `detected` without a count or `unavailable` without a reason. **Extended 15 → 16 types 2026-09-22**: "Out of play" was missing though Veo reports it and it is the largest Tier A type |
 
 ---
 
@@ -996,7 +993,7 @@ Two things worth keeping:
 
 ## Done already (do not redo)
 
-- 9 defects closed and verified — `verify.sh all` → `pass=9 fail=0 skip=0`, 35 tests.
+- 10 defects closed and verified — `verify.sh all` → `pass=10 fail=0 skip=0`, 36 tests.
   Full record in `OPUS2.md`.
 - gpu-box provisioned: torch 2.11.0+cu128, CUDA 12.8, 4× H100, uv-managed CPython 3.12.
   `scripts/remote/provision.sh` is idempotent (re-run → `cached`, exit 10).
@@ -1007,8 +1004,9 @@ Two things worth keeping:
 - Veo ground truth captured (above).
 - `scripts/local/score-benchmark.py` (G5) — validated on four cases including a random
   detector scoring BELOW its own chance baseline.
-- **Track 2 complete**: U1 (hash routing), U2 (jersey-only identity), U3 (15-type status
-  surface) all merged and independently verified. Baseline **`pass=9 fail=0 skip=0`, 36 tests**.
+- **Track 2 complete**: U1 (hash routing), U2 (jersey-only identity), U3 (now a **16**-type
+  status surface -- "Out of play" was missing) all merged and independently verified.
+  Baseline **`pass=10 fail=0 skip=0`, 36 pytest tests**, and the frontend builds clean.
 - 720p proxy rebuilt and verified (1280x720, duration 6172.933433 exact).
 
 ---

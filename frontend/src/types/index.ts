@@ -39,12 +39,14 @@ export interface Event {
   timestamp: number;
   period: number;
   event_type: string;
-  team: 'home' | 'away';
+  // 'unknown' when the detector declined to predict a side rather than guessing one
+  team: 'home' | 'away' | 'unknown';
   player_jersey?: string;
   player_name?: string;
   description: string;
-  pitch_x: number;
-  pitch_y: number;
+  // null when no metric calibration exists for the source footage -- do not plot it
+  pitch_x: number | null;
+  pitch_y: number | null;
   confidence?: number;
 }
 
@@ -150,6 +152,7 @@ export type EventTypeLabel =
   | 'Free kick'
   | 'Goal kick'
   | 'Throw-in'
+  | 'Out of play'
   | 'Tackle'
   | 'Interception'
   | 'Dribble'

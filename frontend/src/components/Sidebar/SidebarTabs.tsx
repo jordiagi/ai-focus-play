@@ -7,7 +7,7 @@ import { Match, Highlight, Event, AnalyticsData, EventTypeLabel } from '../../ty
 
 const EVENT_TYPES: EventTypeLabel[] = [
   'Kickoff', 'Goal', 'Shot on goal', 'Shot', 'Save', 'Corner', 'Foul', 'Free kick',
-  'Goal kick', 'Throw-in', 'Tackle', 'Interception', 'Dribble',
+  'Goal kick', 'Throw-in', 'Out of play', 'Tackle', 'Interception', 'Dribble',
   'Loose ball recovery', 'Pass',
 ];
 

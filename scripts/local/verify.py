@@ -429,6 +429,90 @@ def d10_no_invented_analytics():
     return ("PASS", "no invented analytics literal returned") if not bad else ("FAIL", "; ".join(bad))
 
 
+def d11_ml_ingest_honesty():
+    """Catches: the ML ingest claiming a position, a mode or a count it does not have.
+
+    Three separate lies were available here and one of them was live during development:
+
+    * `Event.pitch_x/pitch_y` had a column default of (52.5, 34.0) -- the centre spot --
+      and SQLAlchemy applies a scalar default when the value is None at INSERT time. The
+      ingest passed None for "no metric calibration exists" and every row came back on
+      the centre spot. The model said unknown, the database said centre spot.
+    * The seeded demo match is pinned to analysis_mode="demo", so ingesting there would
+      leave ML events presented under a demo label.
+    * The capability surface is a separate claim from the events, so counts can drift
+      from what is actually stored.
+
+    Behavioural, not a grep: it ingests into a throwaway database and inspects the rows
+    that come back."""
+    art = os.path.join(REPO, "backend/.local/artifacts/mosaic")
+    pred = os.path.join(art, "pred_all.json")
+    man = os.path.join(art, "manifest_all.json")
+    if not (os.path.exists(pred) and os.path.exists(man)):
+        return "SKIP", "no ingestable prediction set on disk"
+    tmp = tempfile.mkdtemp(prefix="d11-")
+    db = os.path.join(tmp, "probe.db")
+    env = {**os.environ, "PYTHONPATH": REPO, "AIFP_DB_PATH": db}
+    mk = (
+        "import sys,time;"
+        "from backend.src.storage.repository import MatchRepository;"
+        "from backend.src.domain.models.match import Match;"
+        "r=MatchRepository();"
+        "r.save_match(Match(id='probe-match',title='p',home_team='H',away_team='A',"
+        "date='2026-01-01',video_url='/x.mp4',duration_seconds=10.0,created_at=time.time()))"
+    )
+    r = subprocess.run([VENV, "-c", mk], cwd=REPO, env=env, capture_output=True,
+                       text=True, timeout=300)
+    if r.returncode != 0:
+        return "FAIL", f"could not create a probe match: {r.stderr.strip()[-200:]}"
+
+    ing = os.path.join(REPO, "backend/src/services/pipeline/ml_ingest.py")
+    r = subprocess.run([VENV, ing, "--pred", pred, "--manifest", man,
+                        "--match-id", "probe-match"], cwd=REPO, env=env,
+                       capture_output=True, text=True, timeout=600)
+    if r.returncode != 0:
+        return "FAIL", f"ingest failed or self-verification tripped: {r.stderr.strip()[-300:]}"
+
+    # refusing the pinned demo match is part of the contract
+    r2 = subprocess.run([VENV, ing, "--pred", pred, "--manifest", man,
+                         "--match-id", "demo-arlington-skyline"], cwd=REPO, env=env,
+                        capture_output=True, text=True, timeout=600)
+    if r2.returncode == 0:
+        return "FAIL", "ingest wrote into the pinned demo match instead of refusing"
+
+    # inspect the rows, not the model that produced them
+    con = sqlite3.connect(db)
+    try:
+        pos = con.execute("select count(*) from events where match_id='probe-match' "
+                          "and (pitch_x is not null or pitch_y is not null)").fetchone()[0]
+        mode = con.execute("select analysis_mode from matches where id='probe-match'"
+                           ).fetchone()[0]
+        caps_raw = con.execute("select event_capabilities from matches "
+                               "where id='probe-match'").fetchone()[0]
+        rows = con.execute("select event_type, count(*) from events "
+                           "where match_id='probe-match' group by 1").fetchall()
+    finally:
+        con.close()
+    if pos:
+        return "FAIL", (f"{pos} ingested events carry a pitch position though the "
+                        f"pipeline has no metric calibration")
+    if mode != "ml":
+        return "FAIL", f"analysis_mode is {mode!r} after an ML ingest"
+    if not caps_raw:
+        return "FAIL", "no capability surface was persisted"
+    caps = json.loads(caps_raw)
+    stored = dict(rows)
+    for label, cap in caps.items():
+        if cap.get("status") == "detected" and cap.get("count") != stored.get(label, 0):
+            return "FAIL", (f"capability {label!r} claims {cap.get('count')} but "
+                            f"{stored.get(label, 0)} events are stored")
+        if cap.get("status") == "unavailable" and not cap.get("reason"):
+            return "FAIL", f"capability {label!r} is unavailable with no reason"
+    n = sum(stored.values())
+    return "PASS", (f"{n} events ingested, no invented positions, mode=ml, "
+                    f"{len(stored)} labels reconcile with stored rows")
+
+
 PROBES = {
     "d1": ("read-only enforcement", d1_read_only),
     "d2": ("CV determinism", d2_determinism),
@@ -439,6 +523,7 @@ PROBES = {
     "d7": ("orphaned-job sweep", d7_orphan_sweep),
     "d8": ("invented shot outcome", d8_saved_outcome),
     "d10": ("invented analytics literals", d10_no_invented_analytics),
+    "d11": ("ml ingest honesty", d11_ml_ingest_honesty),
 }
 
 def main():

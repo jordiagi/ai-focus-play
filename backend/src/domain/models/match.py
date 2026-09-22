@@ -37,12 +37,22 @@ class Event(BaseModel):
     timestamp: float
     period: int = 1
     event_type: str
-    team: str  # "home", "away"
+    # "home" | "away" | "unknown". "unknown" is not a placeholder: a detector whose
+    # team channel does not clear its random-team control must be able to decline, and
+    # the team-aware metric rewards guessing over abstaining, so declining has to be
+    # representable or the pipeline is pushed into fabricating a side.
+    team: str
     player_jersey: Optional[str] = None
     player_name: Optional[str] = None
     description: str
-    pitch_x: float = 52.5  # standard 0..105 meters
-    pitch_y: float = 34.0  # standard 0..68 meters
+    # Metres, 0..105 x 0..68 -- and OPTIONAL, because a detector that has no metric
+    # calibration must be able to say so. The previous default of (52.5, 34.0) is the
+    # centre spot, so any event ingested without a position silently claimed to have
+    # happened on the centre spot. D-A failed to calibrate this footage five times over;
+    # the D-B detectors work in panorama pixels and have no metres to give. None means
+    # "not known", and consumers must skip rather than plot it.
+    pitch_x: Optional[float] = None
+    pitch_y: Optional[float] = None
     confidence: float = 0.8
 
 class RadarPlayer(BaseModel):
@@ -136,10 +146,13 @@ class EventCapability(BaseModel):
 
 def default_event_capabilities() -> Dict[str, EventCapability]:
     """Capabilities of the current heuristic pipeline for legacy/new matches."""
+    # "Out of play" was missing from this list until 2026-09-21. Veo reports it as a
+    # type (it is 64 of the 447 events in the benchmark, the largest Tier A type), so a
+    # surface that cannot name it cannot report it. Added rather than worked around.
     labels = [
         "Kickoff", "Goal", "Shot on goal", "Shot", "Save", "Corner", "Foul",
-        "Free kick", "Goal kick", "Throw-in", "Tackle", "Interception", "Dribble",
-        "Loose ball recovery", "Pass",
+        "Free kick", "Goal kick", "Throw-in", "Out of play", "Tackle", "Interception",
+        "Dribble", "Loose ball recovery", "Pass",
     ]
     detected = {"Kickoff", "Goal", "Shot"}
     return {

@@ -12,7 +12,8 @@ from backend.src.storage.database import (
 )
 from backend.src.domain.models.match import (
     Match, Highlight, Event, Drawing, RadarFrame, RadarPlayer, RadarBall,
-    ShotRecord, TeamStats, AnalyticsData, PlayerRoster
+    ShotRecord, TeamStats, AnalyticsData, PlayerRoster, EventCapability,
+    default_event_capabilities
 )
 
 logger = logging.getLogger("repository")
@@ -84,6 +85,8 @@ class MatchRepository:
                 existing.journal_notes = match.journal_notes
                 existing.analysis_mode = match.analysis_mode
                 existing.analysis_confidence = match.analysis_confidence
+                existing.event_capabilities = json.dumps(
+                    {k: v.model_dump() for k, v in (match.event_capabilities or {}).items()})
             else:
                 db_m = MatchDB(
                     id=match.id,
@@ -105,6 +108,8 @@ class MatchRepository:
                     journal_notes=match.journal_notes,
                     analysis_mode=match.analysis_mode,
                     analysis_confidence=match.analysis_confidence,
+                    event_capabilities=json.dumps(
+                        {k: v.model_dump() for k, v in (match.event_capabilities or {}).items()}),
                     created_at=match.created_at,
                 )
                 db.add(db_m)
@@ -304,6 +309,19 @@ class MatchRepository:
                 return None
             return AnalyticsData(**json.loads(db_an.data))
 
+    def clear_analytics(self, match_id: str) -> bool:
+        """Drop a match's analytics. Needed by the ML ingest: possession, shot map and
+        team stats are computed by the demo/heuristic engine, so leaving them in place
+        beside freshly ingested ML events would present one pipeline's numbers as the
+        other's. Better to serve nothing than to serve the wrong provenance."""
+        with self.get_db() as db:
+            existing = db.query(AnalyticsDB).filter(AnalyticsDB.match_id == match_id).first()
+            if not existing:
+                return False
+            db.delete(existing)
+            db.commit()
+            return True
+
     def set_analytics(self, match_id: str, data: AnalyticsData):
         with self.get_db() as db:
             existing = db.query(AnalyticsDB).filter(AnalyticsDB.match_id == match_id).first()
@@ -498,6 +516,17 @@ class MatchRepository:
             }
 
     def _match_db_to_domain(self, db: Session, m: MatchDB) -> Match:
+        # An absent/unreadable surface falls back to the heuristic defaults rather than
+        # to an empty dict: an empty surface would read as "nothing is even attempted",
+        # which is a different and equally false claim.
+        raw = getattr(m, "event_capabilities", None)
+        caps = default_event_capabilities()
+        if raw:
+            try:
+                caps = {k: EventCapability(**v) for k, v in json.loads(raw).items()}
+            except Exception:
+                logger.warning("match %s has an unreadable event_capabilities blob; "
+                               "falling back to the heuristic defaults", m.id)
         db_lineup = db.query(LineupPlayerDB).filter(LineupPlayerDB.match_id == m.id).all()
         lineup = [
             PlayerRoster(
@@ -532,6 +561,7 @@ class MatchRepository:
             journal_notes=m.journal_notes,
             analysis_mode=getattr(m, 'analysis_mode', 'heuristic') or 'heuristic',
             analysis_confidence=getattr(m, 'analysis_confidence', 'low') or 'low',
+            event_capabilities=caps,
             created_at=m.created_at
         )
 
