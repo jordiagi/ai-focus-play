@@ -9,18 +9,26 @@ from 0.229 to ~0.260 while containing no information whatsoever.
 That makes "the primary metric went up" worthless on its own as evidence. Every team
 channel has to be scored against the same predictions with the team replaced by:
 
-  * a coin flip (the real null -- 40 trials)
+  * a coin flip (the real null, `--trials` of them)
   * a constant, each side in turn (catches a channel that has only learned the prior)
   * nothing at all (shows how much of the gain is merely *having* a team)
 
 The defend-end channels do not need this test to survive it -- GoalKick and Goal score
 *identically* team-aware and team-agnostic, meaning every true positive carries the right
-side, which no coin flip can do. The shirt-colour channel does need it, and passes on the
-type it is about: ThrowIn F1 0.178 against a random maximum of 0.156 over 40 trials.
+side, which no coin flip can do. The shirt-colour channel does need it, and passes:
+**ThrowIn 0.200, p = 0.020** over 200 trials. The chained OutOfPlay team does not --
+**0.147, p = 0.26** -- which is what retracted it.
 
-Its macro margin is thin (0.274 against a random maximum of 0.274) and that is not a
-contradiction: most of the macro movement is the OutOfPlay knock-on, which benefits from
-*any* team on the throw-ins it chains off, informative or not.
+The verdict is an **empirical p-value**, `(1 + #{random >= real}) / (1 + trials)`, not a
+comparison against the trials' maximum. The maximum is a bad statistic here: it tightens
+as the trial count grows and it turns on the tail of a single seed. It cost this control
+a correct verdict once -- a channel that had just improved from 0.178 to 0.200 was marked
+"not a result" because the random maximum reached 0.222 on that run, when only 1 trial in
+40 had.
+
+The macro row stays the weakest of the three, and that is not a contradiction: most of
+the macro movement is the OutOfPlay knock-on, which benefits from *any* team on the
+throw-ins it chains off, informative or not.
 """
 import argparse, copy, json, subprocess, sys, tempfile
 from pathlib import Path
@@ -58,7 +66,8 @@ def main():
     ap.add_argument("--artifacts", required=True)
     ap.add_argument("--restart-pred", required=True, help="the teamed restart predictions")
     ap.add_argument("--type", default="FootballThrowIn", help="the type whose team is replaced")
-    ap.add_argument("--trials", type=int, default=40)
+    ap.add_argument("--trials", type=int, default=200)
+    ap.add_argument("--alpha", type=float, default=0.05)
     ap.add_argument("--seed", type=int, default=17)
     ap.add_argument("--python", default=sys.executable)
     ap.add_argument("--out", required=True)
@@ -97,17 +106,23 @@ def main():
                     e["team"] = "Own" if rng.random() < 0.5 else "Opponent"
             trials.append(run_chain(ev, art, tmp, a.python))
 
+    # empirical p-value rather than a max comparison -- see the module docstring
     for key in ("ThrowIn", "OutOfPlay", "macro"):
         v = np.array([t[key] for t in trials])
         real = doc["real"][key]
+        ge = int((v >= real).sum())
+        pval = (1 + ge) / (1 + len(v))
         doc[f"random_{key}"] = {
             "mean": round(float(v.mean()), 4), "p90": round(float(np.percentile(v, 90)), 4),
+            "p99": round(float(np.percentile(v, 99)), 4),
             "max": round(float(v.max()), 4), "real": real,
-            "trials_at_or_above_real": int((v >= real).sum()),
-            "is_a_result": bool(real > v.max())}
+            "trials_at_or_above_real": ge, "trials": len(v),
+            "p_value": round(pval, 4), "alpha": a.alpha,
+            "is_a_result": bool(pval < a.alpha)}
     doc["reading"] = (
-        "a team channel is a result only where `is_a_result` is true. The macro row is "
-        "the weakest because random teams on this type still feed the OutOfPlay chain.")
+        "a team channel is a result only where `is_a_result` is true, i.e. the empirical "
+        "p-value against randomly reassigned teams is below alpha. The macro row is the "
+        "weakest because random teams on this type still feed the OutOfPlay chain.")
     Path(a.out).write_text(json.dumps(doc, indent=1))
     print(json.dumps(doc, indent=1))
     return 0

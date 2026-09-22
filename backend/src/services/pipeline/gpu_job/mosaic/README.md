@@ -704,7 +704,7 @@ Period-2 macro (0.261) again exceeds period-1 (0.186). **KickOff is the first ty
 reach parity.** Every type that predicts team scores the same team-aware as
 team-agnostic — when these detectors find an event, they get the side right.
 
-### Reproducing steps 8-14 from the stored artifacts
+### Reproducing steps 8-15 from the stored artifacts
 
 Seconds, CPU only, no gpu-box — everything they read is already in
 `backend/.local/artifacts/mosaic/`:
@@ -746,7 +746,7 @@ $V scripts/local/score-benchmark.py --pred $A/pred_all.json --manifest $A/manife
 
 # the control every team claim must clear -- replaces the team, keeps the predictions
 $V $M/control_team_shuffle.py --artifacts $A \
-    --restart-pred $A/pred_restarts_teamed.json --out $A/control_team.json
+    --restart-pred $A/pred_restarts_teamed.json --out $A/control_team.json   # ~5 min
 ```
 
 Every script writes the **exact command that produced it** into its own output
@@ -919,3 +919,71 @@ micro-F1 **0.182**, parity 1/14, period-2 macro (0.313) again above period-1 (0.
 GoalKick and Goal score *identically* team-aware and team-agnostic — every true positive
 carries the right side, which no coin flip can do, so those need no control to survive
 one.
+
+## D-B step 15 — attribution, which was the actual constraint
+
+Step 14 left throw-in attribution at 25 of 38 and named it, not the colour, as the cap.
+Diagnosing the 13 failures settled what kind of problem it was:
+
+| why attribution failed | n |
+| :-- | --: |
+| **ball outside every player box** | **12** |
+| no ball candidate in the window at all | 1 |
+| ball inside 2+ boxes (ambiguous) | **0** |
+
+**Not one failure was ambiguity.** And of the 12, seven missed the nearest box edge by
+only **1.6–32 px**. Which is exactly what a throw-in looks like: the ball is held *above
+the head*, so it lands just outside a person box rather than inside it.
+
+### The fix, and why it is a fraction rather than a number of pixels
+
+Pad each box by a fraction of **its own height**. Players here run 13–298 px tall, so a
+fixed pixel tolerance is nothing up close and enormous at the far touchline. Swept by
+attribution and **period-1** accuracy, never by period 2:
+
+| pad | attributed | period-1 acc | period-2 (read once) | majority | balanced |
+| :-- | --: | --: | --: | --: | --: |
+| 0 (strict) | 25/38 = 0.66 | 0.70 | 0.80 | **0.80 (tie)** | 0.88 |
+| **0.10 × h (chosen)** | **30/38 = 0.79** | **0.83** | **0.83** | 0.78 | **0.89** |
+| 0.15–0.20 × h | 32/38 = 0.84 | 0.77 | 0.68 | 0.74 | 0.72 |
+| 0.30 × h | 31/38 = 0.82 | 0.67 | 0.79 | 0.74 | 0.73 |
+
+0.10 h has the best period-1 accuracy in the sweep, so it is selectable without touching
+period 2. Larger pads buy attribution and start catching the wrong player — 0.15 h adds
+two more throw-ins and loses 15 points of held-out accuracy.
+
+Held out, the channel now **clears** the majority-class baseline (0.83 against 0.78)
+where under strict containment it tied it. Teamed predictions rise 38 → 46.
+
+### And the control caught a flaw in the control
+
+With the better attribution, ThrowIn F1 went 0.178 → **0.200** — and the first control
+run marked it **not a result**, because the random maximum over 40 trials happened to
+reach 0.222. Only 1 trial in 40 did.
+
+"Must beat the best of N random trials" is a bad criterion: it tightens as N grows and it
+turns on the tail of a single seed. Replaced with the standard permutation estimate,
+`p = (1 + #{random >= real}) / (1 + trials)`, over 200 trials:
+
+| | real | random mean | random p99 | trials ≥ real | p | result |
+| :-- | --: | --: | --: | --: | --: | :-- |
+| **ThrowIn** | **0.200** | 0.112 | 0.200 | 3/200 | **0.020** | **yes** |
+| OutOfPlay (chained) | 0.147 | 0.126 | 0.178 | 51/200 | **0.259** | **no** |
+| macro | 0.278 | 0.260 | 0.281 | 4/200 | **0.025** | yes |
+
+So the improved attribution turns ThrowIn team into a result at p = 0.02, and the
+step-13 retraction is confirmed far more firmly than before — p = 0.26 is not close.
+
+### Where the benchmark stands
+
+| type | n_ref | n_pred | F1 team-agnostic | F1 team-aware | team channel |
+| :-- | --: | --: | --: | --: | :-- |
+| OutOfPlay | 64 | 127 | 0.356 | 0.147 | chained — **not a result** (p = 0.26) |
+| ThrowIn | 38 | 52 | 0.244 | **0.200** | shirt colour — **a result** (p = 0.02) |
+| GoalKick | 16 | 13 | 0.276 | **0.276** | defend-end map |
+| CornerKick | 9 | 11 | 0.100 | 0.100 | defend-end map; type **not a result** |
+| KickOff | 8 | 4 | 0.667 | **0.500** | goal-end lookback |
+| Goal | 6 | 3 | 0.444 | **0.444** | goal-end lookback |
+| **macro** | | | **0.348** | **0.278** | p = 0.025 |
+
+micro-F1 **0.188**, parity 1/14, period-2 macro **0.320** against period-1 0.243.
