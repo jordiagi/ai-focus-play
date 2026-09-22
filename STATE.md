@@ -4,12 +4,12 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-21 · by Claude Opus 5 · **PRIMARY METRIC 0.278** (p = 0.025 vs
-random teams), 6 types, 32 % of event mass; team-agnostic 0.348, micro 0.188, parity
-1/14. Throw-in team from the **thrower's shirt** is a result at **p = 0.020**; attribution
-0.66 → **0.79** by padding the player box 0.10 × its height. **Step 13's OutOfPlay team
-stays retracted — p = 0.26.** Every team claim must clear `control_team_shuffle.py`,
-which now reports a permutation p-value, not a max comparison.
+**Last updated:** 2026-09-21 · by Claude Opus 5 · **PRIMARY METRIC 0.278 as reported,
+0.253 conservative** (zeroing channels that fail their control), 6 types, 32 % of event
+mass; team-agnostic 0.348, micro 0.188, parity 1/14. Throw-in team from the thrower's
+shirt is a result at **p = 0.020**. **OutOfPlay team is not reachable — three routes
+measured dead**; its chained channel stays in, labelled, at p = 0.26. Every team claim
+must clear `control_team_shuffle.py` (permutation p-value).
 
 ---
 
@@ -48,7 +48,7 @@ read the repo. It holds roughly 25 minutes of GPU + CPU work:
 | `pitch_frame.json` | the occupancy-derived `(xi, eta)` frame | seconds |
 | `pred_restarts.json`, `score_restarts.json` | the 4 restart types and their scores | seconds |
 | `pred_goals.json`, `score_goals.json` | Goal, inferred from its kickoff | seconds |
-| `players_colour.json`, `pd_035060.json`, `players_predti.json`, `players_pre.json`, `players_ko.json`, `players_dense.json` | player boxes **with shirt colour** at event times — **gpu-box, ~10-22 s each; unreachable without it** | needs gpu-box |
+| `players_colour.json`, `pd_035060.json`, `players_predti.json`, `players_pre.json`, `players_ko.json`, `players_dense.json`, `players_oop.json` | player boxes **with shirt colour** at event times — **gpu-box; 10-35 s of GPU each but frame extraction dominates (~4 min for 960)** | needs gpu-box |
 | `ball5_frame.json` | ball candidates in **frame** coords (pulled from the box) — what lets players and ball share a space with no registration | needs gpu-box |
 | `pred_restarts_teamed.json`, `score_shirt.json` | restarts with throw-in team attached | seconds |
 | `control_team.json` | the random-team control | ~2 min |
@@ -76,60 +76,76 @@ Work is **mid-flight, not parked**. Everything below is committed and reproducib
 
 ## Recommended next step
 
-Throw-in team is done and is a result. The remaining moves, ranked:
+**The event-detection track has reached its natural limit with this ball track.** Every
+cheap channel is taken, and the two remaining ideas both reduce to the same bottleneck.
 
-1. **OutOfPlay team needs its own channel** (64 events, the largest type, currently
-   team-aware 0.147 at **p = 0.26** — i.e. nothing). The chain off restarts is exact in
-   ground truth (64/64) and worthless in practice. The thrower-shirt machinery should
-   apply directly: whoever last touched the ball put it out. That is the single biggest
-   honest gain left.
-2. **The ball track caps everything** — coverage 0.586, and all six types read it.
-   Raising it lifts detection, typing *and* teaming at once.
-3. **The remaining 8 unattributed throw-ins** are 1 with no ball candidate at all and 7
-   where the ball sits >32 px outside every box — probably false-positive candidates or
-   an undetected thrower, not a tolerance problem. Padding past 0.10 × h makes things
-   worse, not better.
-4. **CornerKick is still not a result**; **FreeKick (15) still unattempted**.
+1. **The ball track caps everything** — coverage 0.586, 5 fps. All six types read it, and
+   it is now the named cause of the biggest failure: OutOfPlay team needs the toucher of
+   a *moving* ball, which at 5 fps and ~50 px of travel per frame is not recoverable.
+   Raising coverage and frame rate lifts detection, typing **and** teaming at once. This
+   is the only thing left that moves several numbers.
+2. **OutOfPlay team is not reachable without that** — three routes measured dead
+   (below). Do not retry them.
+3. **CornerKick is still not a result**; **FreeKick (15) still unattempted** — its
+   position cloud sits inside ThrowIn's.
+4. **Jersey recognition (G7)** remains the declared-last item, with an honest ceiling of
+   ~25-40 % against Veo's 75 % and no roster available.
 
-**Do not retry, all measured dead:** throw-in team by position (~50/50 in every
-(end, period) cell), by post-throw ball direction (**17/35 = 0.486**), by nearest player
-at the throw-in instant (ball inside a box in **2 of 36**), and OutOfPlay team by
-inverting the restart chain (**p = 0.26**).
+**Do not retry — all measured dead:**
+
+| idea | result |
+| :-- | :-- |
+| throw-in team by position | ~50/50 in every (end, period) cell |
+| throw-in team by post-throw ball direction | **17/35 = 0.486**, drift medians not even ordered right |
+| thrower by nearest player at the throw-in instant | ball inside a box in **2 of 36** |
+| OutOfPlay team by chaining off restart predictions | **p = 0.26**; coin flip at every pairing window from 10-60 s |
+| OutOfPlay team by last player contact | attribution 0.94 and **still a coin flip** (p2 0.64 = majority 0.64) |
+| OutOfPlay team by the strike frame | protocol-selected cells score **below** baseline held out (0.45, 0.48) |
 
 Full record: `backend/src/services/pipeline/gpu_job/mosaic/README.md`.
 
 ---
 
-## D-B result (2026-09-21) — step 15: attribution was the constraint
+## D-B result (2026-09-21) — step 16: OutOfPlay team, three routes, all dead
 
-Diagnosing step 14's 13 unattributed throw-ins settled the kind of problem it was:
-**12 of 13 were "ball outside every player box", and not one was ambiguity.** Seven of
-those missed the nearest edge by only **1.6-32 px** — which is what a throw-in looks
-like, the ball held *above the head* landing just outside the person box.
+64 events, the largest attempted type. The rule is simple — whoever last touched the ball
+put it out — and the step-15 thrower machinery looked like it should transfer. It does
+not. 960 frames at 5 fps across [-3.2,-0.2] s before every true OutOfPlay, 24,519
+persons, 35 s of GPU.
 
-Fix: pad each box by a fraction of **its own height** (players run 13-298 px tall, so a
-fixed pixel tolerance is nothing up close and enormous at the far touchline). Swept by
-attribution and period-1 accuracy only:
+| route | attribution | period 1 | period 2 | verdict |
+| :-- | --: | --: | --: | :-- |
+| chain off our restart predictions | — | 0.54 | 0.64 | coin flip, **p = 0.26** |
+| last player contact before crossing | **0.94** | 0.70 | 0.64 | **ties** majority 0.64 |
+| player at the strike frame | 0.58 | **0.71** | **0.45** | **below** majority 0.60 |
 
-| pad | attributed | period-1 | period-2 | majority | balanced |
-| :-- | --: | --: | --: | --: | --: |
-| 0 (strict) | 0.66 | 0.70 | 0.80 | **0.80 (tie)** | 0.88 |
-| **0.10 x h (chosen)** | **0.79** | **0.83** | **0.83** | 0.78 | **0.89** |
-| 0.15-0.20 x h | 0.84 | 0.77 | 0.68 | 0.74 | 0.72 |
+The chain's ceiling with *true* restarts and *true* teams is **64/64 = 1.00**, so its
+whole loss is that the first teamed restart prediction within the window is usually not
+the restart that followed this OutOfPlay — restart precision is 0.21-0.31.
 
-0.10 h has the best period-1 accuracy in the sweep, so it is selectable without touching
-period 2, and held out the channel now **clears** the baseline it previously tied.
+Route 2 is the instructive one: attribution **0.94**, better than the throw-in's 0.79,
+and the team is a coin flip anyway. The ball is being associated to plenty of players,
+just not the right one.
 
-**The control caught a flaw in the control.** ThrowIn went 0.178 → 0.200, and the first
-run marked it *not a result* because the random maximum over 40 trials reached 0.222 —
-which only 1 trial in 40 did. "Beat the best of N trials" tightens as N grows and turns
-on one seed's tail. Replaced with a permutation p-value over 200 trials:
+**Why the throw-in worked and this cannot.** A throw-in has a **stationary ball held in
+the hands for 1-2 s** — a temporally extended, unambiguous association. An out-of-play's
+last touch is **instantaneous**: at 5 fps a struck ball moves ~50 px between frames so
+the contact frame may never be sampled, the ball passes near many players on its way out,
+and the touch is often a deflection that is ambiguous even to a human.
 
-| | real | random mean | trials >= real | p | result |
-| :-- | --: | --: | --: | --: | :-- |
-| **ThrowIn** | **0.200** | 0.112 | 3/200 | **0.020** | **yes** |
-| OutOfPlay (chained) | 0.147 | 0.126 | 51/200 | **0.259** | **no** |
-| macro | 0.278 | 0.260 | 4/200 | **0.025** | yes |
+**This machinery works where the ball is held, not where it is struck.** Anything needing
+the toucher of a moving ball needs a higher frame rate or real tracking with possession.
+
+**The headline, both ways.** The chained channel stays in the output, declared and
+labelled, as CornerKick does — but it fails its control, so:
+
+| macro-F1, team-aware | value |
+| :-- | --: |
+| as reported | **0.278** |
+| **conservative — channels failing their control zeroed** | **0.253** |
+
+**0.024 of the headline rests on a channel indistinguishable from guessing.** Quote 0.253
+where one number is wanted.
 
 ---
 
@@ -281,6 +297,7 @@ F1 at every cap) — which is the evidence it is not doing the detector's work.
 | **KickOff** | 8 | 4 | **0.667** | **0.500** |
 | **Goal** | 6 | 3 | **0.444** | **0.444** |
 | **macro** | | | **0.348** | **0.278** |
+| **macro, conservative** (channels failing their control zeroed) | | | — | **0.253** |
 
 | | start of 2026-09-20 | now |
 | :-- | --: | --: |
@@ -713,7 +730,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | B17 | Player detection with shirt colour | ☑ | `detect_players_colour.py` on gpu-box — times from a file, upper-torso Lab/HSV per box. 4 runs, ~10-22 s each |
 | B18 | **`control_team_shuffle.py`** | ☑ | **The control every team claim must clear.** Replaces the team, keeps the predictions. Exposed that random teams alone lift macro 0.229 → 0.260 |
 | B19 | Raise thrower attribution above 0.66 | ☑ | **0.66 → 0.79** by padding each box 0.10 x its own height. Diagnosis first: **12 of 13 failures were "ball outside every box", 0 were ambiguous**, 7 missed by only 1.6-32 px — the ball is held above the head. Larger pads catch the wrong player |
-| B20 | OutOfPlay team from a direct channel | ☐ | **The biggest honest gain left.** 64 events at team-aware 0.147, p = 0.26 — i.e. nothing. Apply the thrower-shirt machinery directly: whoever last touched the ball put it out |
+| B20 | OutOfPlay team from a direct channel | ✗ **three routes measured dead** | Chain off restarts **p = 0.26**; last contact attributes **0.94** and is still a coin flip; strike frame scores **below baseline** held out. Cause: the last touch is instantaneous, and at 5 fps a struck ball moves ~50 px per frame. **This machinery works where the ball is held, not struck** |
+| B21 | Raise ball-track coverage / frame rate | ☐ | **The one remaining item that moves several numbers.** Coverage 0.586 at 5 fps; now the named cause of B20's failure as well as the cap on detection and typing |
 | B12 | Reproducibility guard | ☑ | Every detector now writes the **exact command** into its own output. Added after step 8's figures proved unreproducible |
 
 ### Track 2 — UI / route parity — ☑ **COMPLETE**

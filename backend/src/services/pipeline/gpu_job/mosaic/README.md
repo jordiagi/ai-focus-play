@@ -704,7 +704,7 @@ Period-2 macro (0.261) again exceeds period-1 (0.186). **KickOff is the first ty
 reach parity.** Every type that predicts team scores the same team-aware as
 team-agnostic — when these detectors find an event, they get the side right.
 
-### Reproducing steps 8-15 from the stored artifacts
+### Reproducing steps 8-16 from the stored artifacts
 
 Seconds, CPU only, no gpu-box — everything they read is already in
 `backend/.local/artifacts/mosaic/`:
@@ -987,3 +987,92 @@ step-13 retraction is confirmed far more firmly than before — p = 0.26 is not 
 | **macro** | | | **0.348** | **0.278** | p = 0.025 |
 
 micro-F1 **0.188**, parity 1/14, period-2 macro **0.320** against period-1 0.243.
+
+## D-B step 16 — OutOfPlay team: three routes, all measured dead
+
+OutOfPlay is the largest attempted type (64 events) and the last one holding a team-aware
+score that is statistically nothing. The physical rule is simple — *whoever last touched
+the ball put it out* — and the thrower-shirt machinery from step 15 looked like it should
+transfer directly. It does not. Three routes were tried and all three fail on held-out
+data.
+
+Player detections for this: 960 frames at 5 fps across [-3.2,-0.2] s before every true
+OutOfPlay, 24,519 persons, 35 s of GPU.
+
+### Route 1 — chain off our own restart predictions
+
+The relation is **exact in the ground truth**: an OutOfPlay's side is always the opposite
+of the restart's, 64/64. Our own predictions destroy it. Sweeping the pairing window,
+scored only on OutOfPlay predictions that are true positives:
+
+| window | teamed | TPs teamed | period 1 | period 2 |
+| --: | --: | --: | --: | --: |
+| 10 s | 23 | 6 | 1/4 = 0.25 | 1/2 = 0.50 |
+| 15 s | 39 | 10 | 4/7 = 0.57 | 2/3 = 0.67 |
+| 30 s | 67 | 18 | 5/9 = 0.56 | 6/9 = 0.67 |
+| 60 s | 97 | 24 | 7/13 = 0.54 | 7/11 = 0.64 |
+| **ceiling, true restarts and true teams** | | | | **64/64 = 1.00** |
+
+A coin flip at every window. The ceiling is 1.00, so the entire loss is that *the first
+teamed restart prediction within the window is usually not the restart that followed this
+OutOfPlay* — restart precision is 0.21–0.31, so the pairing is mostly noise. Tightening
+the window to the median 17 s gap does not help; it just teams fewer.
+
+### Route 2 — the last player contact before the ball crosses
+
+Scan backwards for the latest frame where the ball sits inside exactly one padded box:
+
+| rule | attributed | period 1 | period 2 | majority |
+| :-- | --: | --: | --: | --: |
+| last contact, pad 0.20 h | 60/64 = 0.94 | **0.70** | 0.64 | **0.64 (tie)** |
+| confidence-weighted vote, pad 0.10 h | 57/64 = 0.89 | 0.69 | 0.65 | 0.65 (tie) |
+
+Attribution is *high* — 0.94, far better than the throw-in's 0.79 — and the team is a
+coin flip anyway. That combination is the tell: the ball is being associated to plenty of
+players, just not the right one.
+
+### Route 3 — the player at the strike frame
+
+The physically correct cue: find the frame of largest ball acceleration in the window —
+the kick that sent it out — and take the nearest player. Selected on period-1 accuracy,
+as the protocol requires:
+
+| pad, max distance | attributed | period 1 | period 2 | majority |
+| :-- | --: | --: | --: | --: |
+| **0.00 h, 1.0 h (best period-1)** | 0.58 | **0.71** | **0.45** | 0.60 |
+| **0.10 h, 0.6 h (best period-1)** | 0.59 | **0.71** | **0.48** | 0.67 |
+| 0.00 h, 0.3 h | 0.36 | 0.64 | 0.75 | 0.67 |
+| 0.10 h, 1.0 h | 0.62 | 0.67 | 0.73 | 0.64 |
+
+The two cells the protocol selects score **below their majority baseline** on held-out
+data. Two other cells look good on period 2 — and they are only identifiable as good in
+hindsight, which is exactly what the period split exists to stop.
+
+### Why the throw-in worked and this cannot
+
+**The throw-in has a stationary ball held in a player's hands for one to two seconds** —
+a temporally extended, unambiguous association, which is why containment works there and
+why padding the box by 0.10 h was enough to lift attribution to 0.79.
+
+An out-of-play's last touch is **instantaneous**. At 5 fps a struck ball moves ~50 px
+between frames, so the contact frame may not be sampled at all; on its way out the ball
+passes near many players, which is why route 2 attributes 94 % of events to *somebody*;
+and the last touch is often a deflection, ambiguous even to a human annotator.
+
+**The lesson generalises past this type: this machinery works where the ball is held, not
+where it is struck.** Anything needing the toucher of a moving ball needs either a much
+higher frame rate or real multi-object tracking with possession — not this.
+
+### What this means for the headline
+
+The chained OutOfPlay team channel stays in the output, declared and labelled, exactly as
+CornerKick does. But it fails its control at **p = 0.26**, so the conservative reading of
+the primary metric zeroes it:
+
+| macro-F1, team-aware | value |
+| :-- | --: |
+| as reported | **0.278** |
+| **with every channel that fails its control zeroed** | **0.253** |
+
+**0.024 of the headline rests on a channel indistinguishable from guessing.** Quote the
+conservative number where one number is wanted.
