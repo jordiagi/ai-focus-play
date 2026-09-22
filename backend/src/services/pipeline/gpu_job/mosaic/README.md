@@ -704,7 +704,7 @@ Period-2 macro (0.261) again exceeds period-1 (0.186). **KickOff is the first ty
 reach parity.** Every type that predicts team scores the same team-aware as
 team-agnostic — when these detectors find an event, they get the side right.
 
-### Reproducing steps 8-13 from the stored artifacts
+### Reproducing steps 8-14 from the stored artifacts
 
 Seconds, CPU only, no gpu-box — everything they read is already in
 `backend/.local/artifacts/mosaic/`:
@@ -723,20 +723,30 @@ $V $M/detect_restarts.py --track $A/ball_track.json --candidates $A/ball5_pano.j
     --frame $A/pitch_frame.json --pred $A/pred_restarts.json \
     --manifest $A/manifest_restarts.json --out $A/score_restarts.json
 
+# throw-in team from the thrower's shirt (step 14). The player artifacts are already
+# pulled, so this needs no gpu-box; regenerating them does (detect_players_colour.py).
+$V $M/team_from_shirt.py --players $A/pd_035060.json $A/players_predti.json \
+    --ball-frame $A/ball5_frame.json --restart-pred $A/pred_restarts.json \
+    --out-pred $A/pred_restarts_teamed.json --out $A/score_shirt.json --emit-team
+
 $V $M/detect_out_of_play.py --track $A/ball_track.json \
-    --restart-pred $A/pred_restarts.json \
+    --restart-pred $A/pred_restarts_teamed.json \
     --pred $A/pred_oop.json --manifest $A/manifest_oop.json --out $A/score_oop.json
 
-$V $M/detect_goals.py --restart-pred $A/pred_restarts.json --frame $A/pitch_frame.json \
+$V $M/detect_goals.py --restart-pred $A/pred_restarts_teamed.json --frame $A/pitch_frame.json \
     --pred $A/pred_goals.json --manifest $A/manifest_goals.json --out $A/score_goals.json
 
 $V $M/merge_predictions.py \
-    --pred $A/pred_oop.json $A/pred_restarts.json $A/pred_goals.json \
+    --pred $A/pred_oop.json $A/pred_restarts_teamed.json $A/pred_goals.json \
     --manifest $A/manifest_oop.json $A/manifest_restarts.json $A/manifest_goals.json \
     --out-pred $A/pred_all.json --out-manifest $A/manifest_all.json
 
-# independent confirmation, and the repo's current headline over all 5 types
+# independent confirmation, and the repo's current headline over all 6 types
 $V scripts/local/score-benchmark.py --pred $A/pred_all.json --manifest $A/manifest_all.json
+
+# the control every team claim must clear -- replaces the team, keeps the predictions
+$V $M/control_team_shuffle.py --artifacts $A \
+    --restart-pred $A/pred_restarts_teamed.json --out $A/control_team.json
 ```
 
 Every script writes the **exact command that produced it** into its own output
@@ -808,3 +818,104 @@ open, but `sshd` answers with
 which is an interactive re-auth no agent can complete. Same blocker as 2026-09-20, same
 fix. Until it clears, the possession work cannot start — it is not a design question any
 more, just access.
+
+## D-B step 14 — throw-in team from the thrower's shirt, and the control that nearly killed it
+
+gpu-box came back, so the possession question could finally be asked. Throw-in team is
+the one thing the defend-end map cannot reach, and both cheap cues were already dead
+(position ~50/50 in every cell, direction 17/35). What it needs is *who is holding the
+ball*, which for a throw-in is a much smaller question than possession in general.
+
+### Finding the thrower
+
+| rule | attributed |
+| :-- | --: |
+| nearest player **at the throw-in instant** | useless — ball inside a box in **2 of 36** |
+| ball inside **exactly one** box, any 5 fps step in [-2.6,-0.4] s | **25 of 38 = 0.66** |
+
+At the instant Veo timestamps, the ball is already in flight, and the second-nearest
+player is a median **24 px** further than the nearest (which is 60 px away) — so
+"nearest" is a toss-up in over half of cases. Before the throw the ball is *in the
+taker's hands*, which makes containment a clean test rather than a distance threshold.
+The ball is detectable there: a candidate exists in [-2.5,-0.5] s at **37 of 38**
+throw-ins, though at lower confidence (0.44 against 0.74 after the throw).
+
+### A bug found by looking, not by reasoning
+
+The first shirt band, 0.15–0.45 of box height, **sits on head and shoulders.** Cropping
+the boxes and viewing them showed the sampled swatches were grass and hair. Sweeping the
+band separates the class medians far better —
+
+| band | Own L median | Opponent L median |
+| :-- | --: | --: |
+| 0.15–0.45 (original) | 97 | 143 |
+| 0.35–0.60 (used) | **84** | **177** |
+
+— and changes held-out accuracy **not at all**. So the band was never the binding
+constraint. Attribution rate and sample size are. Worth keeping: the visual check was
+right that the descriptor was wrong, and wrong that it was what mattered.
+
+### The number that does not flatter it
+
+Threshold and polarity fitted on period 1:
+
+| | n | correct | accuracy | majority baseline | balanced |
+| :-- | --: | --: | --: | --: | --: |
+| period 1 (fitted) | 10 | 7 | 0.70 | 0.60 | 0.75 |
+| **period 2 (held out)** | 15 | 12 | **0.80** | **0.80** | **0.88** |
+
+Held out it **ties its majority-class baseline** — because the attributable subsample is
+12 Own to 3 Opponent while all 38 throw-ins are roughly even. Balanced accuracy 0.88
+against 0.50 says the colour is informative (every one of the 3 Opponents correct); n=15
+says it cannot be demonstrated that way.
+
+### The control that decides it — and the perverse incentive it exposes
+
+**The team-aware metric rewards guessing over abstaining.** A prediction with no team
+scores 0 team-aware; a prediction with a *coin-flip* team is right about half the time.
+Assigning random teams to the throw-ins lifts macro from 0.229 to 0.260 while containing
+no information at all. So "the primary metric went up" is worthless on its own as
+evidence, and `control_team_shuffle.py` now exists to replace the team and keep
+everything else:
+
+| team on ThrowIn | ThrowIn F1 | OutOfPlay F1 | macro |
+| :-- | --: | --: | --: |
+| **shirt colour (shipped)** | **0.178** | 0.147 | **0.274** |
+| always Own | 0.133 | 0.147 | 0.267 |
+| always Opponent | 0.067 | 0.105 | 0.249 |
+| coin flip, 40 trials — mean | 0.105 | 0.132 | 0.260 |
+| coin flip — **max** | **0.156** | **0.168** | **0.274** |
+| no team at all | 0.000 | 0.052 | 0.229 |
+
+Two verdicts, and one of them is a retraction:
+
+* **ThrowIn team is a result.** 0.178 against a random maximum of 0.156, with **0 of 40**
+  trials reaching it.
+* **OutOfPlay team by chaining (step 13) is NOT a result.** 0.147 against a random
+  maximum of 0.168, with **12 of 40** trials at or above it. The underlying relation is
+  still exact (64/64), but our own restart type-and-team predictions are wrong often
+  enough that inverting them adds nothing over a coin flip. It is kept and emitted, and
+  labelled not a result — the same treatment CornerKick gets.
+
+The macro row is the weakest of the three (0.274 against a random max of 0.274) and that
+is not a contradiction: most of the macro movement is the OutOfPlay knock-on, which
+benefits from *any* team on the throw-ins it chains off.
+
+**Every future team claim must clear this control, not zero.**
+
+### Where the benchmark stands
+
+| type | n_ref | n_pred | F1 team-agnostic | F1 team-aware | team channel |
+| :-- | --: | --: | --: | --: | :-- |
+| OutOfPlay | 64 | 127 | 0.356 | 0.147 | chained — **not a result** |
+| ThrowIn | 38 | 52 | 0.244 | **0.178** | shirt colour — a result |
+| GoalKick | 16 | 13 | 0.276 | **0.276** | defend-end map |
+| CornerKick | 9 | 11 | 0.100 | 0.100 | defend-end map; type **not a result** |
+| KickOff | 8 | 4 | 0.667 | **0.500** | goal-end lookback |
+| Goal | 6 | 3 | 0.444 | **0.444** | goal-end lookback |
+| **macro** | | | **0.348** | **0.274** | |
+
+micro-F1 **0.182**, parity 1/14, period-2 macro (0.313) again above period-1 (0.243).
+GoalKick and Goal score *identically* team-aware and team-agnostic — every true positive
+carries the right side, which no coin flip can do, so those need no control to survive
+one.

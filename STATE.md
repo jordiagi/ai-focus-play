@@ -4,12 +4,13 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-21 · by Claude Opus 5 · **PRIMARY METRIC 0.000 → 0.229, FIRST
-TYPE AT PARITY.** Team-aware macro-F1 **0.229** over 6 types covering 32 % of event mass;
-team-agnostic 0.348; **parity count 1/14** (KickOff, F1 0.500). Held-out macro (0.269)
-beats dev (0.196). **⊘ BLOCKED on gpu-box: Tailscale SSH needs interactive re-auth** —
-everything cheap is done; the remaining work needs possession, which needs that box.
-**Step 8's originally published figures did not reproduce and have been restated.**
+**Last updated:** 2026-09-21 · by Claude Opus 5 · **PRIMARY METRIC 0.274**, 6 types,
+32 % of event mass; team-agnostic 0.348, micro 0.182, parity 1/14. Throw-in team now
+comes from the **thrower's shirt colour** and clears a random-team control (0 of 40).
+**RETRACTION: step 13's OutOfPlay team is NOT a result** — a coin flip matches it (12 of
+40). **The team-aware metric rewards guessing over abstaining — every team claim must
+clear `control_team_shuffle.py`, not zero.** Step 8's original figures did not reproduce
+and have been restated.
 
 ---
 
@@ -20,7 +21,7 @@ everything cheap is done; the remaining work needs possession, which needs that 
    `context.md` (environment + traps) and `PLAN.md` (roadmap).
 2. `bash scripts/local/verify.sh all` must print **`pass=9 fail=0 skip=0`**. If it does
    not, fix that before new work.
-2b. **Re-run before you extend.** Run the README's "Reproducing steps 8-12" block and
+2b. **Re-run before you extend.** Run the README's "Reproducing steps 8-14" block and
    check the figures come back. Step 8's originally published numbers did *not*, and that
    was found only by accident — see the incident log. Every score doc now carries the
    `command` that produced it; if a figure's `command` does not match how you ran it, the
@@ -48,6 +49,10 @@ read the repo. It holds roughly 25 minutes of GPU + CPU work:
 | `pitch_frame.json` | the occupancy-derived `(xi, eta)` frame | seconds |
 | `pred_restarts.json`, `score_restarts.json` | the 4 restart types and their scores | seconds |
 | `pred_goals.json`, `score_goals.json` | Goal, inferred from its kickoff | seconds |
+| `players_colour.json`, `pd_035060.json`, `players_predti.json`, `players_pre.json`, `players_ko.json`, `players_dense.json` | player boxes **with shirt colour** at event times — **gpu-box, ~10-22 s each; unreachable without it** | needs gpu-box |
+| `ball5_frame.json` | ball candidates in **frame** coords (pulled from the box) — what lets players and ball share a space with no registration | needs gpu-box |
+| `pred_restarts_teamed.json`, `score_shirt.json` | restarts with throw-in team attached | seconds |
+| `control_team.json` | the random-team control | ~2 min |
 | `pred_all.json`, `manifest_all.json`, `score_all.json` | all 6 types pooled — the repo's current headline | seconds |
 
 Cheap to regenerate from these: the 80 anchor frames (`f1280`, one ffmpeg pass at the
@@ -72,36 +77,92 @@ Work is **mid-flight, not parked**. Everything below is committed and reproducib
 
 ## Recommended next step
 
-**⊘ Blocked, and the block is access, not design.** Everything reachable without new
-compute has been taken. What is left is **possession** — who touched the ball last —
-which is the only thing that can team ThrowIn (38) and OutOfPlay (64), the two types
-holding 102 of the 141 attempted events at 0 or near-0 team-aware.
+The cheap channels are exhausted and the expensive one has been opened. What is left,
+ranked:
 
-To unblock, a human must visit the Tailscale auth URL that `ssh root@gpu-box` prints:
+1. **Attribution, not colour, is what caps throw-in team.** 25 of 38 throw-ins get a
+   thrower (0.66); the other 13 have no frame where the ball sits inside exactly one
+   box. Denser sampling already took this from 0.45 to 0.66 — a tracker that holds the
+   ball while it is *held* would take it further. **The shirt band is NOT the
+   constraint** (sweeping it moved the class medians 97/143 → 84/177 and held-out
+   accuracy not at all).
+2. **OutOfPlay team needs its own channel, not the chain.** The chain is exact in ground
+   truth (64/64) and worthless in practice (a coin flip matches it). The same
+   thrower-shirt machinery should work directly: whoever last touched the ball put it
+   out.
+3. **The ball track still caps everything** — coverage 0.586, and all six types read it.
+4. **CornerKick is still not a result** (F1 0.100 = the random control's best trial).
+5. **FreeKick (15) is still declared unattempted.**
 
-```
-ssh root@gpu-box          # prints: To authenticate, visit https://login.tailscale.com/a/...
-bash scripts/remote/doctor.sh   # must exit 0 before any GPU work
-```
-
-Then the possession build, in the order its gates should be measured:
-
-1. **Player boxes at the event times.** `detect_players.py` already exists; it needs
-   re-running at the ~100 restart/OutOfPlay times rather than the 600 sampled in-play
-   frames. The boxes were never pulled locally — only the derived occupancy points.
-2. **Shirt colour → team.** *Separability is already confirmed by eye, not assumed:*
-   white against dark navy on uniform green turf. Cluster into two, map cluster → Own
-   with **one bit fitted on period 1**, exactly as step 11 did for the defend-end map.
-3. **Nearest player to the ball at a restart = the taker.** This is the assumption to
-   test before building on it.
-4. Then ThrowIn team, and OutOfPlay team directly rather than through the thin chain.
-
-**Two cues are already measured and dead — do not retry them:** throw-in team by
-position (~50/50 in every (end, period) cell) and by post-throw ball direction
-(**17/35 = 0.486**, a coin flip, with the two drift distributions not even ordered the
-right way round).
+**Do not retry, all measured dead:** throw-in team by position (~50/50 in every
+(end, period) cell), by post-throw ball direction (**17/35 = 0.486**), or by nearest
+player at the throw-in instant (ball inside a box in **2 of 36**; second-nearest a median
+24 px further than the nearest).
 
 Full record: `backend/src/services/pipeline/gpu_job/mosaic/README.md`.
+
+---
+
+## ⚠ The metric rewards guessing — read before quoting any team number
+
+A prediction with **no** team scores 0 on the team-aware side. A prediction with a
+**coin-flip** team is right about half the time. So assigning random teams to the
+throw-ins lifts macro from **0.229 to 0.260** while containing no information at all.
+
+**"The primary metric went up" is therefore not evidence.** Every team channel must be
+scored against `control_team_shuffle.py`, which replaces the team and keeps everything
+else:
+
+| team on ThrowIn | ThrowIn F1 | OutOfPlay F1 | macro |
+| :-- | --: | --: | --: |
+| **shirt colour (shipped)** | **0.178** | 0.147 | **0.274** |
+| always Own | 0.133 | 0.147 | 0.267 |
+| always Opponent | 0.067 | 0.105 | 0.249 |
+| coin flip, 40 trials — mean | 0.105 | 0.132 | 0.260 |
+| coin flip — **max** | **0.156** | **0.168** | **0.274** |
+| no team at all | 0.000 | 0.052 | 0.229 |
+
+* **ThrowIn team is a result** — 0 of 40 random trials reach 0.178.
+* **OutOfPlay team (step 13) is NOT** — 12 of 40 reach 0.147. Retracted as a result,
+  still emitted and labelled, exactly as CornerKick is.
+* GoalKick and Goal need no control to survive one: they score **identically** team-aware
+  and team-agnostic, so every true positive carries the right side, which no coin flip
+  can do.
+
+---
+
+## D-B result (2026-09-21) — step 14: throw-in team from the thrower's shirt
+
+gpu-box came back (Tailscale re-auth), so possession could finally be asked about.
+
+**Finding the thrower.** At the instant Veo timestamps, the ball is already in flight —
+it falls inside a player box in **2 of 36**, and the second-nearest player is a median
+24 px further than the nearest, so "nearest" is a toss-up. *Before* the throw the ball is
+in the taker's hands: requiring it inside **exactly one** box at any 5 fps step in
+[-2.6,-0.4] s attributes **25 of 38 (0.66)**. The ball is detectable there — present at
+37 of 38 throw-ins, at lower confidence (0.44 vs 0.74 after).
+
+**Reading the shirt.** Kits are white against dark navy. Own throwers land at L median
+**84**, Opponent at **177**. Threshold and polarity fitted on period 1.
+
+| | n | correct | accuracy | majority baseline | balanced |
+| :-- | --: | --: | --: | --: | --: |
+| period 1 (fitted) | 10 | 7 | 0.70 | 0.60 | 0.75 |
+| **period 2 (held out)** | 15 | 12 | **0.80** | **0.80** | **0.88** |
+
+It **ties its majority-class baseline** held out, because the attributable subsample is
+12 Own to 3 Opponent while all 38 throw-ins are roughly even. Balanced accuracy 0.88 vs
+0.50 says the colour is informative; n=15 says it cannot be shown that way. The
+benchmark-level control above is what settles it.
+
+**A bug found by looking.** The first shirt band (0.15-0.45 of box height) sits on head
+and shoulders — cropping the boxes and viewing them showed the swatches were grass and
+hair. Sweeping it improved the class medians (97/143 → 84/177) and held-out accuracy
+**not at all**, so the visual check was right that the descriptor was wrong and wrong
+about it mattering.
+
+**Where it lands:** ThrowIn team-aware **0.000 → 0.178**, macro **0.229 → 0.274**, micro
+**0.085 → 0.182**.
 
 ---
 
@@ -118,6 +179,12 @@ OutOfPlay predictions get teamed, 8 of those are also true positives, and the te
 right on **6 of 8**. A relation perfect in the ground truth degrades to what our own
 restart predictions are worth. **OutOfPlay team-aware 0.000 → 0.052**, macro 0.220 →
 **0.229**, micro 0.057 → **0.085**.
+
+> **⚠ RETRACTED as a result (step 14).** Scored against a random-team control this
+> channel is indistinguishable from guessing — 12 of 40 coin-flip trials match or beat
+> it. The 64/64 ground-truth relation is still exact; our own restart type-and-team
+> predictions are simply wrong often enough that inverting them adds nothing. It is
+> still emitted, and labelled, exactly as CornerKick is.
 
 **Dead end 1 — throw-in direction.** The obvious cue (the taker keeps the ball, so it
 drifts toward the end they attack) is a **coin flip: 17/35 = 0.486**, and the drift
@@ -174,20 +241,20 @@ F1 at every cap) — which is the evidence it is not doing the detector's work.
 
 | type | n_ref | n_pred | F1 agnostic | F1 team-aware |
 | :-- | --: | --: | --: | --: |
-| OutOfPlay | 64 | 127 | 0.356 | 0.052 |
-| ThrowIn | 38 | 52 | 0.244 | 0.000 |
+| OutOfPlay | 64 | 127 | 0.356 | 0.147 |
+| ThrowIn | 38 | 52 | 0.244 | 0.178 |
 | GoalKick | 16 | 13 | 0.276 | **0.276** |
 | CornerKick | 9 | 11 | 0.100 | 0.100 |
 | **KickOff** | 8 | 4 | **0.667** | **0.500** |
 | **Goal** | 6 | 3 | **0.444** | **0.444** |
-| **macro** | | | **0.348** | **0.229** |
+| **macro** | | | **0.348** | **0.274** |
 
 | | start of 2026-09-20 | now |
 | :-- | --: | --: |
 | types attempted | 1 | **6** |
 | event mass | 14 % | **32 %** |
 | macro-F1 team-agnostic | 0.338 | **0.348** |
-| **macro-F1 team-aware (primary)** | **0.000** | **0.229** |
+| **macro-F1 team-aware (primary)** | **0.000** | **0.274** |
 | **parity count (F1 >= 0.5)** | **0/14** | **1/14** |
 
 Period-2 macro (0.261) again beats period-1 (0.186). **Every type that predicts team
@@ -532,7 +599,7 @@ the few-second scale of the 64 `FootballOutOfPlay` events. Not a result.
 
 | Blocker | Impact | Who clears it |
 | :-- | :-- | :-- |
-| **Tailscale SSH to gpu-box expired AGAIN (2026-09-21)** | **⊘ HARD BLOCK on all remaining work.** Possession — the only route to ThrowIn (38) and OutOfPlay (64) team, i.e. 102 of 141 attempted events — needs player detection, and there is no `torch`/`ultralytics` locally. Box pings at 17 ms with port 22 open; `sshd` answers `Tailscale SSH requires an additional check. To authenticate, visit https://login.tailscale.com/a/...` | **A human**, in a browser. Run `ssh root@gpu-box`, open the URL it prints, then `bash scripts/remote/doctor.sh` must exit 0 |
+| ~~Tailscale SSH to gpu-box expired AGAIN (2026-09-21)~~ | **CLEARED same day** by a human opening the auth URL. `doctor.sh` exits 0; `/workspace` survived (video sha256 `ef7552326b0ab24e`, ball5 output intact). **This expires repeatedly — budget for it.** Fix: run `ssh root@gpu-box`, open the URL it prints | done |
 | ~~Tailscale SSH to gpu-box expired~~ (2026-09-20) | Cleared that day; recurred. **This expires repeatedly — budget for it** | see above |
 | Veo Bearer token is ephemeral (~minutes) | Only matters if ground truth needs re-capturing; it does not right now | Re-run the capture procedure in `PLAN.md` |
 
@@ -581,7 +648,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | G0 | Rebuild `benchmarks/veo_reference.json`; fix `scripts/config.env` time base; decode Veo's x/z convention | ☑ | `c38d62f`. Coords decoded: x=length, z=width, absolute. Centre spot lands 2 m off ideal — Veo's own bias, recorded not corrected |
 | G1 | **Measure ball-detection rate** — the go/no-go gate | ☑ | **Both halves measured.** tiled 0.833 / 0.828 — **gate passes**. full-frame 0.677 / 0.716 — fails one half. Caveat below: this is candidate presence, not correctness |
 | G2 | Pitch calibration | ⏸ **STOPPED** | Three approaches measured and failed (1854 m → 10-15 m → 88-110 m). Cause is structural, not tuning: all pretrained models are broadcast-trained and each of our frames shows too little pitch. Parked as **D-A** in `specs/deferred.md` |
-| G3 | Tier A detectors (7 types) | ◐ | **6 of 14 types scored via D-B** (OutOfPlay + 4 restarts + Goal), 32 % of event mass. Macro-F1 **0.348 team-agnostic / 0.229 team-aware**, parity 1/14 |
+| G3 | Tier A detectors (7 types) | ◐ | **6 of 14 types scored via D-B** (OutOfPlay + 4 restarts + Goal), 32 % of event mass. Macro-F1 **0.348 team-agnostic / 0.274 team-aware**, micro 0.182, parity 1/14 |
 | G4 | Possession HMM → Tier B (4 types + Pass count) | ⏸ | Conditional on G1 gate |
 | G5 | Scoring harness (macro-F1, chance baseline, parity count, period split) | ☑ | Built and validated on 4 cases: refuses without manifest; empty→honest zeros; perfect→1.0; **random detector scores BELOW its chance baseline** |
 | G6 | Ingest artifacts → `analysis_mode="ml"` | ⏸ | `ml_ingest.py` does not exist yet |
@@ -608,9 +675,11 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | B11 | Team for KickOff (8) | ☑ | Solved by the goal-end lookback, not by drift: the kickoff after a goal is taken by the side that conceded. **6/6 on true times**; the 2 period-opening kickoffs are emitted unteamed |
 | B13 | **FootballGoal from its kickoff** | ☑ | **F1 0.444 (held-out 0.500), team-aware = team-agnostic.** Offset 38.13 s fitted on period 1. `detect_goals.py`. Low-n: 6 events, 3 predictions |
 | B14 | **Prediction budget** | ☑ | Smallest K with period-1 F1 within 5 % of unconstrained. Lifts OutOfPlay held-out F1 0.383 → **0.467** and its chance-lift 6.7x → **9.1x**; **no-op on the restart detector** |
-| B15 | Team for OutOfPlay (64), by chaining | ☑ partial | Restart team inverted — **exact 64/64 in ground truth**, but only 41/127 predictions get teamed and 6/8 of the scoreable ones are right. **Team-aware 0.000 → 0.052** |
-| B16 | Team for ThrowIn (38) | ⊘ **blocked** | Position ~50/50 **and** post-throw direction **17/35 = 0.486** — both measured dead. Needs possession → player team assignment → gpu-box |
-| B17 | Player team assignment by shirt colour | ⊘ **blocked on gpu-box** | **Separability confirmed by eye: white vs dark navy on uniform green.** Needs `detect_players.py` re-run at event times + 2-cluster colour + one bit fitted on period 1 |
+| B15 | Team for OutOfPlay (64), by chaining | ☑ emitted, **NOT a result** | Relation exact 64/64 in ground truth, but **a coin flip matches it** (12/40 trials ≥ 0.147). Retracted as a result; still emitted and labelled |
+| B16 | **Team for ThrowIn (38), from the thrower's shirt** | ☑ | **0.000 → 0.178, clears the random-team control 0/40.** Attribution 25/38; held-out colour accuracy 0.80 (ties its skewed baseline, balanced 0.88) |
+| B17 | Player detection with shirt colour | ☑ | `detect_players_colour.py` on gpu-box — times from a file, upper-torso Lab/HSV per box. 4 runs, ~10-22 s each |
+| B18 | **`control_team_shuffle.py`** | ☑ | **The control every team claim must clear.** Replaces the team, keeps the predictions. Exposed that random teams alone lift macro 0.229 → 0.260 |
+| B19 | Raise thrower attribution above 0.66 | ☐ | 13 of 38 throw-ins have no frame with the ball inside exactly one box. **This, not colour, is the cap** — band sweeps changed held-out accuracy not at all |
 | B12 | Reproducibility guard | ☑ | Every detector now writes the **exact command** into its own output. Added after step 8's figures proved unreproducible |
 
 ### Track 2 — UI / route parity — ☑ **COMPLETE**
