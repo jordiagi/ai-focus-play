@@ -134,7 +134,10 @@ class PlayerRoster(BaseModel):
     is_starter: bool = True
     is_captain: bool = False
     is_player_of_match: bool = False
-    minutes_played: int = 90
+    # No minutes-played measurement exists: there is no player tracking across
+    # time and no possession model. A default of 90 claimed every player
+    # played the full match. None renders as an em-dash.
+    minutes_played: Optional[int] = None
 
 class EventCapability(BaseModel):
     status: Literal["detected", "not_attempted", "unavailable"]
@@ -184,7 +187,9 @@ class Match(BaseModel):
     video_url: str
     panoramic_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
-    views_count: int = 1
+    # Nothing increments this -- there is no view tracking. It is not a view
+    # counter, so it must not render as one.
+    views_count: int = 0
     lineup: List[PlayerRoster] = []
     journal_notes: str = ""
     analysis_mode: str = "heuristic"         # "demo" | "heuristic" | "ml"

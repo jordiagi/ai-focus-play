@@ -92,7 +92,23 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
       : { status: 'not_attempted' as const };
   };
 
-  const renderStatValue = (val: number | string | null | undefined, suffix = '') => {
+  // A row named in the backend's `unavailable` map renders as an em-dash carrying the
+  // measured reason, WHATEVER numeric value the field holds. Several stat fields are
+  // non-Optional server-side and default to a plausible number -- possession_percent
+  // defaults to 50.0, and an ML match carries a real detection count in `goals` that
+  // is NOT a scoreline -- so the value alone cannot express "never measured".
+  const renderStatValue = (
+    val: number | string | null | undefined,
+    suffix = '',
+    reason?: string,
+  ) => {
+    if (reason) {
+      return (
+        <span className="text-gray-500 font-bold cursor-help" title={reason}>
+          —
+        </span>
+      );
+    }
     if (val === null || val === undefined) {
       return (
         <span 
@@ -385,19 +401,19 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                       <span className="text-[#2979FF] truncate max-w-[100px]">{match.away_team}</span>
                     </div>
                     {[
-                      { label: 'Goal', h: analytics.home_stats.goals, a: analytics.away_stats.goals, eventTypes: ['Goal'] },
-                      { label: 'Shot', h: analytics.home_stats.shots, a: analytics.away_stats.shots, eventTypes: ['Shot'] },
-                      { label: 'Total attempts', h: analytics.home_stats.attempts, a: analytics.away_stats.attempts, eventTypes: ['Shot', 'Shot on goal'] },
-                      { label: 'Corner', h: analytics.home_stats.corners, a: analytics.away_stats.corners, eventTypes: ['Corner'] },
-                      { label: 'Foul', h: analytics.home_stats.fouls, a: analytics.away_stats.fouls, eventTypes: ['Foul'] },
-                      { label: 'Free kick', h: analytics.home_stats.free_kicks, a: analytics.away_stats.free_kicks, eventTypes: ['Free kick'] },
-                      { label: 'Passes completed', h: analytics.home_stats.passes_completed, a: analytics.away_stats.passes_completed, derived: true, eventTypes: [] },
-                      { label: 'Penalty', h: analytics.home_stats.penalties, a: analytics.away_stats.penalties, eventTypes: ['Penalty'] },
-                      { label: 'Possession %', h: analytics.home_stats.possession_percent, a: analytics.away_stats.possession_percent, derived: true, suffix: '%', eventTypes: [] },
-                      { label: 'Possession minutes', h: analytics.home_stats.possession_minutes, a: analytics.away_stats.possession_minutes, eventTypes: [] },
-                      { label: 'Possession won', h: analytics.home_stats.possession_won, a: analytics.away_stats.possession_won, derived: true, eventTypes: [] },
-                      { label: 'Tackle', h: analytics.home_stats.tackles, a: analytics.away_stats.tackles, eventTypes: ['Tackle'] },
-                      { label: 'Throw-in', h: analytics.home_stats.throw_ins, a: analytics.away_stats.throw_ins, eventTypes: ['Throw-in'] },
+                      { label: 'Goal', statKey: 'goals', h: analytics.home_stats.goals, a: analytics.away_stats.goals, eventTypes: ['Goal'] },
+                      { label: 'Shot', statKey: 'shots', h: analytics.home_stats.shots, a: analytics.away_stats.shots, eventTypes: ['Shot'] },
+                      { label: 'Total attempts', statKey: 'attempts', h: analytics.home_stats.attempts, a: analytics.away_stats.attempts, eventTypes: ['Shot', 'Shot on goal'] },
+                      { label: 'Corner', statKey: 'corners', h: analytics.home_stats.corners, a: analytics.away_stats.corners, eventTypes: ['Corner'] },
+                      { label: 'Foul', statKey: 'fouls', h: analytics.home_stats.fouls, a: analytics.away_stats.fouls, eventTypes: ['Foul'] },
+                      { label: 'Free kick', statKey: 'free_kicks', h: analytics.home_stats.free_kicks, a: analytics.away_stats.free_kicks, eventTypes: ['Free kick'] },
+                      { label: 'Passes completed', statKey: 'passes_completed', h: analytics.home_stats.passes_completed, a: analytics.away_stats.passes_completed, derived: true, eventTypes: [] },
+                      { label: 'Penalty', statKey: 'penalties', h: analytics.home_stats.penalties, a: analytics.away_stats.penalties, eventTypes: ['Penalty'] },
+                      { label: 'Possession %', statKey: 'possession_percent', h: analytics.home_stats.possession_percent, a: analytics.away_stats.possession_percent, derived: true, suffix: '%', eventTypes: [] },
+                      { label: 'Possession minutes', statKey: 'possession_minutes', h: analytics.home_stats.possession_minutes, a: analytics.away_stats.possession_minutes, eventTypes: [] },
+                      { label: 'Possession won', statKey: 'possession_won', h: analytics.home_stats.possession_won, a: analytics.away_stats.possession_won, derived: true, eventTypes: [] },
+                      { label: 'Tackle', statKey: 'tackles', h: analytics.home_stats.tackles, a: analytics.away_stats.tackles, eventTypes: ['Tackle'] },
+                      { label: 'Throw-in', statKey: 'throw_ins', h: analytics.home_stats.throw_ins, a: analytics.away_stats.throw_ins, eventTypes: ['Throw-in'] },
                     ].map((r, i) => (
                       <button
                         type="button"
@@ -406,9 +422,9 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                         onClick={() => seekToFirstEventOfType(r.eventTypes)}
                         className="w-full flex items-center justify-between py-1 border-b border-[#1a1e28] disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        <div className="w-12 text-left">{renderStatValue(r.h, r.suffix)}</div>
+                        <div className="w-12 text-left">{renderStatValue(r.h, r.suffix, analytics.unavailable?.[r.statKey])}</div>
                         <span className="text-gray-400 text-[11px]">{r.label}</span>
-                        <div className="w-12 text-right">{renderStatValue(r.a, r.suffix)}</div>
+                        <div className="w-12 text-right">{renderStatValue(r.a, r.suffix, analytics.unavailable?.[r.statKey])}</div>
                       </button>
                     ))}
                   </div>
@@ -604,7 +620,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                     </span>
                     <div>
                       <div className="text-xs font-bold text-white">{player.name}</div>
-                      <div className="text-[10px] text-gray-400">{player.position} • {player.minutes_played} mins played</div>
+                      <div className="text-[10px] text-gray-400">{player.position} • {player.minutes_played == null ? '\u2014' : player.minutes_played} mins played</div>
                     </div>
                   </div>
                   <span className="text-[10px] text-[#00E676] font-semibold bg-[#00E676]/10 px-2 py-0.5 rounded">

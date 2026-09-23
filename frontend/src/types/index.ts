@@ -121,6 +121,15 @@ export interface AnalyticsData {
     home: any[];
     away: any[];
   };
+  /** Which pipeline produced these numbers: "heuristic" or "ml". */
+  provenance?: string;
+  /**
+   * stat-row key -> the measured reason that row is not available. A row named here
+   * must render as an em-dash with its reason, WHATEVER numeric value the matching
+   * TeamStats field carries: several are non-Optional server-side and default to a
+   * plausible number, so the value alone cannot express "never measured".
+   */
+  unavailable?: Record<string, string>;
 }
 
 export interface PlayerRoster {
@@ -130,7 +139,8 @@ export interface PlayerRoster {
   is_starter: boolean;
   is_captain?: boolean;
   is_player_of_match?: boolean;
-  minutes_played: number;
+  /** null when never measured -- no player-time tracking exists. */
+  minutes_played: number | null;
 }
 
 export type EventCapabilityStatus = 'detected' | 'not_attempted' | 'unavailable';

@@ -627,7 +627,7 @@ class MatchRepository:
                 video_url="/media/demo_match.mp4",
                 panoramic_url="/media/demo_match.mp4",
                 thumbnail_url="/media/demo_thumb.jpg",
-                views_count=95,
+                views_count=0,
                 journal_notes="Great high-press organization in the first half. Focus on transitional recovery when attacking wings overextend.",
                 analysis_mode="demo",
                 analysis_confidence="low",
@@ -666,7 +666,7 @@ class MatchRepository:
                     is_starter=starter,
                     is_captain=capt,
                     is_player_of_match=motm,
-                    minutes_played=90 if starter else 25
+                    minutes_played=None
                 ))
 
             # Highlights

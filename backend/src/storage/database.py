@@ -45,7 +45,7 @@ class MatchDB(Base):
     video_url = Column(String, nullable=False)
     panoramic_url = Column(String, nullable=True)
     thumbnail_url = Column(String, nullable=True)
-    views_count = Column(Integer, default=95)
+    views_count = Column(Integer, default=0)
     journal_notes = Column(Text, default="")
     analysis_mode = Column(String, default="heuristic")       # "demo" | "heuristic" | "ml"
     analysis_confidence = Column(String, default="low")       # "low" | "medium" | "high"
@@ -134,7 +134,7 @@ class LineupPlayerDB(Base):
     is_starter = Column(Boolean, default=True)
     is_captain = Column(Boolean, default=False)
     is_player_of_match = Column(Boolean, default=False)
-    minutes_played = Column(Integer, default=90)
+    minutes_played = Column(Integer, nullable=True, default=None)
 
     match = relationship("MatchDB", back_populates="lineup")
 

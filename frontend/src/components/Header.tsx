@@ -98,9 +98,11 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <div className="text-[11px] text-[#8e8e8e] flex items-center space-x-1.5 leading-none mt-0.5">
-            <span>{currentMatch?.date || 'Sep 13, 2026'}</span>
+            <span>{currentMatch?.date || '\u2014'}</span>
             <span>-</span>
-            <span>{currentMatch?.views_count || 95} views</span>
+            {/* Nothing increments views_count -- there is no view tracking. Showing a
+                number here (or falling back to a literal 95) would invent a metric. */}
+            <span title="View tracking is not implemented">&mdash; views</span>
           </div>
         </div>
       </div>
