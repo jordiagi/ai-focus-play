@@ -10,6 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from backend.src.config import CORS_ORIGINS, MEDIA_DIR, READ_ONLY
 from backend.src.api.guards import ReadOnlyAPIMiddleware
 from backend.src.api.routes.matches import router as matches_router
+from backend.src.api.routes.comments import router as comments_router
 from backend.src.services.pipeline.video_processor import VideoProcessor
 
 logging.basicConfig(
@@ -66,6 +67,7 @@ app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
 
 # Include API routes
 app.include_router(matches_router)
+app.include_router(comments_router)
 
 @app.get("/api/capabilities")
 def get_capabilities():

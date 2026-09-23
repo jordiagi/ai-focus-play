@@ -17,10 +17,16 @@ What it will not do, and why each refusal matters:
   (52.5, 34.0) -- the centre spot -- so ingesting without a position would have silently
   claimed every event happened on the centre spot. They are now optional and this writes
   `None`.
-* **No analytics.** Possession, shot map and team stats come from the demo/heuristic
-  engine. Leaving them beside ML events would present one pipeline's numbers as the
-  other's, so any existing analytics row is **dropped**, and the stats tab serves 404
-  rather than the wrong provenance. Tier B (G4) is what would fill it honestly.
+* **ML-provenance analytics, not dropped analytics.** This used to drop any existing
+  analytics row outright, on the reasoning that leaving the demo/heuristic engine's
+  possession, shot map and team stats beside freshly ingested ML events would present
+  one pipeline's numbers as the other's. That reasoning was right but the fix overshot:
+  it served a 404 instead of an honest answer. `ml_analytics.py` now builds an
+  `AnalyticsData` with `provenance="ml"` instead -- every row a detector's own control
+  actually cleared becomes a real per-team count (today: `goals`, `throw_ins`), and
+  every other row is named in its `unavailable` map with the measured reason, rather
+  than reused from the other pipeline or silently dropped. Tier B (G4) is what would
+  turn more of those rows into counts.
 * **No team where team is not a result.** Types whose team channel fails its own random
   control are ingested with the team omitted rather than guessed; the metric rewards
   guessing over abstaining, and this must not take that bait.
@@ -71,16 +77,30 @@ DEMO_MATCH_ID = "demo-arlington-skyline"
 # ingested without a team rather than with a guessed one.
 TEAM_NOT_A_RESULT = {"FootballOutOfPlay"}
 
-# Why each label the ML pipeline does not deliver is missing. Measured reasons only.
+# Why each label the ML pipeline does not deliver is missing. Measured reasons only --
+# these three (Shot, Free kick, Foul) WERE attempted today (commit 070ba47) and failed
+# measurably; see score_shots.json / score_setpieces.json. Do not revert these to
+# "not attempted" -- that would be false, not merely stale.
 UNAVAILABLE = {
-    "Free kick": "not attempted: its position cloud sits inside Throw-in's with no "
-                 "separating cue (D-B step 10)",
-    "Shot": "not attempted: needs shot direction toward a goal mouth, which needs the "
-            "metric calibration D-A failed to obtain",
-    "Shot on goal": "not attempted: requires shot detection plus an on-target test, "
-                    "neither of which exists",
-    "Save": "not attempted: requires shot detection first",
-    "Foul": "not attempted: no cue measured; whistle audio is not analysed",
+    "Shot": "attempted (detect_shots.py, 070ba47): no metric calibration needed -- it "
+            "used the existing pixel-space goal-end geometry (B10) instead. Failed "
+            "held out: period 2 F1 0.120, below S1 (needs >= 0.25); 1.80x matched-K "
+            "chance (chance mean 0.067), below S2's >= 2.0x; and 0.120 does not beat "
+            "the OutOfPlay-proxy control's 0.149, failing S3. Verdict FAIL "
+            "(score_shots.json).",
+    "Free kick": "attempted (detect_setpieces.py, ball-stays-inside-the-pitch cue, "
+                 "070ba47, not position). Failed held out: period 2 F1 0.000 (0 of 10 "
+                 "matched), 0.0x matched-K chance (chance mean 0.016), and ties the "
+                 "OutOfPlay-proxy control at 0.000. Verdict FAIL (score_setpieces.json).",
+    "Shot on goal": "requires shot detection plus an on-target test; shot detection "
+                    "was attempted and failed (see Shot), so this is undetectable on "
+                    "today's evidence, not merely untried",
+    "Save": "requires shot detection first; shot detection was attempted and failed "
+            "(see Shot), so saves render as not detected rather than as untried",
+    "Foul": "attempted (detect_setpieces.py, same stoppage cue as Free kick, 070ba47): "
+            "period 2 held out F1 0.143 (1 of 4 predictions correct). Not gated -- "
+            "PLAN.md records the whistle as unrecoverable so onset timing cannot be "
+            "verified -- published for the record as measured (score_setpieces.json).",
     "Tackle": "not attempted: Tier B, needs possession (G4, deferred)",
     "Interception": "not attempted: Tier B, needs possession (G4, deferred)",
     "Dribble": "not attempted: Tier B, needs possession (G4, deferred)",
@@ -172,7 +192,9 @@ def main():
         "per_label": {k: v.count for k, v in caps.items() if v.status == "detected"},
         "events_without_team": unteamed,
         "positions": "none -- no metric calibration exists, pitch_x/pitch_y are null",
-        "analytics": "dropped -- demo/heuristic numbers must not sit beside ML events",
+        "analytics": "built with provenance='ml' (backend/src/services/pipeline/"
+                     "ml_analytics.py); counted rows and unavailable reasons are "
+                     "recorded below rather than dropping the row",
         "team_convention": "Veo 'Own' -> app 'home'; a convention, not a measurement",
         "team_withheld_for": sorted(TEAM_NOT_A_RESULT),
         "capabilities": {k: v.model_dump() for k, v in caps.items()},
@@ -195,7 +217,9 @@ def main():
             print(f"REFUSING: no match {a.match_id!r} in the database", file=sys.stderr)
             return 2
         repo.set_events(a.match_id, events)
-        dropped = repo.clear_analytics(a.match_id)
+        from backend.src.services.pipeline.ml_analytics import build_ml_analytics
+        analytics = build_ml_analytics(pred, manifest, score)
+        repo.set_analytics(a.match_id, analytics)
         match.analysis_mode = "ml"
         # "medium" not "high": 6 of 14 types, 32 % of event mass, precision 0.21-1.00
         match.analysis_confidence = "medium"
@@ -225,9 +249,17 @@ def main():
             if cap.status == "detected" and cap.count != counts.get(label, 0):
                 problems.append(f"capability {label!r} claims {cap.count} but "
                                 f"{counts.get(label, 0)} events are stored")
+        back_analytics = repo.get_analytics(a.match_id)
+        if back_analytics is None:
+            problems.append("analytics row came back None -- it should have been "
+                             "written with provenance='ml', not dropped")
+        elif back_analytics.provenance != "ml":
+            problems.append(f"analytics provenance came back "
+                             f"{back_analytics.provenance!r}, not 'ml'")
         report["verified"] = not problems
         report["problems"] = problems
-        report["analytics_row_dropped"] = dropped
+        report["analytics_provenance"] = getattr(back_analytics, "provenance", None)
+        report["analytics_unavailable_rows"] = sorted((back_analytics or analytics).unavailable)
         report["written"] = True
         if problems:
             print("INGEST VERIFICATION FAILED:\n  " + "\n  ".join(problems),

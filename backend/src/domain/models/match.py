@@ -117,6 +117,15 @@ class AnalyticsData(BaseModel):
         default_factory=lambda: {"home": [], "away": []})
     heatmaps: Dict[str, List[Dict[str, Any]]] = Field(
         default_factory=lambda: {"home": [], "away": []})
+    # Which pipeline produced these numbers. Mixing the heuristic engine's possession
+    # with the ML pipeline's events would present one's figures as the other's.
+    provenance: str = "heuristic"  # "heuristic" | "ml"
+    # stat-row key -> the measured reason that row is not available. A row named here
+    # is rendered as an em-dash with its reason, whatever numeric value the field
+    # happens to carry -- several stat fields are non-Optional and default to a
+    # plausible-looking number (possession_percent defaults to 50.0), so the value
+    # alone cannot express "never measured". This map is what expresses it.
+    unavailable: Dict[str, str] = Field(default_factory=dict)
 
 class PlayerRoster(BaseModel):
     jersey: str
