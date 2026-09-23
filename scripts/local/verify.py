@@ -513,6 +513,58 @@ def d11_ml_ingest_honesty():
                     f"{len(stored)} labels reconcile with stored rows")
 
 
+def d12_no_invented_defaults():
+    """Catches: an invented literal moved from the producer into the Pydantic field
+    DEFAULT itself. d10 only ever runs the real engine, which passes every one of
+    these fields explicitly -- it would never see a fabricated default. This probe
+    constructs AnalyticsData with only the two required stats args, in a fresh
+    subprocess (so no earlier probe's import of the module can hide a stale
+    definition), and inspects the model's own defaults, not engine output.
+
+    Also catches the shared-mutable-default bug: a class-level dict/list literal used
+    as a Pydantic default is shared across every instance unless default_factory is
+    used, so a write through one instance leaks into a fresh one."""
+    code = (
+        "import json,copy;"
+        "from backend.src.domain.models.match import AnalyticsData, TeamStats;"
+        "a=AnalyticsData(home_stats=TeamStats(), away_stats=TeamStats());"
+        "b=AnalyticsData(home_stats=TeamStats(), away_stats=TeamStats());"
+        "out=copy.deepcopy({'pass_strings':a.pass_strings,'pass_locations':a.pass_locations,"
+        "'possession_locations':a.possession_locations,'heatmaps':a.heatmaps});"
+        "a.pass_strings['home'].append(99);"
+        "out['leak']=b.pass_strings['home'];"
+        "print(json.dumps(out))"
+    )
+    r = subprocess.run([VENV, "-c", code], cwd=REPO,
+                       env={**os.environ, "PYTHONPATH": REPO},
+                       capture_output=True, text=True, timeout=60)
+    if r.returncode != 0:
+        return "FAIL", f"probe script raised: {r.stderr.strip()[-300:]}"
+    try:
+        out = json.loads(r.stdout.strip().splitlines()[-1])
+    except Exception as e:
+        return "FAIL", f"could not parse probe output: {e}; stdout={r.stdout!r}"
+
+    bad = []
+    if out.get("pass_strings") != {"home": [], "away": []}:
+        bad.append(f"pass_strings default is {out.get('pass_strings')!r}, not empty")
+    if out.get("pass_locations") != {"home": {}, "away": {}}:
+        bad.append(f"pass_locations default is {out.get('pass_locations')!r}, not empty")
+    if out.get("possession_locations") != {"home": {}, "away": {}}:
+        bad.append(f"possession_locations default is {out.get('possession_locations')!r}, not empty")
+    if out.get("heatmaps") != {"home": [], "away": []}:
+        bad.append(f"heatmaps default is {out.get('heatmaps')!r}, not empty")
+    for field in ("pass_strings", "pass_locations", "possession_locations", "heatmaps"):
+        val = out.get(field)
+        if val is not None and any(ch.isdigit() and ch != "0" for ch in json.dumps(val)):
+            bad.append(f"{field} default {val!r} contains a numeric literal")
+    if out.get("leak"):
+        bad.append(f"mutating one instance's pass_strings leaked into a fresh instance: {out.get('leak')}")
+
+    return ("PASS", "all four defaults are empty, no numeric literal, no shared-object leak") \
+        if not bad else ("FAIL", "; ".join(bad))
+
+
 PROBES = {
     "d1": ("read-only enforcement", d1_read_only),
     "d2": ("CV determinism", d2_determinism),
@@ -524,6 +576,7 @@ PROBES = {
     "d8": ("invented shot outcome", d8_saved_outcome),
     "d10": ("invented analytics literals", d10_no_invented_analytics),
     "d11": ("ml ingest honesty", d11_ml_ingest_honesty),
+    "d12": ("invented analytics defaults", d12_no_invented_defaults),
 }
 
 def main():

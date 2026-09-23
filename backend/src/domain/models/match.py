@@ -105,22 +105,18 @@ class AnalyticsData(BaseModel):
     home_stats: TeamStats
     away_stats: TeamStats
     shot_map: List[ShotRecord] = []
-    pass_locations: Dict[str, Dict[str, float]] = {
-        "home": {"defensive": 20.0, "middle": 55.0, "attacking": 25.0},
-        "away": {"defensive": 15.0, "middle": 50.0, "attacking": 35.0}
-    }
-    possession_locations: Dict[str, Dict[str, float]] = {
-        "home": {"defensive": 25.0, "middle": 50.0, "attacking": 25.0},
-        "away": {"defensive": 20.0, "middle": 52.0, "attacking": 28.0}
-    }
-    pass_strings: Dict[str, List[int]] = {
-        "home": [18, 12, 8, 4, 3, 2, 1, 0],
-        "away": [24, 16, 11, 7, 4, 3, 2, 1]
-    }
-    heatmaps: Dict[str, List[Dict[str, Any]]] = {
-        "home": [],
-        "away": []
-    }
+    # Honest defaults: the empty shape, not an invented number. A detector/seed that
+    # has a real value passes it explicitly (cv_engine.py and repository.py both do).
+    # default_factory so each instance gets its own dict/list -- the previous class-level
+    # literals were mutable containers shared across every AnalyticsData instance.
+    pass_locations: Dict[str, Dict[str, float]] = Field(
+        default_factory=lambda: {"home": {}, "away": {}})
+    possession_locations: Dict[str, Dict[str, float]] = Field(
+        default_factory=lambda: {"home": {}, "away": {}})
+    pass_strings: Dict[str, List[int]] = Field(
+        default_factory=lambda: {"home": [], "away": []})
+    heatmaps: Dict[str, List[Dict[str, Any]]] = Field(
+        default_factory=lambda: {"home": [], "away": []})
 
 class PlayerRoster(BaseModel):
     jersey: str
