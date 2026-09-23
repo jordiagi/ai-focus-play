@@ -25,7 +25,7 @@ or above the measured gate (>=100 RANSAC inliers) are kept.
 Veo's own (x, z) pitch coordinate is recorded alongside each point, so a later step can
 try direct correspondences if the region mask is not enough.
 """
-import argparse, csv, json, math, subprocess
+import argparse, sys, csv, json, math, subprocess
 from pathlib import Path
 
 import numpy as np
@@ -149,6 +149,7 @@ def main():
                     "inliers": n_in, "veo_x": ex, "veo_z": ez})
 
     doc = {"job": "D-A step 3c: play region from Veo events",
+            "command": " ".join(sys.argv),
            "events_tried": tried, "events_located": kept,
            "located_frac": round(kept / max(tried, 1), 3),
            "canvas": [Cw, Ch]}

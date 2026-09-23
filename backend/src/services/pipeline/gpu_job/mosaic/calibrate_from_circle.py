@@ -28,7 +28,7 @@ against synthetic ground truth rather than by staring at the output:
 Reports the same honest metric as `../pitch/score_alignment.py`: the fraction of
 projected model line landing on a detected line pixel.
 """
-import argparse, json, math
+import argparse, sys, json, math
 from pathlib import Path
 
 import numpy as np
@@ -320,6 +320,7 @@ def main():
 
     doc = {
         "job": "D-A step 3b: centre-circle-anchored pitch calibration",
+        "command": " ".join(sys.argv),
         "params": {"alpha_rad": round(float(p[0]), 5), "beta_rad": round(float(p[1]), 5),
                    "camera_height_m": round(float(p[2]), 3),
                    "gamma_rad": round(float(p[3]), 5),

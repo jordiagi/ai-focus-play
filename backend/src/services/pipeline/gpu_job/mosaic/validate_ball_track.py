@@ -22,7 +22,7 @@ Two refinements over the first pass:
 The control is the same track sampled at arbitrary times: if being near the centre spot
 at kickoff is not much better than being near it in general, the track knows nothing.
 """
-import argparse, csv, json, math
+import argparse, sys, csv, json, math
 from pathlib import Path
 
 import numpy as np
@@ -70,6 +70,7 @@ def main():
     ctrl = np.hypot(U - CX, V - CY)
     doc = {
         "job": "D-B step 7: ball track vs the centre spot at kickoff",
+        "command": " ".join(sys.argv),
         "why_not_the_obvious_test": (
             "correlating track azimuth with Veo's x against the camera's aim compares "
             "two outputs of Veo's own tracker -- contaminated, and every selector lost "

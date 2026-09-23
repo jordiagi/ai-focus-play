@@ -24,7 +24,7 @@ single frame of this footage provides it.
 
 Exit codes: 0 built, 4 too few frames survived matching.
 """
-import argparse, json, math, subprocess
+import argparse, sys, json, math, subprocess
 from pathlib import Path
 
 
@@ -249,6 +249,7 @@ def main():
 
     doc = {
         "job": "D-A step 2: rotating-camera panorama",
+        "command": " ".join(sys.argv),
         "warp": a.warp,
         "frames_offered": len(idxs), "frames_matched": len(imgs),
         "focal_seeded_per_frame": seeded, "source_width": a.width if a.video else G["width"],

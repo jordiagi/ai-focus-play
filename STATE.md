@@ -15,6 +15,74 @@ real. Primary metric **0.278 reported / 0.253 conservative**, 32 % of mass. Base
 
 ---
 
+## What this system can and cannot do — the closing summary
+
+Audited 2026-09-23 by deleting every derived artifact and rebuilding from the README's
+reproduce block. The ball track came back **byte-identical** (sha `1ced4109f521208f`) and
+**every** headline, per-type, gate and control figure below reproduced exactly, p-values
+included. Nothing here is quoted from memory.
+
+### It detects six of Veo's fourteen event types, 141 of 447 events (32 % of mass)
+
+| type | n_ref | n_pred | F1 team-agnostic | F1 team-aware | team channel |
+| :-- | --: | --: | --: | --: | :-- |
+| OutOfPlay | 64 | 127 | 0.356 | 0.147 | chained — **not a result** (p = 0.26) |
+| ThrowIn | 38 | 52 | 0.244 | **0.200** | thrower's shirt — a result (p = 0.020) |
+| GoalKick | 16 | 13 | 0.276 | **0.276** | defend-end map |
+| CornerKick | 9 | 11 | 0.100 | 0.100 | defend-end map; type **not a result** |
+| KickOff | 8 | 4 | **0.667** | **0.500** | goal-end lookback |
+| Goal | 6 | 3 | 0.444 | **0.444** | goal-end lookback |
+| **macro** | | | **0.348** | **0.278** | |
+
+**Quote 0.253, not 0.278**, if one number is wanted: that is the macro with every channel
+that fails its own control zeroed. Micro-F1 is **0.188** — much lower than macro, because
+macro over attempted types rewards doing well on small ones, and the two best (KickOff 8,
+Goal 6) are low-n. Held-out period 2 (macro 0.320) beats dev period 1 (0.243) throughout.
+One type reaches parity (F1 >= 0.5). Results land in the app as `analysis_mode="ml"` with
+a 16-label capability surface that names a measured reason for each type it does not do.
+
+### It does all of that with no metric calibration at all
+
+Five attempts failed (ball correspondences 1854 m then 10-15 m, PnLCalib 88-110 m, 8-D
+ray search, centre-circle anchor), and the reason is structural: inverting 14,607 player
+points onto the fitted ground plane gives a **105.8 x 104.5 m box — a square**, where a
+pitch is ~1.5:1. Everything above is therefore computed in **panorama pixels**, and no
+event carries a position.
+
+### What it cannot do, each closed by a measurement rather than by giving up
+
+| closed | evidence |
+| :-- | :-- |
+| **Tier B — 241 events, 54 % of mass** (interception, tackle, dribble, loose ball) | Needs who-has-the-ball in open play. Pre-registered 15 fps gate **failed**: attribution rose 0.94 → 0.98, accuracy stayed at chance, shirt **AUC 0.503** at a *larger* median box (86 px) than where the same descriptor works (66 px). A 2-D box has no depth, so containment cannot separate "at the feet" from "flying over" |
+| **OutOfPlay team** | Three routes: chaining (p = 0.26), last contact (attribution 0.94, still chance), strike frame (below baseline held out) |
+| **Metric positions / radar / speeds in m/s** | D-A, five measured failures; the ground plane inverts to a square |
+| **Camera motion as an event signal (D-0)** | Falsified against its own pre-registered criteria; the kickoff detector scored 0/8 |
+| **Better numbers from a better ball track (B21)** | Falsified: coverage 0.586 → 0.802 drops macro 0.348 → 0.252, because step 8's detector is built on the coverage *collapse* |
+| **FreeKick** | Not attempted: its position cloud sits inside ThrowIn's with no separating cue |
+| **Jersey / player identity (G7)** | Not attempted. No roster exists, so it is open-set with abstention (~25-40 % honest ceiling) or Veo-label leakage that must be declared |
+
+### What it would take to go further
+
+Not tuning. Tier B needs **depth or genuine multi-object tracking with a contact model**;
+metric work needs a calibration model **trained on this footage** rather than broadcast TV.
+Both are different projects, and the measurements above are what say so.
+
+### What the process produced that outlasts the numbers
+
+- **Every detector records the exact command that produced it.** Two results in this repo
+  once could not be reproduced from their own record (step 8's figures; the ball track's
+  `--ball-frame` flag, worth 0.10 of coverage). Both were caught by re-running, not by
+  reading.
+- **The team-aware metric rewards guessing over abstaining** — random teams alone lift
+  macro 0.229 → 0.260. `control_team_shuffle.py` is the permutation test every team claim
+  must clear, and it retracted one that had already been shipped.
+- **`d11`** guards the ingest against inventing positions, modes or counts;
+  negative-tested like `d10`.
+- Baseline: **`verify.sh all` → `pass=10 fail=0 skip=0`**, **36 pytest tests**, frontend
+  builds clean.
+
+---
+
 ## Resume in 60 seconds
 
 1. Read this file, then **`backend/src/services/pipeline/gpu_job/mosaic/README.md`** —

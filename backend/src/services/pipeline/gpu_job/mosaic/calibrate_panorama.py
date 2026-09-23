@@ -39,7 +39,7 @@ Honest scoring: the headline number is the fraction of projected model line that
 on a real detected line pixel. That is the same metric `../pitch/score_alignment.py`
 used, so the result is directly comparable with PnLCalib's 0.29 median / 26% well-aligned.
 """
-import argparse, json, math
+import argparse, sys, json, math
 from pathlib import Path
 
 import numpy as np
@@ -401,6 +401,7 @@ def main():
     al, be, h, ga, tx, ty, L, W = p
     doc = {
         "job": "D-A step 3: ray-space pitch calibration of the panorama",
+        "command": " ".join(sys.argv),
         "params": {"alpha_rad": round(float(al), 5), "beta_rad": round(float(be), 5),
                    "camera_height_m": round(float(h), 3),
                    "gamma_rad": round(float(ga), 5),

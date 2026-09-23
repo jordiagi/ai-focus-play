@@ -10,7 +10,7 @@ without one and the attempted set is the whole point of it.
 Absent is not the same as wrong: the harness matches per (type, team), so a type with no
 team simply scores 0 on the team-aware side, which is the honest outcome.
 """
-import argparse, json
+import argparse, json, sys
 from pathlib import Path
 
 KEEP = ("video_s", "event_type", "team", "period")
@@ -42,6 +42,7 @@ def main():
     Path(a.out_pred).write_text(json.dumps(
         {"events": sorted(events, key=lambda e: e["video_s"])}, indent=1))
     Path(a.out_manifest).write_text(json.dumps({
+        "command": " ".join(sys.argv),
         "attempted": sorted(attempted),
         "tuned_on": tuned.pop() if len(tuned) == 1 else "mixed: " + ", ".join(sorted(tuned)),
         "not_attempted": not_attempted,

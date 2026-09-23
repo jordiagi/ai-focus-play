@@ -24,7 +24,7 @@ The occupancy map is reported, not thresholded into a polygon here. Turning it i
 zones is the next step and deserves its own measurement -- the repo has been burned
 before by treating coverage as if it were accuracy.
 """
-import argparse, json, math, subprocess
+import argparse, sys, json, math, subprocess
 from pathlib import Path
 
 import numpy as np
@@ -163,6 +163,7 @@ def main():
     dens = cv2.GaussianBlur(acc, (0, 0), a.sigma)
     doc = {
         "job": "D-B step 2: player occupancy in panorama space",
+        "command": " ".join(sys.argv),
         "frames_with_detections": len(frames),
         "frames_registered": reg_ok, "frames_tried": reg_try,
         "registered_frac": round(reg_ok / max(reg_try, 1), 3),

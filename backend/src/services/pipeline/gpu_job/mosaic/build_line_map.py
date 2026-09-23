@@ -17,7 +17,7 @@ different frames, and the accumulation over 80 frames fills in what any one fram
 misses. The geometry is unchanged -- same cameras, same warper, same canvas -- so the
 result is registered pixel-for-pixel with the RGB panorama.
 """
-import argparse, json, math
+import argparse, sys, json, math
 from pathlib import Path
 
 import numpy as np
@@ -100,6 +100,7 @@ def main():
     mean = np.clip(mean, 0, 1)
     cv2.imwrite(a.out_image, (mean * 255).astype(np.uint8))
     doc = {"job": "D-A step 3a: warped line-response map",
+           "command": " ".join(sys.argv),
            "frames_used": used, "canvas": [Cw, Ch],
            "covered_frac": round(float((cov >= a.min_cover).mean()), 3),
            "median_cover": int(np.median(cov[cov > 0])) if (cov > 0).any() else 0,

@@ -23,7 +23,7 @@ while players move through it, so the median composites away the players and lea
 line markings. That is exactly the input a pitch-calibration model wants, and it is the
 thing no single frame of this footage provides.
 """
-import argparse, heapq, json, math
+import argparse, sys, heapq, json, math
 from pathlib import Path
 
 
@@ -147,7 +147,8 @@ def main():
 
     r_init = residuals_from(Href)
 
-    report = {"job": "D-A step 1: global mosaic", "frames_total": n,
+    report = {"job": "D-A step 1: global mosaic",
+               "command": " ".join(sys.argv), "frames_total": n,
               "component_frames": len(keep), "edges_used": len(edges),
               "reference_frame_index": ref, "reference_time_s": times[ref],
               "reference_degree": deg[ref],

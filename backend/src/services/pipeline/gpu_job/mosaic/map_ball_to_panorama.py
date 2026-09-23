@@ -22,7 +22,7 @@ features once.
 Every candidate is carried through with its confidence and apparent size. Nothing here
 decides which candidate is the ball.
 """
-import argparse, json, math, subprocess
+import argparse, sys, json, math, subprocess
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -186,6 +186,7 @@ def main():
     reg = sum(1 for r in results if r["reg"] >= a.min_inliers)
     ncand = sum(len(r["c"]) for r in results)
     doc = {"job": "D-B step 5: ball candidates in panorama space",
+           "command": " ".join(sys.argv),
            "fps": fps, "frames_with_candidates": len(jobs),
            "frames_registered": reg,
            "registered_frac": round(reg / max(len(jobs), 1), 4),

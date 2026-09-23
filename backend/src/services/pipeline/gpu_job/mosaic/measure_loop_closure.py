@@ -28,7 +28,7 @@ an ungated homography is garbage (36-52 px round trip) and would fake a failure 
 Also reports graph connectivity, which decides whether one mosaic can cover the whole
 match or whether it fragments into disjoint view clusters.
 """
-import argparse, itertools, json, math, random, subprocess, statistics as st
+import argparse, sys, itertools, json, math, random, subprocess, statistics as st
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -181,6 +181,7 @@ def main():
     med = st.median(errs) if errs else None
     doc = {
         "job": "D-A step 0: loop-closure consistency of the planar model",
+        "command": " ".join(sys.argv),
         "frames": n, "span_s": [a.t0, a.t1], "step_s": a.step,
         "width": a.width, "min_inliers_gate": a.min_inliers,
         "pairs_tested": len(jobs), "edges_gated": len(H) // 2,

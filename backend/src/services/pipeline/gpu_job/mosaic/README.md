@@ -704,7 +704,7 @@ Period-2 macro (0.261) again exceeds period-1 (0.186). **KickOff is the first ty
 reach parity.** Every type that predicts team scores the same team-aware as
 team-agnostic — when these detectors find an event, they get the side right.
 
-### Reproducing steps 8-17 from the stored artifacts
+### Reproducing steps 8-18 from the stored artifacts
 
 Seconds, CPU only, no gpu-box — everything they read is already in
 `backend/.local/artifacts/mosaic/`:
@@ -753,7 +753,25 @@ $V scripts/local/score-benchmark.py --pred $A/pred_all.json --manifest $A/manife
 # the control every team claim must clear -- replaces the team, keeps the predictions
 $V $M/control_team_shuffle.py --artifacts $A \
     --restart-pred $A/pred_restarts_teamed.json --out $A/control_team.json   # ~5 min
+
+# the pre-registered gate that closed Tier B (needs the 15 fps artifacts, already pulled)
+$V $M/gate_association_fps.py --players $A/players15_oop.json \
+    --ball-frame $A/ball15_oop.json --fps-label 15 --out $A/gate_fps15.json
 ```
+
+**Audited end to end on 2026-09-23**: every derived artifact deleted, the block re-run,
+and the ball track came back **byte-identical** (sha `1ced4109f521208f`) with every
+headline, per-type, gate and control figure matching what is written here — p-values to
+four decimals. Two caveats for whoever repeats it:
+
+* Artifacts produced *before* the command-recording guard (`panorama.json`,
+  `line_map.json`, `occupancy.json`, `zones.json`, `loop_closure.json`, the `calibration_*`
+  and `pose_*` files) carry no `command` field. Their producing scripts now write one, so
+  the gap closes on any regeneration. A missing `command` there means "predates the
+  guard", not "untrustworthy".
+* **There are two files named `detect_restarts.py`.** `mosaic/detect_restarts.py` is the
+  live detector; `camera/detect_restarts.py` belongs to **D-0, which was falsified** and
+  says so in its first line. Check the directory before running one.
 
 Every script writes the **exact command that produced it** into its own output
 (`command`). That exists because step 8's original figures could not be reproduced

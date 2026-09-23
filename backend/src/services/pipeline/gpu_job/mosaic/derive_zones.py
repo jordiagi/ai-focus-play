@@ -18,7 +18,7 @@ that bound the playing surface, so the test is: what fraction of the polygon's b
 lands on a detected line pixel -- scored against the fraction a random boundary of the
 same length would achieve. A ratio near 1 means the polygon is an arbitrary blob.
 """
-import argparse, json, math
+import argparse, sys, json, math
 from pathlib import Path
 
 import numpy as np
@@ -87,6 +87,7 @@ def main():
             best = (on / max(chance, 1e-9), q, c, reg)
 
     doc = {"job": "D-B step 3: derived pitch region in panorama pixel space",
+            "command": " ".join(sys.argv),
            "player_points": int(len(pts)), "canvas": [Cw, Ch],
            "near_px": a.near_px, "sweep": rows,
            "why_pixels_not_metres": (

@@ -24,7 +24,7 @@ Fitting alpha, beta, gamma, tx, ty, L, W to 171 azimuth observations with h fixe
 heavily overdetermined, and the residual is reported in degrees so it can be read
 against the camera's own tracking lag.
 """
-import argparse, json, math
+import argparse, sys, json, math
 from pathlib import Path
 
 import numpy as np
@@ -99,6 +99,7 @@ def main():
     res = np.degrees(wrap(model_az(p) - th_obs))
     doc = {
         "job": "D-A step 3d: pose from Veo event azimuths",
+        "command": " ".join(sys.argv),
         "n_events": len(pts), "camera_height_m_fixed": round(h, 3),
         "params": {"alpha_rad": round(AL, 5), "beta_rad": round(BE, 5),
                    "gamma_rad": round(float(p[0]), 5),
