@@ -4,12 +4,12 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-22 · by Claude Opus 5 · **`analysis_mode="ml"` IS NOW REAL** —
-G6 ingests the 6 scored types (210 predictions) into the app with an honest 16-label
-capability surface. Primary metric **0.278 as reported, 0.253 conservative**, 32 % of
-event mass. Baseline is now **`pass=10 fail=0 skip=0`, 36 pytest tests, frontend builds**
-(new probe **d11**, negative-tested). Throw-in team is a result at p = 0.020; OutOfPlay
-team is not reachable (three routes dead).
+**Last updated:** 2026-09-22 · by Claude Opus 5 · **B21 FALSIFIED — more ball-track
+coverage makes the benchmark WORSE** (macro 0.348 → 0.264 → 0.252 as coverage goes 0.586
+→ 0.700 → 0.802), exactly as step 8 predicted in writing. The detectors are tuned to this
+track *including its weaknesses*. `analysis_mode="ml"` is real (G6). Primary metric
+**0.278 reported / 0.253 conservative**, 32 % of event mass. Baseline **`pass=10 fail=0
+skip=0`, 36 pytest tests**. ⚠ gpu-box Tailscale auth expired again.
 
 ---
 
@@ -77,72 +77,63 @@ Work is **mid-flight, not parked**. Everything below is committed and reproducib
 
 ## Recommended next step
 
-**B21 — raise ball-track coverage / frame rate.** It is now the only item that moves
-several numbers at once: coverage 0.586 at 5 fps caps detection, typing *and* teaming,
-and it is the named cause of the OutOfPlay-team failure (a struck ball moves ~50 px per
-frame, so the contact frame is often never sampled). Re-detecting at 15 fps is ~30 min of
-GPU, then the whole chain re-runs from the README's reproduce block and every figure in
-this file gets restated. The ingest path is now stable, so the numbers churn once.
+**B21 is no longer it — it was measured and falsified (below).** Raising ball-track
+coverage degrades every number, because step 8's detector is built on the coverage
+*collapse* and the record predicted this would happen. Any track change now requires the
+detectors to be **re-derived, not refitted**.
 
-After that: **FreeKick (15)** is still unattempted with no candidate cue, **CornerKick**
-is still not a result, and **jersey recognition (G7)** remains sequenced last with an
-honest ceiling of ~25-40 %.
+What is actually left, and none of it is cheap:
 
-**Do not retry — all measured dead:** throw-in team by position or by post-throw ball
-direction (17/35); thrower by nearest player at the throw-in instant (2 of 36); OutOfPlay
-team by chaining off restarts (p = 0.26), by last player contact (attribution 0.94 and
-still a coin flip), or by the strike frame (below baseline held out).
+1. **A 15 fps re-detection is still defensible but is no longer a cheap win.** It adds
+   real information rather than loosening a threshold, and would shrink inter-frame
+   motion threefold — the named cause of the OutOfPlay-team failure. But the six
+   detectors would have to be re-derived against the new track's characteristics, and
+   `map_ball_to_panorama.py` costs **~10 hours on this box's 8 cores** (~40 min on
+   gpu-box's 128). Treat it as a re-build of D-B, not a tuning pass.
+2. **Tier B / possession (G4)** is the honest route to the types that remain unattempted
+   — Pass, Tackle, Interception, Dribble, Loose ball. It is also what OutOfPlay and
+   ThrowIn team really wanted. Large, unmeasured.
+3. **FreeKick (15)** still has no candidate cue; **CornerKick** is still not a result;
+   **jersey recognition (G7)** is still sequenced last at a ~25-40 % honest ceiling.
+
+**Do not retry — all measured dead:** raising track coverage by loosening `miss_cost`;
+throw-in team by position or post-throw direction; thrower by nearest player at the
+throw-in instant; OutOfPlay team by chaining, by last contact, or by the strike frame.
 
 Full record: `backend/src/services/pipeline/gpu_job/mosaic/README.md`.
 
 ---
 
-## G6 done (2026-09-22) — `analysis_mode="ml"` is real
+## D-B result (2026-09-22) — step 17: B21 falsified, and the flag worth 0.10 coverage
 
-`main.py` had advertised `"ml"` in `supported_analysis_modes` since the API was written
-and the DB had the column, but **nothing could ever produce it**. `ml_ingest.py` closes
-that: it reads `pred_all.json` + `manifest_all.json` + `score_all.json` and writes events,
-the capability surface and the mode. It does not touch `cv_engine.py`, which stays frozen.
+**More coverage is worse.** `miss_cost` is the tracker's decision threshold in disguise,
+so raising it buys coverage from the same candidates — a cheap way to test B21's premise
+before spending GPU. Each track went through the whole chain, thresholds refitted on
+period 1:
 
-**210 events ingested** across 6 labels — Out of play 127, Throw-in 52, Goal kick 13,
-Corner 11, Kickoff 4, Goal 3 — with the other 10 labels marked `unavailable` and a
-*measured* reason each.
+| coverage | macro agnostic | macro team-aware | micro | OutOfPlay | ThrowIn |
+| --: | --: | --: | --: | --: | --: |
+| **0.586 (current)** | **0.348** | **0.278** | **0.188** | **0.356** | **0.244** |
+| 0.700 | 0.264 | 0.176 | 0.142 | 0.350 | 0.228 |
+| 0.802 | 0.252 | 0.170 | 0.127 | 0.336 | 0.167 |
+| 0.859 | 0.293 | 0.243 | 0.134 | 0.316 | 0.220 |
 
-**Four refusals, each of which would otherwise have been a lie:**
+**Step 8 predicted this in writing** — its middle feature is track coverage *collapsing*
+after the ball leaves the field, and the record said "improve the tracker and this
+feature weakens". It does, monotonically for OutOfPlay. A detector built on a failure
+mode loses its signal when the failure is fixed. Second mechanism: raising `miss_cost`
+admits candidates the tracker would decline, so impossible steps rise 0.005 → 0.024 and
+the speed features get noisier at the same time.
 
-- **No positions.** `Event.pitch_x/pitch_y` are now `Optional` and written `None`.
-- **No analytics.** Possession / shot map / team stats come from the demo engine; any
-  existing row is **dropped** so the stats tab 404s rather than serving one pipeline's
-  numbers beside another's. Tier B (G4) is what would fill it.
-- **No team where team is not a result.** OutOfPlay fails its random-team control, so its
-  127 events carry `team="unknown"` rather than a guess (134 of 210 events in total).
-- **No ingest into the seeded demo match**, which the repository pins to
-  `analysis_mode="demo"`. Writing there would present ML events under a demo label, so
-  the ingest exits 2 with that explanation.
-
-**The bug this turned up, which only a database read could catch.** `pitch_x`/`pitch_y`
-carried a column default of **(52.5, 34.0) — the centre spot** — and SQLAlchemy applies a
-scalar default when the value is `None` at INSERT. The ingest passed `None` for "no
-metric calibration exists" and **all 210 rows came back on the centre spot**: the model
-said unknown, the database said centre spot. The defaults are removed, the ingest now
-**re-reads what it wrote and fails loudly** if a position, mode or count disagrees, and
-probe **d11** covers it (negative-tested: FAILS with the default restored, PASSES without).
-
-**A vocabulary gap fixed rather than worked around.** The app's event-type list had 15
-labels and **no "Out of play"** — though Veo reports it and it is the largest Tier A type
-at 64 of 447 events. A surface that cannot name a type cannot report it, so the
-vocabulary is now 16 labels (backend defaults, frontend union, sidebar list).
-
-**Confidence is `"medium"`, not `"high"`:** 6 of 14 types, 32 % of event mass, per-type
-precision 0.21-1.00.
-
-```sh
-backend/.venv/bin/python backend/src/services/pipeline/ml_ingest.py \
-    --pred  backend/.local/artifacts/mosaic/pred_all.json \
-    --manifest backend/.local/artifacts/mosaic/manifest_all.json \
-    --score backend/.local/artifacts/mosaic/score_all.json \
-    --match-id <a real match id> --report <report.json>      # --dry-run to preview
-```
+**The flag worth 0.10 of coverage.** Re-deriving the track with every parameter the stats
+recorded gave coverage **0.687**, not the stored **0.586**, on byte-identical input. The
+centre prior only applies when **`--ball-frame` is also supplied**, and that flag appears
+nowhere in the stats — so a run can report `w_centre: 3.0` while the term is inert, which
+is what happened. With the flag the track reproduces **byte for byte** (sha
+`1ced4109f521208f`). The artifact was never lost, but the record could not have told
+anyone how to rebuild it. The stats now carry the exact command and a
+`centre_prior_active` boolean, and the reproduce block starts from the track rather than
+assuming it.
 
 ---
 
@@ -728,7 +719,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | B18 | **`control_team_shuffle.py`** | ☑ | **The control every team claim must clear.** Replaces the team, keeps the predictions. Exposed that random teams alone lift macro 0.229 → 0.260 |
 | B19 | Raise thrower attribution above 0.66 | ☑ | **0.66 → 0.79** by padding each box 0.10 x its own height. Diagnosis first: **12 of 13 failures were "ball outside every box", 0 were ambiguous**, 7 missed by only 1.6-32 px — the ball is held above the head. Larger pads catch the wrong player |
 | B20 | OutOfPlay team from a direct channel | ✗ **three routes measured dead** | Chain off restarts **p = 0.26**; last contact attributes **0.94** and is still a coin flip; strike frame scores **below baseline** held out. Cause: the last touch is instantaneous, and at 5 fps a struck ball moves ~50 px per frame. **This machinery works where the ball is held, not struck** |
-| B21 | Raise ball-track coverage / frame rate | ☐ | **The one remaining item that moves several numbers.** Coverage 0.586 at 5 fps; now the named cause of B20's failure as well as the cap on detection and typing |
+| B21 | Raise ball-track coverage | ✗ **falsified** | Coverage 0.586 → 0.802 drops macro **0.348 → 0.252**; OutOfPlay falls monotonically. **Step 8 predicted it**: its feature is the coverage *collapse*. Any track change needs the detectors **re-derived, not refitted** |
+| B22 | Record what actually ran in every artifact | ☑ | `associate_ball.py` now writes its command and `centre_prior_active`. One unrecorded flag (`--ball-frame`) was the difference between coverage 0.586 and 0.687 on identical input |
 | B12 | Reproducibility guard | ☑ | Every detector now writes the **exact command** into its own output. Added after step 8's figures proved unreproducible |
 
 ### Track 2 — UI / route parity — ☑ **COMPLETE**

@@ -704,7 +704,7 @@ Period-2 macro (0.261) again exceeds period-1 (0.186). **KickOff is the first ty
 reach parity.** Every type that predicts team scores the same team-aware as
 team-agnostic — when these detectors find an event, they get the side right.
 
-### Reproducing steps 8-16 from the stored artifacts
+### Reproducing steps 8-17 from the stored artifacts
 
 Seconds, CPU only, no gpu-box — everything they read is already in
 `backend/.local/artifacts/mosaic/`:
@@ -713,6 +713,12 @@ Seconds, CPU only, no gpu-box — everything they read is already in
 A=backend/.local/artifacts/mosaic
 V=backend/.venv/bin/python
 M=backend/src/services/pipeline/gpu_job/mosaic
+
+# the ball track itself. --ball-frame is NOT optional decoration: without it the centre
+# prior is inert and coverage comes out 0.687 instead of 0.586, on identical input.
+$V $M/associate_ball.py --mapped $A/ball5_pano.json --cameras $A/cameras.json \
+    --ball-frame $A/ball5_frame.json --w-centre 3.0 --miss-cost 1.8 \
+    --out $A/ball_track_stats.json --out-track $A/ball_track.json
 
 $V $M/derive_pitch_frame.py --occupancy $A/occupancy_points.json \
     --line-map $A/line_map.png --out $A/pitch_frame.json
@@ -1076,3 +1082,65 @@ the primary metric zeroes it:
 
 **0.024 of the headline rests on a channel indistinguishable from guessing.** Quote the
 conservative number where one number is wanted.
+
+## D-B step 17 — B21 falsified: more ball-track coverage makes the benchmark *worse*
+
+STATE had named the ball track as "the one remaining item that moves several numbers at
+once" — coverage 0.586 at 5 fps, capping detection, typing and teaming. The plan was to
+re-detect at 15 fps. Before spending the GPU, the premise was tested the cheap way: the
+tracker's `miss_cost` is the decision threshold in disguise, so raising it buys coverage
+from the *same* candidates. If more coverage helps, it should help here too.
+
+It does not. Each track was run through the whole chain, thresholds refitted on period 1
+as always:
+
+| coverage | miss_cost | macro agnostic | macro team-aware | micro | OutOfPlay | ThrowIn |
+| --: | --: | --: | --: | --: | --: | --: |
+| **0.586** | **1.8** | **0.348** | **0.278** | **0.188** | **0.356** | **0.244** |
+| 0.700 | 2.5 | 0.264 | 0.176 | 0.142 | 0.350 | 0.228 |
+| 0.802 | 3.2 | 0.252 | 0.170 | 0.127 | 0.336 | 0.167 |
+| 0.859 | 4.0 | 0.293 | 0.243 | 0.134 | 0.316 | 0.220 |
+
+**Every number falls, and OutOfPlay falls monotonically** (0.356 → 0.350 → 0.336 →
+0.316).
+
+**This was predicted in writing at step 8 and is now measured.** That detector's middle
+feature is *track coverage collapsing* after the ball leaves the field, and the record
+already said: "it makes the detector depend on the tracker's weakness: **improve the
+tracker and this feature weakens**." It does. A detector built on a failure mode loses
+its signal when the failure is fixed.
+
+There is a second mechanism: raising `miss_cost` admits candidates the tracker would
+otherwise decline, and impossible steps rise with it (`frac_over_vmax` 0.005 → 0.024), so
+the speed features get noisier at the same time as the coverage feature gets weaker.
+
+**What this does and does not falsify.** It falsifies *"raise coverage and the numbers go
+up"*, which is what B21 asserted. It does **not** prove a 15 fps re-detection is
+worthless: that adds real information rather than loosening a threshold, and would shrink
+inter-frame motion threefold, which is the named cause of the OutOfPlay-team failure. But
+it does establish that **any track change requires the detectors to be re-derived, not
+merely refitted** — the current six are tuned to this track's characteristics, including
+its weaknesses. B21 is no longer a cheap win, and it is no longer next.
+
+A practical note for whoever does try 15 fps: detection is the cheap half (~31 min GPU
+for ~71,600 frames). `map_ball_to_panorama.py` is the expensive half at ~0.5 s/frame —
+**about 10 hours on this box's 8 cores**, so it must run on gpu-box's 128.
+
+## The ball track is reproducible — but one unrecorded flag was worth 0.10 of coverage
+
+Re-deriving the track exposed a near-miss of the step-8 kind. Running `associate_ball.py`
+with every parameter the stats file recorded — `w_centre 3.0`, `w_conf 1.0`,
+`max_skip 10`, `miss_cost 1.8` — gave **coverage 0.687 and 12,886 points** against the
+stored **0.586 and 10,994**, on byte-identical input (18,752 candidate frames, 37 runs).
+
+The cause: the centre prior is only applied when **`--ball-frame` is also supplied**, and
+that flag appears nowhere in the stats. A run could therefore report `w_centre: 3.0`
+while the term was completely inert — which is exactly what the first re-run did. Adding
+`--ball-frame ball5_frame.json` reproduces the stored track **byte for byte** (sha
+`1ced4109f521208f`).
+
+So the artifact was never lost, but the record could not have told anyone how to rebuild
+it. Two fixes, the same ones step 8 earned:
+
+* the stats now carry the **exact command**, and
+* a `centre_prior_active` boolean, because a weight is not evidence that the term ran.

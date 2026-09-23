@@ -25,7 +25,7 @@ beat the camera's own aim, the association has added nothing.
 Reports the correlation, the baseline, and the step statistics. Draws no conclusion the
 numbers do not support.
 """
-import argparse, csv, json, math
+import argparse, csv, json, sys, math
 from pathlib import Path
 
 import numpy as np
@@ -197,7 +197,13 @@ def main():
 
     doc = {
         "job": "D-B step 6: ball association by Viterbi, and its test",
+        "command": " ".join(sys.argv),
+        # w_centre alone does not say what ran: the centre prior is only applied when
+        # --ball-frame is ALSO supplied (see the guard above), so a run could and did
+        # report w_centre=3.0 while the term was inert. That single unrecorded flag is
+        # the whole difference between coverage 0.586 and 0.687 on identical input.
         "w_centre": a.w_centre, "w_conf": a.w_conf,
+        "centre_prior_active": bool(a.ball_frame and a.w_centre > 0),
         "max_skip": a.max_skip, "miss_cost": a.miss_cost,
         "frames_with_candidates": len(fr), "runs": len(runs),
         "frames_declined": len(fr) - len(track),
