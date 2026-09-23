@@ -1,9 +1,23 @@
 import React, { useState } from 'react';
-import { 
-  Video, List, Shirt, BarChart2, LayoutGrid, FileText, 
-  Play, ArrowLeftRight, ArrowUpRight, X
+import {
+  Video, List, Shirt, BarChart2, LayoutGrid, FileText,
+  Play, ArrowLeftRight, ArrowUpRight, ChevronDown, X
 } from 'lucide-react';
 import { Match, Highlight, Event, AnalyticsData, EventTypeLabel } from '../../types';
+import { Unavailable } from './Unavailable';
+import { ThirdsBar } from './ThirdsBar';
+
+type AnalyticsSectionKey =
+  | 'stats' | 'shotMap' | 'passLocation' | 'possessionLocation' | 'passStrings' | 'heatMap';
+
+const ANALYTICS_SECTION_DEFAULTS: Record<AnalyticsSectionKey, boolean> = {
+  stats: true,
+  shotMap: true,
+  passLocation: false,
+  possessionLocation: false,
+  passStrings: false,
+  heatMap: false,
+};
 
 const EVENT_TYPES: EventTypeLabel[] = [
   'Kickoff', 'Goal', 'Shot on goal', 'Shot', 'Save', 'Corner', 'Foul', 'Free kick',
@@ -47,6 +61,9 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
 }) => {
   const [highlightFilter, setHighlightFilter] = useState<string>('all');
   const [eventPeriod, setEventPeriod] = useState<number>(1);
+  const [openSections, setOpenSections] = useState<Record<AnalyticsSectionKey, boolean>>(ANALYTICS_SECTION_DEFAULTS);
+  const toggleSection = (key: AnalyticsSectionKey) =>
+    setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
 
   if (!activeTab) return null;
 
@@ -275,15 +292,26 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                       </span>
                       <span className="text-xs text-white font-medium">{e.description}</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => onSeek(e.timestamp)}
-                      className="p-1.5 rounded-md text-gray-400 hover:text-[#00E676] hover:bg-[#20252f] transition"
-                      aria-label={`Seek to ${e.description} at ${formatTime(e.timestamp)}`}
-                      title="Seek to event"
-                    >
-                      <ArrowUpRight className={`w-3.5 h-3.5 ${isActive ? 'text-[#00E676]' : ''}`} />
-                    </button>
+                    <div className="flex items-center space-x-1">
+                      <button
+                        type="button"
+                        disabled
+                        title="No backend endpoint exists to promote an event to a clip yet"
+                        aria-label={`Add ${e.description} as a clip (not available)`}
+                        className="p-1.5 rounded-md text-gray-400 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <Video className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSeek(e.timestamp)}
+                        className="p-1.5 rounded-md text-gray-400 hover:text-[#00E676] hover:bg-[#20252f] transition"
+                        aria-label={`Seek to ${e.description} at ${formatTime(e.timestamp)}`}
+                        title="Seek to event"
+                      >
+                        <ArrowUpRight className={`w-3.5 h-3.5 ${isActive ? 'text-[#00E676]' : ''}`} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -292,7 +320,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
         )}
 
         {/* ================= ANALYTICS STUDIO TAB ================= */}
-        {activeTab === 'analytics' && analytics && (
+        {activeTab === 'analytics' && (
           <div className="p-3 space-y-4">
             {/* Analysis Mode & Swap Teams Controls (P1-0 & P1-2) */}
             <div className="flex items-center justify-between bg-[#12141a] border border-[#1e222d] rounded-xl p-2.5">
@@ -324,107 +352,223 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
               )}
             </div>
 
-            {/* Match Comparison */}
-            <div className="bg-[#12141a] border border-[#1e222d] rounded-xl p-3 space-y-2 text-xs">
-              <div className="flex items-center justify-between font-bold text-gray-300 pb-1.5 border-b border-[#222]">
-                <span className="text-[#FFD700] truncate max-w-[100px]">{match.home_team}</span>
-                <span className="text-[10px] text-gray-500 font-mono">VS</span>
-                <span className="text-[#2979FF] truncate max-w-[100px]">{match.away_team}</span>
-              </div>
-              {[
-                { label: 'Goal', h: analytics.home_stats.goals, a: analytics.away_stats.goals, eventTypes: ['Goal'] },
-                { label: 'Shot', h: analytics.home_stats.shots, a: analytics.away_stats.shots, eventTypes: ['Shot'] },
-                { label: 'Total attempts', h: analytics.home_stats.attempts, a: analytics.away_stats.attempts, eventTypes: ['Shot', 'Shot on goal'] },
-                { label: 'Corner', h: analytics.home_stats.corners, a: analytics.away_stats.corners, eventTypes: ['Corner'] },
-                { label: 'Foul', h: analytics.home_stats.fouls, a: analytics.away_stats.fouls, eventTypes: ['Foul'] },
-                { label: 'Free kick', h: analytics.home_stats.free_kicks, a: analytics.away_stats.free_kicks, eventTypes: ['Free kick'] },
-                { label: 'Passes completed', h: analytics.home_stats.passes_completed, a: analytics.away_stats.passes_completed, derived: true, eventTypes: [] },
-                { label: 'Penalty', h: analytics.home_stats.penalties, a: analytics.away_stats.penalties, eventTypes: ['Penalty'] },
-                { label: 'Possession %', h: analytics.home_stats.possession_percent, a: analytics.away_stats.possession_percent, derived: true, suffix: '%', eventTypes: [] },
-                { label: 'Possession minutes', h: analytics.home_stats.possession_minutes, a: analytics.away_stats.possession_minutes, eventTypes: [] },
-                { label: 'Possession won', h: analytics.home_stats.possession_won, a: analytics.away_stats.possession_won, derived: true, eventTypes: [] },
-                { label: 'Tackle', h: analytics.home_stats.tackles, a: analytics.away_stats.tackles, eventTypes: ['Tackle'] },
-                { label: 'Throw-in', h: analytics.home_stats.throw_ins, a: analytics.away_stats.throw_ins, eventTypes: ['Throw-in'] },
-              ].map((r, i) => (
-                <button
-                  type="button"
-                  key={i}
-                  disabled={r.derived}
-                  onClick={() => seekToFirstEventOfType(r.eventTypes)}
-                  className="w-full flex items-center justify-between py-1 border-b border-[#1a1e28] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <div className="w-12 text-left">{renderStatValue(r.h, r.suffix)}</div>
-                  <span className="text-gray-400 text-[11px]">{r.label}</span>
-                  <div className="w-12 text-right">{renderStatValue(r.a, r.suffix)}</div>
-                </button>
-              ))}
-            </div>
-
-            {/* 2D Shot Map */}
-            <div className="bg-[#12141a] border border-[#1e222d] rounded-xl p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white uppercase tracking-wider">Shot Map</span>
-                <span className="text-[10px] text-[#00E676] font-bold">
-                  {analytics.shot_map.length > 0
-                    ? `${Math.round((analytics.shot_map.filter(s => s.outcome === 'goal').length / analytics.shot_map.length) * 100)}% Conversion`
-                    : 'No shots recorded'}
-                </span>
-              </div>
-              <div className="relative w-full aspect-[105/68] bg-[#1a472a] rounded-lg border border-[#2d5f3e] overflow-hidden">
-                <svg viewBox="0 0 105 68" className="w-full h-full" role="img" aria-label="2D soccer shot map">
-                  <rect x="1" y="1" width="103" height="66" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
-                  <line x1="52.5" y1="1" x2="52.5" y2="67" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
-                  <circle cx="52.5" cy="34" r="9.15" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
-                  <rect x="88.5" y="14" width="16.5" height="40" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
-                  <rect x="1" y="14" width="16.5" height="40" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
-                  {analytics.shot_map.map(s => (
-                    <circle
-                      key={s.id}
-                      cx={s.x}
-                      cy={s.y}
-                      r={s.outcome === 'goal' ? 3.5 : 2.5}
-                      fill={s.outcome === 'goal' ? '#00E676' : s.outcome === 'saved' ? '#FFD700' : '#FF5252'}
-                      stroke="#000"
-                      strokeWidth="0.6"
-                      onClick={() => onSeek(s.timestamp)}
-                      className="cursor-pointer hover:scale-150 transition"
-                    />
-                  ))}
-                </svg>
-              </div>
-            </div>
-
-            {/* Pitch Thirds Breakdown */}
-            <div className="bg-[#12141a] border border-[#1e222d] rounded-xl p-3 space-y-2">
-              <span className="text-xs font-bold text-white uppercase tracking-wider">Thirds Breakdown</span>
-              <div>
-                <div className="flex justify-between text-[11px] text-gray-400 mb-1">
-                  <span>Passes</span>
-                  <span>{analytics.pass_locations.home.defensive}% • {analytics.pass_locations.home.middle}% • {analytics.pass_locations.home.attacking}%</span>
-                </div>
-                <div className="h-2.5 rounded-full overflow-hidden flex bg-[#1e2330]">
-                  <div style={{ width: `${analytics.pass_locations.home.defensive}%` }} className="bg-blue-600" />
-                  <div style={{ width: `${analytics.pass_locations.home.middle}%` }} className="bg-[#00E676]" />
-                  <div style={{ width: `${analytics.pass_locations.home.attacking}%` }} className="bg-yellow-500" />
-                </div>
-              </div>
-            </div>
-
-            {/* Pass Strings */}
-            <div className="bg-[#12141a] border border-[#1e222d] rounded-xl p-3 space-y-2">
-              <span className="text-xs font-bold text-white uppercase tracking-wider">Pass Strings</span>
-              <div className="flex items-end space-x-2 h-16 pt-2">
-                {analytics.pass_strings.home.map((val, idx) => (
-                  <div key={idx} className="flex-1 flex flex-col items-center">
-                    <div
-                      style={{ height: `${Math.max(10, val * 5)}%` }}
-                      className="w-full bg-[#00E676] rounded-t hover:bg-[#00c968] transition"
-                    />
-                    <span className="text-[9px] text-gray-400 mt-1">{idx + 3}</span>
+            {!analytics ? (
+              <Unavailable
+                reason={
+                  "This match was analysed by the ML pipeline. The stats table below is produced " +
+                  "by a separate heuristic pipeline that this match never ran, and combining the two " +
+                  "would misattribute one pipeline's numbers to the other, so no analytics are shown " +
+                  "for this match."
+                }
+              />
+            ) : (
+              <>
+                {/* Stats */}
+                <div className="bg-[#12141a] border border-[#1e222d] rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('stats')}
+                    aria-expanded={openSections.stats}
+                    aria-controls="analytics-section-stats"
+                    className="w-full flex items-center justify-between p-3 text-left cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${openSections.stats ? '' : '-rotate-90'}`} aria-hidden="true" />
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">Stats</span>
+                    </span>
+                  </button>
+                  {openSections.stats && (
+                  <div id="analytics-section-stats" className="px-3 pb-3 text-xs space-y-2">
+                    <div className="flex items-center justify-between font-bold text-gray-300 pb-1.5 border-b border-[#222]">
+                      <span className="text-[#FFD700] truncate max-w-[100px]">{match.home_team}</span>
+                      <span className="text-[10px] text-gray-500 font-mono">VS</span>
+                      <span className="text-[#2979FF] truncate max-w-[100px]">{match.away_team}</span>
+                    </div>
+                    {[
+                      { label: 'Goal', h: analytics.home_stats.goals, a: analytics.away_stats.goals, eventTypes: ['Goal'] },
+                      { label: 'Shot', h: analytics.home_stats.shots, a: analytics.away_stats.shots, eventTypes: ['Shot'] },
+                      { label: 'Total attempts', h: analytics.home_stats.attempts, a: analytics.away_stats.attempts, eventTypes: ['Shot', 'Shot on goal'] },
+                      { label: 'Corner', h: analytics.home_stats.corners, a: analytics.away_stats.corners, eventTypes: ['Corner'] },
+                      { label: 'Foul', h: analytics.home_stats.fouls, a: analytics.away_stats.fouls, eventTypes: ['Foul'] },
+                      { label: 'Free kick', h: analytics.home_stats.free_kicks, a: analytics.away_stats.free_kicks, eventTypes: ['Free kick'] },
+                      { label: 'Passes completed', h: analytics.home_stats.passes_completed, a: analytics.away_stats.passes_completed, derived: true, eventTypes: [] },
+                      { label: 'Penalty', h: analytics.home_stats.penalties, a: analytics.away_stats.penalties, eventTypes: ['Penalty'] },
+                      { label: 'Possession %', h: analytics.home_stats.possession_percent, a: analytics.away_stats.possession_percent, derived: true, suffix: '%', eventTypes: [] },
+                      { label: 'Possession minutes', h: analytics.home_stats.possession_minutes, a: analytics.away_stats.possession_minutes, eventTypes: [] },
+                      { label: 'Possession won', h: analytics.home_stats.possession_won, a: analytics.away_stats.possession_won, derived: true, eventTypes: [] },
+                      { label: 'Tackle', h: analytics.home_stats.tackles, a: analytics.away_stats.tackles, eventTypes: ['Tackle'] },
+                      { label: 'Throw-in', h: analytics.home_stats.throw_ins, a: analytics.away_stats.throw_ins, eventTypes: ['Throw-in'] },
+                    ].map((r, i) => (
+                      <button
+                        type="button"
+                        key={i}
+                        disabled={r.derived}
+                        onClick={() => seekToFirstEventOfType(r.eventTypes)}
+                        className="w-full flex items-center justify-between py-1 border-b border-[#1a1e28] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <div className="w-12 text-left">{renderStatValue(r.h, r.suffix)}</div>
+                        <span className="text-gray-400 text-[11px]">{r.label}</span>
+                        <div className="w-12 text-right">{renderStatValue(r.a, r.suffix)}</div>
+                      </button>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
+                  )}
+                </div>
+
+                {/* Shot map */}
+                <div className="bg-[#12141a] border border-[#1e222d] rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('shotMap')}
+                    aria-expanded={openSections.shotMap}
+                    aria-controls="analytics-section-shot-map"
+                    className="w-full flex items-center justify-between p-3 text-left cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${openSections.shotMap ? '' : '-rotate-90'}`} aria-hidden="true" />
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">Shot map</span>
+                    </span>
+                    <span className="text-[10px] text-[#00E676] font-bold">
+                      {analytics.shot_map.length > 0
+                        ? `${Math.round((analytics.shot_map.filter(s => s.outcome === 'goal').length / analytics.shot_map.length) * 100)}% Conversion`
+                        : 'No shots recorded'}
+                    </span>
+                  </button>
+                  {openSections.shotMap && (
+                  <div id="analytics-section-shot-map" className="px-3 pb-3">
+                    <div className="relative w-full aspect-[105/68] bg-[#1a472a] rounded-lg border border-[#2d5f3e] overflow-hidden">
+                      <svg viewBox="0 0 105 68" className="w-full h-full" role="img" aria-label="2D soccer shot map">
+                        <rect x="1" y="1" width="103" height="66" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
+                        <line x1="52.5" y1="1" x2="52.5" y2="67" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
+                        <circle cx="52.5" cy="34" r="9.15" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
+                        <rect x="88.5" y="14" width="16.5" height="40" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
+                        <rect x="1" y="14" width="16.5" height="40" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
+                        {analytics.shot_map.map(s => (
+                          <circle
+                            key={s.id}
+                            cx={s.x}
+                            cy={s.y}
+                            r={s.outcome === 'goal' ? 3.5 : 2.5}
+                            fill={s.outcome === 'goal' ? '#00E676' : s.outcome === 'saved' ? '#FFD700' : '#FF5252'}
+                            stroke="#000"
+                            strokeWidth="0.6"
+                            onClick={() => onSeek(s.timestamp)}
+                            className="cursor-pointer hover:scale-150 transition"
+                          />
+                        ))}
+                      </svg>
+                    </div>
+                  </div>
+                  )}
+                </div>
+
+                {/* Pass location */}
+                <div className="bg-[#12141a] border border-[#1e222d] rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('passLocation')}
+                    aria-expanded={openSections.passLocation}
+                    aria-controls="analytics-section-pass-location"
+                    className="w-full flex items-center justify-between p-3 text-left cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${openSections.passLocation ? '' : '-rotate-90'}`} aria-hidden="true" />
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">Pass location</span>
+                    </span>
+                  </button>
+                  {openSections.passLocation && (
+                  <div id="analytics-section-pass-location" className="px-3 pb-3">
+                    <ThirdsBar
+                      label="Passes"
+                      home={analytics.pass_locations?.home}
+                      unavailableReason="No pass location data for this match — the pipeline that produced these analytics did not compute a pass-location breakdown."
+                    />
+                  </div>
+                  )}
+                </div>
+
+                {/* Possession location */}
+                <div className="bg-[#12141a] border border-[#1e222d] rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('possessionLocation')}
+                    aria-expanded={openSections.possessionLocation}
+                    aria-controls="analytics-section-possession-location"
+                    className="w-full flex items-center justify-between p-3 text-left cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${openSections.possessionLocation ? '' : '-rotate-90'}`} aria-hidden="true" />
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">Possession location</span>
+                    </span>
+                  </button>
+                  {openSections.possessionLocation && (
+                  <div id="analytics-section-possession-location" className="px-3 pb-3">
+                    <ThirdsBar
+                      label="Possession"
+                      home={analytics.possession_locations?.home}
+                      unavailableReason="No possession location data for this match — the pipeline that produced these analytics did not compute a possession-location breakdown."
+                    />
+                  </div>
+                  )}
+                </div>
+
+                {/* Pass strings */}
+                <div className="bg-[#12141a] border border-[#1e222d] rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('passStrings')}
+                    aria-expanded={openSections.passStrings}
+                    aria-controls="analytics-section-pass-strings"
+                    className="w-full flex items-center justify-between p-3 text-left cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${openSections.passStrings ? '' : '-rotate-90'}`} aria-hidden="true" />
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">Pass strings</span>
+                    </span>
+                  </button>
+                  {openSections.passStrings && (
+                  <div id="analytics-section-pass-strings" className="px-3 pb-3">
+                    {analytics.pass_strings.home.length > 0 ? (
+                      <div className="flex items-end space-x-2 h-16 pt-2">
+                        {analytics.pass_strings.home.map((val, idx) => (
+                          <div key={idx} className="flex-1 flex flex-col items-center">
+                            <div
+                              style={{ height: `${Math.max(10, val * 5)}%` }}
+                              className="w-full bg-[#00E676] rounded-t hover:bg-[#00c968] transition"
+                            />
+                            <span className="text-[9px] text-gray-400 mt-1">{idx + 3}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <Unavailable reason="No pass-sequencing detection exists in this pipeline, so there is no pass-string distribution to show." />
+                    )}
+                  </div>
+                  )}
+                </div>
+
+                {/* Heat map */}
+                <div className="bg-[#12141a] border border-[#1e222d] rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('heatMap')}
+                    aria-expanded={openSections.heatMap}
+                    aria-controls="analytics-section-heat-map"
+                    className="w-full flex items-center justify-between p-3 text-left cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${openSections.heatMap ? '' : '-rotate-90'}`} aria-hidden="true" />
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">Heat map</span>
+                    </span>
+                  </button>
+                  {openSections.heatMap && (
+                  <div id="analytics-section-heat-map" className="px-3 pb-3">
+                    <Unavailable reason="Unavailable — no metric pitch coordinates exist for this footage. Player positions are not calibrated to real-world metres (five measured calibration attempts failed), so no heat map can be drawn." />
+                  </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
 

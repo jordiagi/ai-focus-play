@@ -184,6 +184,15 @@ class JobDB(Base):
 
     match = relationship("MatchDB", back_populates="jobs")
 
+class CommentDB(Base):
+    __tablename__ = "comments"
+
+    id = Column(String, primary_key=True, index=True)
+    highlight_id = Column(String, ForeignKey("highlights.id"), nullable=False, index=True)
+    author = Column(String, nullable=False)
+    body = Column(Text, nullable=False)
+    created_at = Column(Float, nullable=False)
+
 def _reconcile_indexes():
     """Create any indexes the models declare that the live database is missing.
 

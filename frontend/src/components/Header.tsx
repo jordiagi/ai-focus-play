@@ -24,6 +24,10 @@ export const Header: React.FC<HeaderProps> = ({
     if (currentMatch) {
       shareUrl.searchParams.set('match', currentMatch.id);
     }
+    // window.location.href already carries the current hash route, but set it
+    // explicitly so a shared link keeps whichever drawer is open even if that
+    // ever stops being true.
+    shareUrl.hash = window.location.hash;
     navigator.clipboard.writeText(shareUrl.toString());
     setCopiedShare(true);
     setTimeout(() => setCopiedShare(false), 2000);
