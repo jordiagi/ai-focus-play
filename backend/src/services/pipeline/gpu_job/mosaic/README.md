@@ -1144,3 +1144,42 @@ it. Two fixes, the same ones step 8 earned:
 
 * the stats now carry the **exact command**, and
 * a `centre_prior_active` boolean, because a weight is not evidence that the term ran.
+
+## D-B step 18 — PRE-REGISTERED gate: does 15 fps rescue moving-ball association?
+
+Written before the data was collected, in the style `specs/deferred.md` demanded of D-0.
+
+**Why this gate and not a rebuild.** Step 17 falsified "raise coverage and the numbers go
+up", so 15 fps is *not* justified by the six existing detectors. It is justified by what
+it might unlock: Tier B — interception (89), tackle (84), dribble (41), loose ball (27) =
+**241 events, 54 % of the benchmark** — all of which need to know who has the ball during
+open play. Step 16 measured exactly that association and it was a coin flip, with the
+diagnosis that at 5 fps a struck ball moves ~50 px between frames so the contact frame is
+often never sampled. 15 fps is the direct test of that diagnosis.
+
+**What is being measured.** Step 16's two failing routes, re-run on 15 fps ball and
+player detections in [-3.2, -0.2] s around each of the 64 true OutOfPlay events:
+
+* route 2 — the last frame where the ball sits inside exactly one padded player box
+* route 3 — the player nearest the ball at the frame of largest ball acceleration
+
+Frame coordinates throughout, so **no panorama registration is needed** and the ~40 min
+mapping step is not on the critical path for the gate.
+
+**Pass condition, fixed in advance.** Parameters selected on **period-1** accuracy alone,
+then, on held-out period 2, the selected rule must satisfy **both**:
+
+1. accuracy **>** the period-2 majority-class baseline, and
+2. balanced accuracy **> 0.55**
+
+**For reference, the 5 fps results this must beat:**
+
+| route | attribution | period 1 | period 2 | majority | verdict |
+| :-- | --: | --: | --: | --: | :-- |
+| 2, last contact | 0.94 | 0.70 | 0.64 | 0.64 | tie |
+| 3, strike frame | 0.58 | 0.71 | 0.45 | 0.60 | below |
+
+**If it fails, the answer is to stop**, not to re-derive six detectors against a track
+whose only demonstrated effect so far is to make them worse. A failed gate means
+possession is out of reach at any frame rate this pipeline can afford, and Tier B's 54 %
+of event mass is closed — which is a result worth having for the cost of one GPU hour.
