@@ -1183,3 +1183,52 @@ then, on held-out period 2, the selected rule must satisfy **both**:
 whose only demonstrated effect so far is to make them worse. A failed gate means
 possession is out of reach at any frame rate this pipeline can afford, and Tier B's 54 %
 of event mass is closed — which is a result worth having for the cost of one GPU hour.
+
+### Gate result: **FAIL**, and the diagnosis was wrong in an instructive way
+
+15 fps ball and player detections in the same windows — 2,880 frames each, candidate rate
+**0.848** (against 0.834 at 5 fps), **107 s + 96 s of GPU**. Not an hour; four minutes.
+
+| route | attribution | period 1 | period 2 | majority | balanced | gate |
+| :-- | --: | --: | --: | --: | --: | :-- |
+| last contact (5 fps) | 0.94 | 0.70 | 0.64 | 0.64 | — | fail |
+| **last contact (15 fps)** | **0.98** | 0.66 | **0.53** | 0.65 | 0.41 | **fail** |
+| strike frame (5 fps) | 0.58 | 0.71 | 0.45 | 0.60 | — | fail |
+| **strike frame (15 fps)** | 0.45 | 0.71 | **0.47** | 0.60 | 0.56 | **fail** |
+
+Tripling the frame rate made **attribution better and accuracy no better** — 0.94 → 0.98
+of events got a player, and the team read stayed at chance. Per the pre-registration,
+that is where this stops.
+
+**Step 16's diagnosis was wrong, and the real cause is worse.** The suspicion was
+sampling: a struck ball moves ~50 px between frames at 5 fps, so the contact frame is
+never seen. If that were it, 15 fps would have helped. It did not, so the shirt read was
+tested directly — AUC of shirt lightness for separating Own from Opponent over the
+attributed players:
+
+| attributed player box height | n | Own L median | Opponent L median | AUC |
+| :-- | --: | --: | --: | --: |
+| all | 61 | 118.0 | 104.0 | **0.503** |
+| 40–80 px | 25 | 131.5 | 104.0 | 0.567 |
+| ≥ 80 px | 36 | 95.5 | 103.5 | 0.549 |
+
+**AUC 0.503 is no separation whatsoever**, and it is not a resolution problem: these
+boxes have a **median height of 86 px**, *larger* than the 66 px median in the throw-in
+windows where the same shirt descriptor gave Own 84 against Opponent 177.
+
+So the shirt is readable and the wrong player is being read. **Image-space containment
+cannot tell "the ball is at this player's feet" from "the ball is flying over this
+player"** — a 2-D box has no depth, and in the three seconds before the ball goes out it
+crosses many players. More frames produce *more* such coincidences, which is exactly the
+attribution-up/accuracy-flat signature observed.
+
+The throw-in works for a reason that does not generalise: the ball is **held** —
+stationary, in contact, for a second or more — so duration excludes the coincidence
+reading that geometry cannot.
+
+**What this closes.** Tier B (interception 89, tackle 84, dribble 41, loose ball 27 =
+**241 events, 54 % of the benchmark**) needs who-has-the-ball during open play, which is
+this same discrimination. It is not reachable by raising frame rate, and not by better
+shirt colour. It needs depth, or genuine multi-object tracking with a contact model —
+neither of which is a tuning pass on this pipeline. **Tier B is out of reach here, and
+that is now measured rather than assumed.**

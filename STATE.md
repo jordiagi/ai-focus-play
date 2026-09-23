@@ -4,12 +4,14 @@
 this file first, then `PLAN.md`. Update the status table as you go — a stale status here
 is worse than none.
 
-**Last updated:** 2026-09-22 · by Claude Opus 5 · **B21 FALSIFIED — more ball-track
-coverage makes the benchmark WORSE** (macro 0.348 → 0.264 → 0.252 as coverage goes 0.586
-→ 0.700 → 0.802), exactly as step 8 predicted in writing. The detectors are tuned to this
-track *including its weaknesses*. `analysis_mode="ml"` is real (G6). Primary metric
-**0.278 reported / 0.253 conservative**, 32 % of event mass. Baseline **`pass=10 fail=0
-skip=0`, 36 pytest tests**. ⚠ gpu-box Tailscale auth expired again.
+**Last updated:** 2026-09-23 · by Claude Opus 5 · **TIER B IS OUT OF REACH — measured.**
+The pre-registered 15 fps gate **FAILED**: tripling the frame rate raised attribution
+0.94 → 0.98 and left team accuracy at chance, and shirt-colour AUC over the attributed
+players is **0.503** at a *larger* median box size than where it works. Image-space
+containment cannot tell a ball at a player's feet from one flying over them. That closes
+**241 events, 54 % of the benchmark**. B21 falsified separately. `analysis_mode="ml"` is
+real. Primary metric **0.278 reported / 0.253 conservative**, 32 % of mass. Baseline
+**`pass=10 fail=0 skip=0`, 36 pytest tests**.
 
 ---
 
@@ -49,6 +51,7 @@ read the repo. It holds roughly 25 minutes of GPU + CPU work:
 | `pitch_frame.json` | the occupancy-derived `(xi, eta)` frame | seconds |
 | `pred_restarts.json`, `score_restarts.json` | the 4 restart types and their scores | seconds |
 | `pred_goals.json`, `score_goals.json` | Goal, inferred from its kickoff | seconds |
+| `ball15_oop.json`, `players15_oop.json`, `gate_fps15.json` | the **15 fps gate** — 2,880 frames each, 107 s + 96 s GPU. The gate that closed Tier B | needs gpu-box |
 | `players_colour.json`, `pd_035060.json`, `players_predti.json`, `players_pre.json`, `players_ko.json`, `players_dense.json`, `players_oop.json` | player boxes **with shirt colour** at event times — **gpu-box; 10-35 s of GPU each but frame extraction dominates (~4 min for 960)** | needs gpu-box |
 | `ball5_frame.json` | ball candidates in **frame** coords (pulled from the box) — what lets players and ball share a space with no registration | needs gpu-box |
 | `pred_restarts_teamed.json`, `score_shirt.json` | restarts with throw-in team attached | seconds |
@@ -77,63 +80,73 @@ Work is **mid-flight, not parked**. Everything below is committed and reproducib
 
 ## Recommended next step
 
-**B21 is no longer it — it was measured and falsified (below).** Raising ball-track
-coverage degrades every number, because step 8's detector is built on the coverage
-*collapse* and the record predicted this would happen. Any track change now requires the
-detectors to be **re-derived, not refitted**.
+**The measurement track is finished.** Both remaining routes have now been closed by
+pre-registered tests rather than by running out of ideas:
 
-What is actually left, and none of it is cheap:
+- **B21 (more coverage)** — falsified: coverage 0.586 → 0.802 drops macro 0.348 → 0.252,
+  because step 8's detector is built on the coverage *collapse*.
+- **Tier B (possession)** — the 15 fps gate **failed**. Not sampling, not resolution:
+  shirt AUC over attributed players is **0.503** at a median box height of 86 px, larger
+  than the 66 px where the same descriptor works. The wrong player is being read, because
+  a 2-D box cannot separate "ball at the feet" from "ball flying over". **241 events,
+  54 % of the benchmark, are out of reach** without depth or a real contact model.
 
-1. **A 15 fps re-detection is still defensible but is no longer a cheap win.** It adds
-   real information rather than loosening a threshold, and would shrink inter-frame
-   motion threefold — the named cause of the OutOfPlay-team failure. But the six
-   detectors would have to be re-derived against the new track's characteristics, and
-   `map_ball_to_panorama.py` costs **~10 hours on this box's 8 cores** (~40 min on
-   gpu-box's 128). Treat it as a re-build of D-B, not a tuning pass.
-2. **Tier B / possession (G4)** is the honest route to the types that remain unattempted
-   — Pass, Tackle, Interception, Dribble, Loose ball. It is also what OutOfPlay and
-   ThrowIn team really wanted. Large, unmeasured.
-3. **FreeKick (15)** still has no candidate cue; **CornerKick** is still not a result;
-   **jersey recognition (G7)** is still sequenced last at a ~25-40 % honest ceiling.
+What remains is either a different kind of project or a small honest tidy:
 
-**Do not retry — all measured dead:** raising track coverage by loosening `miss_cost`;
-throw-in team by position or post-throw direction; thrower by nearest player at the
-throw-in instant; OutOfPlay team by chaining, by last contact, or by the strike frame.
+1. **Consolidate and close.** Audit that every claim in STATE and the README reproduces
+   from its recorded command, and write the closing summary of what this system can and
+   cannot do. The "done bar" was defined as *everything honestly reachable, explicitly
+   excluding what we cannot do* — both halves of that are now evidenced.
+2. **Jersey recognition (G7)** — still sequenced last, ~25-40 % honest ceiling, no roster,
+   and the open-set-vs-leakage choice is already documented. It would add identity, not
+   coverage.
+3. **A different pipeline** — depth, multi-object tracking with contact, or a model
+   trained on this footage — is what Tier B would actually require. That is a new
+   project, not a next step.
+
+**Do not retry — all measured dead:** raising track coverage; throw-in team by position
+or post-throw direction; thrower by nearest player at the throw-in instant; OutOfPlay team
+by chaining, last contact, or strike frame; **and the same association at 15 fps**.
 
 Full record: `backend/src/services/pipeline/gpu_job/mosaic/README.md`.
 
 ---
 
-## D-B result (2026-09-22) — step 17: B21 falsified, and the flag worth 0.10 coverage
+## D-B result (2026-09-23) — step 18: the pre-registered 15 fps gate FAILED
 
-**More coverage is worse.** `miss_cost` is the tracker's decision threshold in disguise,
-so raising it buys coverage from the same candidates — a cheap way to test B21's premise
-before spending GPU. Each track went through the whole chain, thresholds refitted on
-period 1:
+Pass condition was committed **before the data existed** (`5807e08`): parameters chosen on
+period-1 accuracy alone, then held-out period 2 must beat both the majority-class baseline
+and a balanced accuracy of 0.55.
 
-| coverage | macro agnostic | macro team-aware | micro | OutOfPlay | ThrowIn |
-| --: | --: | --: | --: | --: | --: |
-| **0.586 (current)** | **0.348** | **0.278** | **0.188** | **0.356** | **0.244** |
-| 0.700 | 0.264 | 0.176 | 0.142 | 0.350 | 0.228 |
-| 0.802 | 0.252 | 0.170 | 0.127 | 0.336 | 0.167 |
-| 0.859 | 0.293 | 0.243 | 0.134 | 0.316 | 0.220 |
+| route | attribution | period 1 | period 2 | majority | balanced | gate |
+| :-- | --: | --: | --: | --: | --: | :-- |
+| last contact, 5 fps | 0.94 | 0.70 | 0.64 | 0.64 | — | fail |
+| **last contact, 15 fps** | **0.98** | 0.66 | **0.53** | 0.65 | 0.41 | **fail** |
+| strike frame, 5 fps | 0.58 | 0.71 | 0.45 | 0.60 | — | fail |
+| **strike frame, 15 fps** | 0.45 | 0.71 | **0.47** | 0.60 | 0.56 | **fail** |
 
-**Step 8 predicted this in writing** — its middle feature is track coverage *collapsing*
-after the ball leaves the field, and the record said "improve the tracker and this
-feature weakens". It does, monotonically for OutOfPlay. A detector built on a failure
-mode loses its signal when the failure is fixed. Second mechanism: raising `miss_cost`
-admits candidates the tracker would decline, so impossible steps rise 0.005 → 0.024 and
-the speed features get noisier at the same time.
+Cost: 2,880 frames each of ball and player detection, candidate rate 0.848, **107 s + 96 s
+of GPU**. The gate needs no panorama registration, so the expensive mapping step never
+entered the critical path.
 
-**The flag worth 0.10 of coverage.** Re-deriving the track with every parameter the stats
-recorded gave coverage **0.687**, not the stored **0.586**, on byte-identical input. The
-centre prior only applies when **`--ball-frame` is also supplied**, and that flag appears
-nowhere in the stats — so a run can report `w_centre: 3.0` while the term is inert, which
-is what happened. With the flag the track reproduces **byte for byte** (sha
-`1ced4109f521208f`). The artifact was never lost, but the record could not have told
-anyone how to rebuild it. The stats now carry the exact command and a
-`centre_prior_active` boolean, and the reproduce block starts from the track rather than
-assuming it.
+**Step 16's diagnosis was wrong.** It blamed sampling — a struck ball moves ~50 px per
+frame at 5 fps. If that were the cause, 15 fps would have helped; instead attribution rose
+and accuracy did not. Testing the shirt read directly:
+
+| attributed box height | n | Own L med | Opp L med | AUC |
+| :-- | --: | --: | --: | --: |
+| all | 61 | 118.0 | 104.0 | **0.503** |
+| >= 80 px | 36 | 95.5 | 103.5 | 0.549 |
+
+**AUC 0.503 is no separation at all**, at a *median box height of 86 px* — larger than the
+66 px median in throw-in windows where the same descriptor gives Own 84 vs Opponent 177.
+The shirt is readable; the wrong player is being read. **A 2-D box has no depth, so
+containment cannot distinguish a ball at a player's feet from one flying over them**, and
+more frames yield more such coincidences — exactly the attribution-up, accuracy-flat
+signature seen.
+
+The throw-in works for a reason that does not generalise: the ball is **held**, so
+duration excludes the coincidence that geometry cannot.
 
 ---
 
@@ -720,6 +733,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done & verified · ⊘ blocked
 | B19 | Raise thrower attribution above 0.66 | ☑ | **0.66 → 0.79** by padding each box 0.10 x its own height. Diagnosis first: **12 of 13 failures were "ball outside every box", 0 were ambiguous**, 7 missed by only 1.6-32 px — the ball is held above the head. Larger pads catch the wrong player |
 | B20 | OutOfPlay team from a direct channel | ✗ **three routes measured dead** | Chain off restarts **p = 0.26**; last contact attributes **0.94** and is still a coin flip; strike frame scores **below baseline** held out. Cause: the last touch is instantaneous, and at 5 fps a struck ball moves ~50 px per frame. **This machinery works where the ball is held, not struck** |
 | B21 | Raise ball-track coverage | ✗ **falsified** | Coverage 0.586 → 0.802 drops macro **0.348 → 0.252**; OutOfPlay falls monotonically. **Step 8 predicted it**: its feature is the coverage *collapse*. Any track change needs the detectors **re-derived, not refitted** |
+| B23 | **Tier B / possession (G4)** | ✗ **gate failed, pre-registered** | 15 fps changed nothing: attribution 0.94 → **0.98**, accuracy still chance, shirt **AUC 0.503** at a *larger* median box (86 px) than where it works (66 px). Image-space containment cannot separate "at the feet" from "flying over". **Closes 241 events / 54 % of mass** |
 | B22 | Record what actually ran in every artifact | ☑ | `associate_ball.py` now writes its command and `centre_prior_active`. One unrecorded flag (`--ball-frame`) was the difference between coverage 0.586 and 0.687 on identical input |
 | B12 | Reproducibility guard | ☑ | Every detector now writes the **exact command** into its own output. Added after step 8's figures proved unreproducible |
 

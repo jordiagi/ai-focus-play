@@ -59,6 +59,9 @@ def main():
     ap.add_argument("--batch", type=int, default=48)
     ap.add_argument("--device", default="0")
     ap.add_argument("--frames-dir", default="/workspace/aifp/frames/ball")
+    ap.add_argument("--spans", default=None,
+                    help="JSON [[t0,t1],...]; overrides --p1/--p2. Each window is "
+                         "decoded contiguously, so many short windows stay cheap")
     ap.add_argument("--p1", type=float, nargs=2, default=[562.3, 2879.3])
     ap.add_argument("--p2", type=float, nargs=2, default=[3674.4, 6132.1])
     a = ap.parse_args()
@@ -82,7 +85,15 @@ def main():
 
     fdir = Path(a.frames_dir)
     fdir.mkdir(parents=True, exist_ok=True)
-    spans = [("p1", a.p1), ("p2", a.p2)]
+    # --spans lets a caller ask for many short windows instead of the two half-long
+    # ones. Each is still decoded CONTIGUOUSLY with one ffmpeg call, which is what
+    # keeps it affordable: seeking to 2,880 individual frames costs ~0.3-0.5 s each,
+    # while 64 three-second windows at 15 fps is 64 seeks and 64 short sequential reads.
+    if a.spans:
+        want = json.loads(Path(a.spans).read_text())
+        spans = [(f"w{i:04d}", (float(t0), float(t1))) for i, (t0, t1) in enumerate(want)]
+    else:
+        spans = [("p1", a.p1), ("p2", a.p2)]
     frames = []
     t_dec = time.time()
     for tag, (t0, t1) in spans:
