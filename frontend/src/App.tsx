@@ -54,6 +54,15 @@ export const App: React.FC = () => {
     setCurrentMatch(match);
     setSelectedJersey(null);
 
+    // Sync match param into browser query string without reloading
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('match', match.id);
+      window.history.replaceState(null, '', url.toString());
+    } catch {
+      // Ignore in non-browser test environments
+    }
+
     try {
       const [h, e, d, r, a] = await Promise.all([
         api.getHighlights(match.id, controller.signal),
@@ -170,9 +179,11 @@ export const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#000000] text-white">
-      {/* 1. Exact Veo Header */}
+      {/* 1. Exact Veo Header with Match Switcher */}
       <Header
         currentMatch={currentMatch}
+        matches={matches}
+        onSelectMatch={selectMatch}
         onOpenBurgerMenu={() => setIsBurgerOpen(true)}
         onOpenUpload={() => setIsUploadOpen(true)}
         canUpload={true}

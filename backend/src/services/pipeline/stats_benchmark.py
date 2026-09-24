@@ -8,21 +8,33 @@ from typing import Dict, Any, Optional
 
 REPO = Path(__file__).resolve().parents[4]
 LIVE_VEO_STATS_PATH = REPO / "benchmarks" / "raw" / "veo_stats_live.json"
+FAIRFAX_STATS_PATH = REPO / "benchmarks" / "raw" / "fairfax_union_stats.json"
 
 
-def load_live_veo_benchmark() -> Dict[str, Any]:
+def load_live_veo_benchmark(match_identifier: Optional[str] = None) -> Dict[str, Any]:
     """Load the ground-truth benchmark extracted from app.veo.co."""
+    if match_identifier and "fairfax" in match_identifier.lower():
+        if FAIRFAX_STATS_PATH.exists():
+            return json.loads(FAIRFAX_STATS_PATH.read_text())
     if not LIVE_VEO_STATS_PATH.exists():
         raise FileNotFoundError(f"Missing live Veo stats at {LIVE_VEO_STATS_PATH}")
     return json.loads(LIVE_VEO_STATS_PATH.read_text())
 
 
-def compare_stats_table(predicted_home: Dict[str, Any], predicted_away: Dict[str, Any], unavailable: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+def compare_stats_table(
+    predicted_home: Dict[str, Any],
+    predicted_away: Dict[str, Any],
+    unavailable: Optional[Dict[str, str]] = None,
+    gt_benchmark: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """
     Compare predicted home and away stats against live Veo ground truth.
     Returns per-metric comparison, error deltas, and honesty status.
     """
-    gt = load_live_veo_benchmark()["stats_table"]["rows"]
+    if gt_benchmark is not None and "stats_table" in gt_benchmark:
+        gt = gt_benchmark["stats_table"]["rows"]
+    else:
+        gt = load_live_veo_benchmark()["stats_table"]["rows"]
     unavailable = unavailable or {}
 
     metric_mapping = {

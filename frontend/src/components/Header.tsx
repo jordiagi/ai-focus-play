@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Match } from '../types';
-import { Upload, Download, Check, Video, FileArchive } from 'lucide-react';
+import { Upload, Download, Check, Video, FileArchive, ChevronDown } from 'lucide-react';
 import { api } from '../services/api';
 
 interface HeaderProps {
   currentMatch: Match | null;
+  matches?: Match[];
+  onSelectMatch?: (match: Match) => void;
   onOpenBurgerMenu: () => void;
   onOpenUpload: () => void;
   canUpload?: boolean;
@@ -12,12 +14,30 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   currentMatch,
+  matches = [],
+  onSelectMatch,
   onOpenBurgerMenu,
   onOpenUpload,
   canUpload = true,
 }) => {
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const [showMatchPicker, setShowMatchPicker] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
+  const matchPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (matchPickerRef.current && !matchPickerRef.current.contains(e.target as Node)) {
+        setShowMatchPicker(false);
+      }
+    };
+    if (showMatchPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMatchPicker]);
 
   const handleShare = () => {
     const shareUrl = new URL(window.location.href);
@@ -63,12 +83,23 @@ export const Header: React.FC<HeaderProps> = ({
           </span>
         </div>
 
-        {/* Match Title & Subtitle */}
-        <div className="pl-1">
+        {/* Match Title & Subtitle with Switcher */}
+        <div className="pl-1 relative" ref={matchPickerRef}>
           <div className="flex items-center space-x-2">
-            <h1 className="text-[14px] font-semibold text-white tracking-normal leading-tight truncate max-w-[280px] md:max-w-[480px]">
-              {currentMatch?.title || 'Arlington SA U16B ECNL (26-27) vs. Skyline U16B ECNL'}
-            </h1>
+            <button
+              onClick={() => matches.length > 1 && setShowMatchPicker(!showMatchPicker)}
+              className={`flex items-center space-x-1.5 text-left group transition focus:outline-none ${
+                matches.length > 1 ? 'cursor-pointer hover:text-[#00E676]' : 'cursor-default'
+              }`}
+              title={matches.length > 1 ? 'Click to switch match recording' : undefined}
+            >
+              <h1 className="text-[14px] font-semibold text-white tracking-normal leading-tight truncate max-w-[280px] md:max-w-[440px] group-hover:text-white">
+                {currentMatch?.title || 'Arlington SA U16B ECNL (26-27) vs. Skyline U16B ECNL'}
+              </h1>
+              {matches.length > 1 && (
+                <ChevronDown className="w-3.5 h-3.5 text-gray-400 group-hover:text-white transition shrink-0" />
+              )}
+            </button>
 
             {/* Analysis Mode Badge (P1-0) */}
             {mode === 'demo' && (
@@ -104,6 +135,45 @@ export const Header: React.FC<HeaderProps> = ({
                 number here (or falling back to a literal 95) would invent a metric. */}
             <span title="View tracking is not implemented">&mdash; views</span>
           </div>
+
+          {/* Match Switcher Dropdown */}
+          {showMatchPicker && matches.length > 1 && (
+            <div className="absolute left-0 top-full mt-2 w-80 bg-[#12141a] border border-[#262c3b] rounded-xl shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="text-[10px] uppercase font-bold tracking-wider text-gray-400 px-2.5 py-1 mb-1 border-b border-[#222]">
+                Switch Match Recording ({matches.length})
+              </div>
+              <div className="space-y-1 max-h-64 overflow-y-auto">
+                {matches.map(m => (
+                  <button
+                    key={m.id}
+                    onClick={() => {
+                      onSelectMatch?.(m);
+                      setShowMatchPicker(false);
+                    }}
+                    className={`w-full text-left p-2.5 rounded-lg flex items-center justify-between transition cursor-pointer ${
+                      m.id === currentMatch?.id
+                        ? 'bg-[#1e2433] border border-[#00E676]/40 text-white'
+                        : 'hover:bg-[#181c26] text-gray-300 hover:text-white'
+                    }`}
+                  >
+                    <div className="min-w-0 pr-2">
+                      <div className="text-xs font-semibold truncate">{m.title}</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5 flex items-center space-x-2">
+                        <span>{m.date}</span>
+                        <span>•</span>
+                        <span>{m.home_score} - {m.away_score}</span>
+                        <span>•</span>
+                        <span className={m.analysis_mode === 'ml' ? 'text-[#00E676]' : 'text-amber-400'}>
+                          {m.analysis_mode === 'ml' ? 'AI' : 'Demo'}
+                        </span>
+                      </div>
+                    </div>
+                    {m.id === currentMatch?.id && <Check className="w-4 h-4 text-[#00E676] shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -281,11 +281,12 @@ def get_benchmark_comparison(match_id: str):
         raise HTTPException(status_code=404, detail="Analytics not found for match")
     try:
         from backend.src.services.pipeline.stats_benchmark import compare_stats_table, load_live_veo_benchmark
-        gt_raw = load_live_veo_benchmark()
+        gt_raw = load_live_veo_benchmark(f"{match.id} {match.title}")
         comparison = compare_stats_table(
             analytics.home_stats.model_dump(),
             analytics.away_stats.model_dump(),
-            analytics.unavailable
+            analytics.unavailable,
+            gt_benchmark=gt_raw,
         )
         return {
             "match_id": match_id,

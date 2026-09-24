@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from backend.src.config import CORS_ORIGINS, MEDIA_DIR, READ_ONLY
+from backend.src.config import CORS_ORIGINS, MEDIA_DIR, READ_ONLY, REPO_ROOT
 from backend.src.api.guards import ReadOnlyAPIMiddleware
 from backend.src.api.routes.matches import router as matches_router
 from backend.src.api.routes.comments import router as comments_router
@@ -36,6 +36,44 @@ async def lifespan(app: FastAPI):
     if not demo_thumb.exists() and demo_video.exists():
         logger.info("Generating default demo thumbnail...")
         VideoProcessor.extract_thumbnail(demo_video, demo_thumb, time_sec=5.0)
+
+    # Startup: Ensure Fairfax Union match is registered if sample assets are present
+    fairfax_id = "fairfax-union-20260920"
+    from backend.src.storage.repository import match_repo
+    if not match_repo.get_match(fairfax_id):
+        fairfax_video = MEDIA_DIR / "fairfax_union_sample_30s.mp4"
+        fairfax_calib = REPO_ROOT / "benchmarks" / "raw" / "fairfax_union_camera_alignment.veo"
+        if fairfax_video.exists() and fairfax_calib.exists():
+            import time
+            from backend.src.domain.models.match import Match
+            from backend.src.services.pipeline.pipeline_runner import MatchPipeline
+            m = Match(
+                id=fairfax_id,
+                title="Arlington SA U16B ECNL (26-27) vs. Fairfax Union",
+                home_team="Arlington SA U16B ECNL",
+                away_team="Fairfax Union",
+                home_score=3,
+                away_score=0,
+                date="Sep 20, 2026",
+                duration_seconds=30.0,
+                status="ready",
+                processing_step="Complete",
+                processing_progress=100.0,
+                video_url="/media/fairfax_union_sample_30s.mp4",
+                panoramic_url="/media/fairfax_union_sample_30s.mp4",
+                thumbnail_url="/media/demo_thumb.jpg",
+                views_count=32,
+                journal_notes="Dominant 3-0 clean sheet. Fluid central progression and clinical inside-box finishing.",
+                analysis_mode="ml",
+                analysis_confidence="medium",
+                created_at=time.time(),
+            )
+            match_repo.save_match(m)
+            try:
+                pipeline = MatchPipeline(match_id=fairfax_id, mode="ml", calib_file=fairfax_calib, repo=match_repo)
+                pipeline.run()
+            except Exception as e:
+                logger.warning(f"Could not run MatchPipeline for Fairfax Union: {e}")
 
     yield
     logger.info("Shutting down Veo Analysis API.")
