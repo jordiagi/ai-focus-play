@@ -86,3 +86,46 @@ def test_pipeline_runner_unknown_mode(test_repo, probe_match):
     )
     with pytest.raises(ValueError, match="Unknown analysis mode"):
         pipeline.run()
+
+
+def test_pipeline_runner_physics_shots(test_repo, probe_match):
+    """Verify MatchPipeline executes physics shot detector on calibrated ball track."""
+    repo_root = Path(__file__).resolve().parents[3]
+    calib = repo_root / "benchmarks/raw/skyline_camera_alignment.veo"
+    artifacts = repo_root / "backend/.local/artifacts/mosaic"
+
+    if not (calib.exists() and (artifacts / "ball_track.json").exists()):
+        pytest.skip("Physical calibration or ball track artifacts missing")
+
+    pipeline = MatchPipeline(
+        match_id=probe_match.id,
+        mode="ml",
+        artifacts_dir=artifacts,
+        calib_file=calib,
+        repo=test_repo,
+    )
+
+    result = pipeline.run()
+
+    assert result["mode"] == "ml"
+    assert result["verified"] is True
+    assert result["physics_shots_detected"] > 0
+
+    # Verify shot events in repository
+    events = test_repo.get_events(probe_match.id)
+    shots = [e for e in events if e.event_type == "Shot"]
+    assert len(shots) == result["physics_shots_detected"]
+
+    # Verify metric coordinates and honesty properties on shot events
+    for s in shots:
+        assert s.pitch_x is not None and 0.0 <= s.pitch_x <= 105.0
+        assert s.pitch_y is not None and 0.0 <= s.pitch_y <= 68.0
+        assert s.team == "unknown"  # honest attribution
+        assert s.confidence > 0.0
+        assert "speed" in s.description
+
+    # Verify event capability surface
+    updated = test_repo.get_match(probe_match.id)
+    assert updated.event_capabilities["Shot"].status == "detected"
+    assert updated.event_capabilities["Shot"].count == len(shots)
+

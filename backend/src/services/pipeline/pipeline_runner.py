@@ -34,6 +34,7 @@ from backend.src.domain.models.match import (
 )
 from backend.src.services.pipeline.ml_analytics import build_ml_analytics
 from backend.src.services.pipeline.ml_ingest import TYPE_TO_LABEL, UNAVAILABLE, build as build_ml_events
+from backend.src.services.pipeline.physics_shot_detector import PhysicsShotDetector
 from backend.src.services.pipeline.radar_calibrator import CalibratedPitchRadar
 from backend.src.services.pipeline.veo_calibrator import VeoCameraModel
 from backend.src.storage.repository import MatchRepository
@@ -126,14 +127,13 @@ class MatchPipeline:
 
         # 1. Build events and capability surface
         events, caps = build_ml_events(pred, manifest, score, self.match_id)
-        self.repo.set_events(self.match_id, events)
 
         # 2. Build ML analytics without invented literals
         analytics = build_ml_analytics(pred, manifest, score)
-        self.repo.set_analytics(self.match_id, analytics)
 
-        # 3. Generate calibrated 2D Pitch Radar frames if camera model and detections are available
+        # 3. Generate calibrated 2D Pitch Radar frames and detect metric shots
         radar_count = 0
+        physics_shots_count = 0
         if self.calib_file.exists():
             cameras_path = self.artifacts_dir / "cameras.json"
             ball_path = self.artifacts_dir / "ball_track.json"
@@ -143,6 +143,7 @@ class MatchPipeline:
                 ball_track_path=ball_path if ball_path.exists() else None,
             )
 
+            # 3a. Generate 2D Pitch Radar frames
             players_path = self.artifacts_dir / "players_colour.json"
             if not players_path.exists():
                 players_path = self.artifacts_dir / "players_ko.json"
@@ -154,7 +155,20 @@ class MatchPipeline:
                     self.repo.save_radar_frames(self.match_id, radar_frames)
                     radar_count = len(radar_frames)
 
-        # 4. Update match record
+            # 3b. Physics-based 3D goal-directed shot detection
+            if calibrator.ball_track and len(calibrator.ball_track) > 1:
+                shot_detector = PhysicsShotDetector()
+                shot_cands = shot_detector.detect_from_calibrated_radar(calibrator)
+                if shot_cands:
+                    shot_events = [shot_detector.to_event(c, self.match_id) for c in shot_cands]
+                    events.extend(shot_events)
+                    caps["Shot"] = EventCapability(status="detected", count=len(shot_events))
+                    physics_shots_count = len(shot_events)
+
+        # 4. Save events and update match record
+        self.repo.set_events(self.match_id, events)
+        self.repo.set_analytics(self.match_id, analytics)
+
         match.analysis_mode = "ml"
         match.analysis_confidence = "medium"
         match.event_capabilities = caps
@@ -172,6 +186,7 @@ class MatchPipeline:
             "events_ingested": len(events),
             "events_stored": len(stored_events),
             "radar_frames_stored": radar_count,
+            "physics_shots_detected": physics_shots_count,
             "capabilities_count": len(caps),
             "analytics_provenance": getattr(stored_analytics, "provenance", None),
             "verified": len(stored_events) == len(events),

@@ -17,6 +17,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
+from backend.src.domain.models.match import Event
+
 
 @dataclass
 class ShotCandidate:
@@ -27,6 +29,8 @@ class ShotCandidate:
     goal_alignment_cos: float
     target_goal: str  # 'left' or 'right'
     confidence: float
+    pitch_x: Optional[float] = None
+    pitch_y: Optional[float] = None
 
 
 class PhysicsShotDetector:
@@ -111,6 +115,8 @@ class PhysicsShotDetector:
                             goal_alignment_cos=round(cos_ang, 4),
                             target_goal=label,
                             confidence=round(conf, 4),
+                            pitch_x=round(x0, 2),
+                            pitch_y=round(y0, 2),
                         )
                     )
 
@@ -124,6 +130,44 @@ class PhysicsShotDetector:
 
         suppressed.sort(key=lambda c: c.timestamp)
         return suppressed
+
+    def detect_from_calibrated_radar(
+        self,
+        radar: Any,
+        p1_bounds: Tuple[float, float] = (562.3, 2879.3),
+        p2_bounds: Tuple[float, float] = (3674.4, 6132.1),
+    ) -> List[ShotCandidate]:
+        """Extract metric ball coordinates from radar model and detect shot candidates."""
+        if not hasattr(radar, "ball_track") or not radar.ball_track or not hasattr(radar, "camera_model") or not radar.camera_model:
+            return []
+
+        metric_pts: List[Tuple[float, float, float]] = []
+        for b in radar.ball_track:
+            u, v, t = float(b["u"]), float(b["v"]), float(b["t"])
+            rpt = radar.camera_model.panorama_pixel_to_radar(u, v, radar.scale, radar.origin)
+            if rpt and -5.0 <= rpt[0] <= 110.0 and -5.0 <= rpt[1] <= 73.0:
+                metric_pts.append((t, rpt[0], rpt[1]))
+
+        return self.detect_from_metric_track(metric_pts, p1_bounds=p1_bounds, p2_bounds=p2_bounds)
+
+    def to_event(self, candidate: ShotCandidate, match_id: str) -> Event:
+        """Convert a detected ShotCandidate into an application Event model."""
+        return Event(
+            match_id=match_id,
+            timestamp=candidate.timestamp,
+            period=candidate.period,
+            event_type="Shot",
+            team="unknown",
+            player_jersey=None,
+            player_name=None,
+            description=(
+                f"Shot detected by physics kinematics — speed {candidate.speed_mps} m/s, "
+                f"dist to goal {candidate.dist_to_goal_m}m, alignment {candidate.goal_alignment_cos:.2f}"
+            ),
+            pitch_x=candidate.pitch_x,
+            pitch_y=candidate.pitch_y,
+            confidence=candidate.confidence,
+        )
 
     @staticmethod
     def evaluate(
