@@ -9,10 +9,14 @@ from typing import Dict, Any, Optional
 REPO = Path(__file__).resolve().parents[4]
 LIVE_VEO_STATS_PATH = REPO / "benchmarks" / "raw" / "veo_stats_live.json"
 FAIRFAX_STATS_PATH = REPO / "benchmarks" / "raw" / "fairfax_union_stats.json"
+BALTIMORE_STATS_PATH = REPO / "benchmarks" / "raw" / "baltimore_armor_stats.json"
 
 
 def load_live_veo_benchmark(match_identifier: Optional[str] = None) -> Dict[str, Any]:
     """Load the ground-truth benchmark extracted from app.veo.co."""
+    if match_identifier and "baltimore" in match_identifier.lower():
+        if BALTIMORE_STATS_PATH.exists():
+            return json.loads(BALTIMORE_STATS_PATH.read_text())
     if match_identifier and "fairfax" in match_identifier.lower():
         if FAIRFAX_STATS_PATH.exists():
             return json.loads(FAIRFAX_STATS_PATH.read_text())

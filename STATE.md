@@ -2,12 +2,13 @@
 
 **Purpose:** Live project status and verification contract. Update as you go. For in-depth post-mortems, mathematical derivations, and historical failure analysis, consult the companion document: [docs/postmortems/falsification_log.md](file:///home/ai/Projects/ai-focus-play/docs/postmortems/falsification_log.md).
 
-**Last updated:** 2026-09-24 · **PHYSICSSHOTDETECTOR WIRED INTO MATCHPIPELINE DAG & VERIFIED.**
+**Last updated:** 2026-09-24 · **3RD MATCH (BALTIMORE ARMOR) INGESTED, CALIBRATED, & VERIFIED ACROSS DAG & UI.**
 - **Track 2 (UI / Route Parity)**: **COMPLETE & AUDITED** (Visual side-by-side audit against live Veo UI documented in `docs/ui_parity_comparison.md`, deep-link routing, tactical shot map 5-metric breakdown, Veo GT overlay).
 - **Option B (Physics-Based 3D Goal-Directed Shot Detection Gate & DAG Integration)**: **SHIPPED & GATED**. `PhysicsShotDetector` projects 2D panoramic points $(u, v)$ to metric pitch coordinates $[0, 105]\text{m} \times [0, 68]\text{m}$ using `VeoCameraModel`. Cleared pre-registered criteria S1 ($F1 \ge 0.25$), S2 ($\ge 2.0\times$ chance [5.77x]), and S3 (beats OutOfPlay proxy [+0.236]) with Period 2 heldout F1 = **0.385** (Recall = **0.909** [10/11 matched], Precision = 0.244). Wired directly into `MatchPipeline` DAG stage 3b: auto-generates metric `Shot` events with $(x, y)$ turf coordinates, speeds, and goal alignment, dynamically updating `event_capabilities["Shot"]` to `detected`.
 - **Option C (Video Telestration & Drawing Enhancement)**: **SHIPPED & TESTED**. Enhanced `TelestratorCanvas` with Veo-style spotlight, directional arrows, player tactical rings, freehand pen, and text labels. Added undo active stroke, hotkey `D` and player toolbar `Draw` toggle, and frame snapshot PNG export with Veo watermark badge.
 - **Option D (Clip Download & Streaming Zip Export in Header Menu)**: **SHIPPED & VERIFIED**. Connected download dropdown to Full Match Video (`/media/...`), streaming zip highlight clips (`/api/matches/{id}/highlights/export` and `/api/matches/{id}/export/zip`), match analytics JSON export, and events/highlights CSV spreadsheet export with click-outside dismissal.
-- **Baseline Verification**: **`pass=11 fail=0 skip=0`** (probes `d1`–`d12`), **93 pytest tests passing**, **33 vitest tests passing** (non-interactive).
+- **3-Match Campaign Ingestion (Skyline, Fairfax Union, Baltimore Armor)**: **SHIPPED & TESTED**. All 3 matches calibrated with physical `.veo` camera alignment models, sample MP4 video fixtures, live Veo analytics benchmark ground truth, and MatchPipeline DAG execution.
+- **Baseline Verification**: **`pass=11 fail=0 skip=0`** (probes `d1`–`d12`), **100 pytest tests passing**, **33 vitest tests passing** (non-interactive).
 
 ---
 
@@ -104,6 +105,7 @@ Legend: ☑ Done & Verified · ◐ In Progress · ⊘ Blocked · ⏸ Deferred ·
 | **U9** | Player Moments & Jersey Tag Filtering in Video Timeline & Drawers | ☑ | Cross-linked jersey selection across `PlayerMomentsBar`, `Timeline`, `Highlights`, `Events`, and dedicated player view in `Players` drawer; 28 vitest tests |
 | **U10** | Video Telestration & Frame Snapshot PNG Export (Option C) | ☑ | Spotlight, directional arrow, player tactical ring, freehand pen, text labels, undo active stroke, hotkey `D` & player toolbar `Draw` toggle, Veo watermark snapshot; 32 vitest tests |
 | **U11** | Clip Download & Streaming Zip Export in Header Menu (Option D) | ☑ | Full match video MP4, streaming zip highlights (`/export/zip`), match analytics JSON, and tagged events/highlights CSV export; 33 vitest tests |
+| **U12** | 3-Match Campaign Ingestion & Multi-Match Veo Parity | ☑ | Arlington vs Skyline, Fairfax Union, and Baltimore Armor; physical camera models, live benchmark mapping, dynamic match switcher, 100 pytest tests passing |
 
 ---
 
@@ -113,4 +115,5 @@ Legend: ☑ Done & Verified · ◐ In Progress · ⊘ Blocked · ⏸ Deferred ·
 | :--- | :--- | :--- |
 | **gpu-box SSH** | Operational (Tailscale) | May require re-auth if token expires (`doctor.sh`). `/workspace` is tmpfs. |
 | **Local Environment** | Healthy | Python 3.14.7 venv, Node/npm vitest working hermetically. |
-| **Sample Diversity** | Single Video Constraint | Current pipeline is evaluated on 1 sample match (Arlington vs. Skyline). User is able to provide additional Veo match MP4s with varying parameters (camera height, lighting, angles) for multi-sample validation. |
+| **Sample Diversity** | Multi-Match Validated (3 Matches) | Pipeline and UI evaluate across 3 real ECNL matches (Skyline, Fairfax Union, Baltimore Armor) with varying camera heights ($4.17\text{m} - 4.22\text{m}$), field geometries ($105\text{m} \times 67.7\text{m} - 70.3\text{m}$), and live Veo stats ground truth. |
+

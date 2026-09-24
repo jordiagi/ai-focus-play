@@ -1,0 +1,144 @@
+{
+  "$comment": "Veo Analytics UI live ground truth extracted via browser-harness directly from app.veo.co on 2026-09-24",
+  "match": {
+    "title": "Arlington SA U16B ECNL (26-27) vs. Baltimore Armor",
+    "uuid": "e64649b4-c5f9-40b3-b650-4c55340dd59f",
+    "slug": "20260906-arlington-sa-u16b-ecnl-26-27-vs-baltimore-armor-vdfb883a",
+    "date": "2026-09-06",
+    "final_result": {
+      "own": 3,
+      "opponent": 0
+    },
+    "own_team": "Arlington SA U16B ECNL (26-27)",
+    "opponent_team": "Baltimore Armor"
+  },
+  "top_cards": {
+    "goals_scored": {
+      "value": 3,
+      "match_diff": 2
+    },
+    "shots": {
+      "value": 14,
+      "match_diff": -7
+    },
+    "possession_percent": {
+      "value": 71,
+      "match_diff": 13
+    }
+  },
+  "stats_table": {
+    "period": "Full recording",
+    "rows": {
+      "goal": {
+        "own": 3,
+        "opponent": 0
+      },
+      "shot": {
+        "own": 14,
+        "opponent": 4
+      },
+      "total_attempts": {
+        "own": 17,
+        "opponent": 4
+      },
+      "corner": {
+        "own": 5,
+        "opponent": 4
+      },
+      "free_kick": {
+        "own": 10,
+        "opponent": 12
+      },
+      "throw_in": {
+        "own": 21,
+        "opponent": 23
+      },
+      "foul": {
+        "own": 13,
+        "opponent": 11
+      },
+      "penalty": {
+        "own": 0,
+        "opponent": 0
+      },
+      "tackle": {
+        "own": 37,
+        "opponent": 54
+      },
+      "passes_completed": {
+        "own": 340,
+        "opponent": 163
+      },
+      "possession_percent": {
+        "own": 71,
+        "opponent": 29
+      },
+      "possession_minutes": {
+        "own": 27,
+        "opponent": 11
+      },
+      "possession_won": {
+        "own": 142,
+        "opponent": 151
+      }
+    }
+  },
+  "shot_map": {
+    "own": {
+      "goals": 3,
+      "shots": 15,
+      "total_attempts": 18,
+      "conversion_rate_pct": 17,
+      "inside_box_conversion_rate_pct": 11,
+      "outside_box_conversion_rate_pct": 22,
+      "attempts_inside_box_pct": 50,
+      "attempts_outside_box_pct": 50
+    },
+    "opponent": {
+      "goals": 0,
+      "shots": 4,
+      "total_attempts": 4,
+      "conversion_rate_pct": 0,
+      "inside_box_conversion_rate_pct": 0,
+      "outside_box_conversion_rate_pct": 0,
+      "attempts_inside_box_pct": 75,
+      "attempts_outside_box_pct": 25
+    }
+  },
+  "pass_location": {
+    "own": {
+      "defensive_pct": 4,
+      "middle_pct": 86,
+      "attacking_pct": 9
+    },
+    "opponent": {
+      "defensive_pct": 9,
+      "middle_pct": 86,
+      "attacking_pct": 4
+    }
+  },
+  "possession_location": {
+    "own": {
+      "defensive_pct": 36,
+      "middle_pct": 41,
+      "attacking_pct": 23
+    },
+    "opponent": {
+      "defensive_pct": 23,
+      "middle_pct": 41,
+      "attacking_pct": 36
+    }
+  },
+  "pass_strings": {
+    "own": {
+      "passes_3_to_5": 35,
+      "passes_6_or_more": 13,
+      "longest_string": 10
+    },
+    "opponent": {
+      "passes_3_to_5": 14,
+      "passes_6_or_more": 3,
+      "longest_string": 6
+    }
+  }
+}

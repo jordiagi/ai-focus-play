@@ -75,6 +75,43 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.warning(f"Could not run MatchPipeline for Fairfax Union: {e}")
 
+    # Startup: Ensure Baltimore Armor match is registered if sample assets are present
+    baltimore_id = "baltimore-armor-20260906"
+    if not match_repo.get_match(baltimore_id):
+        baltimore_video = MEDIA_DIR / "baltimore_armor_sample_30s.mp4"
+        baltimore_calib = REPO_ROOT / "benchmarks" / "raw" / "baltimore_armor_camera_alignment.veo"
+        if baltimore_video.exists() and baltimore_calib.exists():
+            import time
+            from backend.src.domain.models.match import Match
+            from backend.src.services.pipeline.pipeline_runner import MatchPipeline
+            m_balt = Match(
+                id=baltimore_id,
+                title="Arlington SA U16B ECNL (26-27) vs. Baltimore Armor",
+                home_team="Arlington SA U16B ECNL",
+                away_team="Baltimore Armor",
+                home_score=3,
+                away_score=0,
+                date="Sep 6, 2026",
+                duration_seconds=30.0,
+                status="ready",
+                processing_step="Complete",
+                processing_progress=100.0,
+                video_url="/media/baltimore_armor_sample_30s.mp4",
+                panoramic_url="/media/baltimore_armor_sample_30s.mp4",
+                thumbnail_url="/media/demo_thumb.jpg",
+                views_count=28,
+                journal_notes="Tactical 3-0 victory against Baltimore Armor. High pressing and sustained defensive discipline.",
+                analysis_mode="ml",
+                analysis_confidence="medium",
+                created_at=time.time(),
+            )
+            match_repo.save_match(m_balt)
+            try:
+                pipeline = MatchPipeline(match_id=baltimore_id, mode="ml", calib_file=baltimore_calib, repo=match_repo)
+                pipeline.run()
+            except Exception as e:
+                logger.warning(f"Could not run MatchPipeline for Baltimore Armor: {e}")
+
     yield
     logger.info("Shutting down Veo Analysis API.")
 
