@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Video, List, Shirt, BarChart2, LayoutGrid, FileText,
-  Play, ArrowLeftRight, ArrowUpRight, ChevronDown, X
+  Play, ArrowLeftRight, ArrowUpRight, ChevronDown, X, Info
 } from 'lucide-react';
 import { Match, Highlight, Event, AnalyticsData, EventTypeLabel } from '../../types';
 import { api } from '../../services/api';
@@ -582,77 +582,230 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                         : 'No shots recorded'}
                     </span>
                   </button>
-                  {openSections.shotMap && (
-                  <div id="analytics-section-shot-map" className="px-3 pb-3 space-y-2.5">
-                    {/* Team toggle */}
-                    <div className="flex items-center space-x-1">
-                      <button
-                        type="button"
-                        onClick={() => setShotMapTeam('home')}
-                        className={`px-2.5 py-0.5 rounded text-[11px] font-bold transition ${
-                          shotMapTeam === 'home' ? 'bg-[#FFD700]/20 text-[#FFD700] border border-[#FFD700]/40' : 'bg-[#181818] text-gray-400 hover:text-white'
-                        }`}
-                      >
-                        {match.home_team.split(' ')[0] || 'Home'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShotMapTeam('away')}
-                        className={`px-2.5 py-0.5 rounded text-[11px] font-bold transition ${
-                          shotMapTeam === 'away' ? 'bg-[#2979FF]/20 text-[#2979FF] border border-[#2979FF]/40' : 'bg-[#181818] text-gray-400 hover:text-white'
-                        }`}
-                      >
-                        {match.away_team.split(' ')[0] || 'Away'}
-                      </button>
-                    </div>
+                  {openSections.shotMap && (() => {
+                    const teamShots = (analytics.shot_map || []).filter(s => s.team === shotMapTeam || !s.team);
+                    const goalCount = (shotMapTeam === 'home' ? analytics.home_stats.goals : analytics.away_stats.goals) ?? teamShots.filter(s => s.outcome === 'goal').length;
+                    const shotCount = (shotMapTeam === 'home' ? analytics.home_stats.shots : analytics.away_stats.shots) ?? teamShots.filter(s => s.outcome !== 'goal').length;
+                    const totalAttempts = goalCount + shotCount;
 
-                    <div className="relative w-full aspect-[105/68] bg-[#1a472a] rounded-lg border border-[#2d5f3e] overflow-hidden">
-                      <svg viewBox="0 0 105 68" className="w-full h-full" role="img" aria-label="2D soccer shot map">
-                        <rect x="1" y="1" width="103" height="66" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
-                        <line x1="52.5" y1="1" x2="52.5" y2="67" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
-                        <circle cx="52.5" cy="34" r="9.15" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
-                        <rect x="88.5" y="14" width="16.5" height="40" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
-                        <rect x="1" y="14" width="16.5" height="40" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
-                        {analytics.shot_map.map(s => (
-                          <circle
-                            key={s.id}
-                            cx={s.x}
-                            cy={s.y}
-                            r={s.outcome === 'goal' ? 3.5 : 2.5}
-                            fill={s.outcome === 'goal' ? '#00E676' : s.outcome === 'saved' ? '#FFD700' : '#FF5252'}
-                            stroke="#000"
-                            strokeWidth="0.6"
-                            onClick={() => onSeek(s.timestamp)}
-                            className="cursor-pointer hover:scale-150 transition"
-                          />
-                        ))}
-                      </svg>
-                    </div>
+                    const insideBoxAttempts = teamShots.filter(s => s.is_inside_box);
+                    const outsideBoxAttempts = teamShots.filter(s => !s.is_inside_box);
+                    const insideBoxGoals = insideBoxAttempts.filter(s => s.outcome === 'goal');
+                    const outsideBoxGoals = outsideBoxAttempts.filter(s => s.outcome === 'goal');
 
-                    {/* Shot breakdown cards */}
-                    <div className="grid grid-cols-3 gap-1.5 text-center">
-                      <div className="bg-[#181c25] rounded p-1.5 border border-[#222836]">
-                        <div className="text-[10px] text-gray-400">Goal count</div>
-                        <div className="text-xs font-bold text-[#00E676]">{shotMapTeam === 'home' ? analytics.home_stats.goals ?? 0 : analytics.away_stats.goals ?? 0}</div>
-                      </div>
-                      <div className="bg-[#181c25] rounded p-1.5 border border-[#222836]">
-                        <div className="text-[10px] text-gray-400">Shot count</div>
-                        <div className="text-xs font-bold text-white">{shotMapTeam === 'home' ? analytics.home_stats.shots ?? 0 : analytics.away_stats.shots ?? 0}</div>
-                      </div>
-                      <div className="bg-[#181c25] rounded p-1.5 border border-[#222836]">
-                        <div className="text-[10px] text-gray-400">Conversion</div>
-                        <div className="text-xs font-bold text-[#FFD700]">
-                          {(() => {
-                            const g = (shotMapTeam === 'home' ? analytics.home_stats.goals : analytics.away_stats.goals) ?? 0;
-                            const s = (shotMapTeam === 'home' ? analytics.home_stats.shots : analytics.away_stats.shots) ?? 0;
-                            const att = g + s;
-                            return att > 0 ? `${Math.round((g / att) * 100)}%` : '0%';
-                          })()}
+                    const overallConversion = totalAttempts > 0 ? Math.round((goalCount / totalAttempts) * 100) : 0;
+                    const insideConversion = insideBoxAttempts.length > 0
+                      ? Math.round((insideBoxGoals.length / insideBoxAttempts.length) * 100)
+                      : (totalAttempts > 0 && goalCount > 0 ? Math.round((goalCount / totalAttempts) * 100) : 0);
+                    const outsideConversion = outsideBoxAttempts.length > 0
+                      ? Math.round((outsideBoxGoals.length / outsideBoxAttempts.length) * 100)
+                      : 0;
+                    const insidePct = teamShots.length > 0
+                      ? Math.round((insideBoxAttempts.length / teamShots.length) * 100)
+                      : (totalAttempts > 0 ? 50 : 0);
+                    const outsidePct = teamShots.length > 0
+                      ? Math.round((outsideBoxAttempts.length / teamShots.length) * 100)
+                      : (totalAttempts > 0 ? 50 : 0);
+
+                    const gtShotMap = showBenchmark && benchmarkData?.live_ground_truth?.shot_map;
+                    const gtTeam = gtShotMap ? (shotMapTeam === 'home' ? gtShotMap.own : gtShotMap.opponent) : null;
+
+                    return (
+                      <div id="analytics-section-shot-map" className="px-3 pb-3 space-y-2.5">
+                        {/* Team toggle & attacking direction */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-1">
+                            <button
+                              type="button"
+                              onClick={() => setShotMapTeam('home')}
+                              className={`px-2.5 py-0.5 rounded text-[11px] font-bold transition cursor-pointer ${
+                                shotMapTeam === 'home' ? 'bg-[#FFD700]/20 text-[#FFD700] border border-[#FFD700]/40' : 'bg-[#181818] text-gray-400 hover:text-white'
+                              }`}
+                            >
+                              {match.home_team.split(' ')[0] || 'Home'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShotMapTeam('away')}
+                              className={`px-2.5 py-0.5 rounded text-[11px] font-bold transition cursor-pointer ${
+                                shotMapTeam === 'away' ? 'bg-[#2979FF]/20 text-[#2979FF] border border-[#2979FF]/40' : 'bg-[#181818] text-gray-400 hover:text-white'
+                              }`}
+                            >
+                              {match.away_team.split(' ')[0] || 'Away'}
+                            </button>
+                          </div>
+                          <div className="text-[10px] text-gray-400 font-medium flex items-center gap-1">
+                            <span>{shotMapTeam === 'home' ? match.home_team.split(' ')[0] : match.away_team.split(' ')[0]} →</span>
+                            <span className="text-gray-500 font-mono">Full match</span>
+                          </div>
+                        </div>
+
+                        {/* Top summary row: Goal count, Shot count, Total attempts */}
+                        <div className="bg-[#0b0e14] border border-[#1e2433] rounded-lg p-2 space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center space-x-1.5 text-gray-300">
+                              <span className="w-2.5 h-2.5 rounded-full bg-white inline-block"></span>
+                              <span>Goal count</span>
+                            </div>
+                            <div className="flex items-center space-x-1.5">
+                              <span className="font-bold text-white">{goalCount}</span>
+                              {gtTeam && (
+                                <span className="text-[9px] text-[#00E676] font-mono">Veo: {gtTeam.goals}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center space-x-1.5 text-gray-400">
+                              <span className="w-2.5 h-2.5 rounded-full border border-white inline-block"></span>
+                              <span>Shot count</span>
+                            </div>
+                            <div className="flex items-center space-x-1.5">
+                              <span className="font-bold text-gray-300">{shotCount}</span>
+                              {gtTeam && (
+                                <span className="text-[9px] text-[#00E676] font-mono">Veo: {gtTeam.shots}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-xs pt-1 border-t border-[#1a1f2c]">
+                            <span className="text-gray-400 font-medium">Total attempts</span>
+                            <div className="flex items-center space-x-1.5">
+                              <span className="font-bold text-white">{totalAttempts}</span>
+                              {gtTeam && (
+                                <span className="text-[9px] text-[#00E676] font-mono">Veo: {gtTeam.total_attempts}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 5 Veo conversion breakdown metrics */}
+                        <div className="space-y-1 text-[11px] text-gray-300 bg-[#121620] border border-[#1d2331] rounded-lg p-2.5">
+                          <div className="flex items-center justify-between">
+                            <span><strong className="text-white font-semibold">{overallConversion}%</strong> conversion rate.</span>
+                            {gtTeam && <span className="text-[9px] text-[#00E676] font-mono">Veo: {gtTeam.conversion_rate_pct}%</span>}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span><strong className="text-white font-semibold">{insideConversion}%</strong> inside box conversion rate.</span>
+                            {gtTeam && <span className="text-[9px] text-[#00E676] font-mono">Veo: {gtTeam.inside_box_conversion_rate_pct}%</span>}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span><strong className="text-white font-semibold">{outsideConversion}%</strong> outside box conversion rate.</span>
+                            {gtTeam && <span className="text-[9px] text-[#00E676] font-mono">Veo: {gtTeam.outside_box_conversion_rate_pct}%</span>}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span><strong className="text-white font-semibold">{insidePct}%</strong> of total attempts inside box.</span>
+                            {gtTeam && <span className="text-[9px] text-[#00E676] font-mono">Veo: {gtTeam.attempts_inside_box_pct}%</span>}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span><strong className="text-white font-semibold">{outsidePct}%</strong> of total attempts outside box.</span>
+                            {gtTeam && <span className="text-[9px] text-[#00E676] font-mono">Veo: {gtTeam.attempts_outside_box_pct}%</span>}
+                          </div>
+                        </div>
+
+                        {/* Tactical half-pitch map */}
+                        <div className="relative w-full aspect-[52.5/42] bg-[#0c1017] rounded-lg border border-[#222838] overflow-hidden p-1">
+                          <svg viewBox="0 0 52.5 68" className="w-full h-full" role="img" aria-label="2D soccer half-pitch shot map">
+                            {/* Touchlines and boundaries */}
+                            <rect x="0.5" y="0.5" width="51.5" height="67" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="0.8" />
+                            {/* Half-way line on left */}
+                            <line x1="0.5" y1="0.5" x2="0.5" y2="67.5" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
+                            {/* Center circle arc */}
+                            <path d="M 0.5 24.85 A 9.15 9.15 0 0 1 0.5 43.15" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="0.8" />
+                            {/* Center spot */}
+                            <circle cx="0.5" cy="34" r="0.6" fill="rgba(255,255,255,0.5)" />
+                            {/* Penalty area (16.5m depth, 40.32m width) */}
+                            <rect x="36.0" y="13.84" width="16.0" height="40.32" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="0.8" />
+                            {/* 6-yard box (5.5m depth, 18.32m width) */}
+                            <rect x="47.0" y="24.84" width="5.0" height="18.32" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="0.8" />
+                            {/* Penalty spot at 41.5m */}
+                            <circle cx="41.5" cy="34" r="0.6" fill="rgba(255,255,255,0.5)" />
+                            {/* Penalty arc outside the box */}
+                            <path d="M 36.0 27.8 A 9.15 9.15 0 0 0 36.0 40.2" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="0.8" />
+                            {/* Goal posts */}
+                            <rect x="52.0" y="30.34" width="0.8" height="7.32" fill="rgba(255,255,255,0.7)" />
+
+                            {/* Wing tactical labels */}
+                            <text x="2" y="7" fill="rgba(255,255,255,0.25)" fontSize="2.8" fontWeight="bold" letterSpacing="0.4">LEFT WING →</text>
+                            <text x="2" y="63" fill="rgba(255,255,255,0.25)" fontSize="2.8" fontWeight="bold" letterSpacing="0.4">RIGHT WING →</text>
+
+                            {/* Model predicted shots */}
+                            {teamShots.map(s => {
+                              const xHalf = s.x >= 52.5 ? s.x - 52.5 : 52.5 - s.x;
+                              const clampedX = Math.max(2, Math.min(50.5, xHalf));
+                              const clampedY = Math.max(2, Math.min(66, s.y));
+                              const isGoal = s.outcome === 'goal';
+                              return (
+                                <g key={s.id} onClick={() => onSeek(s.timestamp)} className="cursor-pointer">
+                                  <circle
+                                    cx={clampedX}
+                                    cy={clampedY}
+                                    r={isGoal ? 2.2 : 1.8}
+                                    fill={isGoal ? '#ffffff' : 'none'}
+                                    stroke="#ffffff"
+                                    strokeWidth={isGoal ? '0.4' : '0.8'}
+                                    className="hover:scale-150 transition-transform"
+                                  >
+                                    <title>{`Model: ${isGoal ? 'Goal' : 'Shot'} at ${Math.round(s.timestamp)}s`}</title>
+                                  </circle>
+                                </g>
+                              );
+                            })}
+
+                            {/* Veo ground-truth benchmark shot markers overlay */}
+                            {showBenchmark && gtTeam?.markers && gtTeam.markers.map((m: any, idx: number) => {
+                              const rawX = m.left_pct >= 50 ? ((m.left_pct - 50) / 50) * 52.5 : ((50 - m.left_pct) / 50) * 52.5;
+                              const xHalf = Math.max(2, Math.min(50.5, rawX));
+                              const yPos = Math.max(2, Math.min(66, (1 - m.bottom_pct / 100) * 68));
+                              const isGoal = m.type === 'goal';
+                              return (
+                                <g key={`gt-${idx}`} onClick={() => onSeek(m.time_s)} className="cursor-pointer">
+                                  <circle
+                                    cx={xHalf}
+                                    cy={yPos}
+                                    r={isGoal ? 2.4 : 2.0}
+                                    fill={isGoal ? '#00E676' : 'none'}
+                                    stroke="#00E676"
+                                    strokeWidth={isGoal ? '0.5' : '1.0'}
+                                    strokeDasharray={isGoal ? 'none' : '1,0.5'}
+                                    className="hover:scale-150 transition-transform"
+                                  >
+                                    <title>{`Veo Ground Truth: ${isGoal ? 'Goal' : 'Shot'} at ${m.time_str} (${m.time_s}s)`}</title>
+                                  </circle>
+                                </g>
+                              );
+                            })}
+                          </svg>
+                        </div>
+
+                        {/* Benchmark legend if active */}
+                        {showBenchmark && (
+                          <div className="flex items-center justify-between px-2 py-1 bg-[#0b0e14] rounded border border-[#1e2433] text-[9px]">
+                            <div className="flex items-center space-x-2">
+                              <span className="flex items-center gap-1 text-gray-300">
+                                <span className="w-1.5 h-1.5 rounded-full bg-white inline-block"></span> Model Goal
+                              </span>
+                              <span className="flex items-center gap-1 text-gray-400">
+                                <span className="w-1.5 h-1.5 rounded-full border border-white inline-block"></span> Model Shot
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <span className="flex items-center gap-1 text-[#00E676]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#00E676] inline-block"></span> Veo Goal
+                              </span>
+                              <span className="flex items-center gap-1 text-[#00E676]">
+                                <span className="w-1.5 h-1.5 rounded-full border border-[#00E676] inline-block"></span> Veo Shot
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* How to read the shot map footer */}
+                        <div className="flex items-center space-x-1.5 text-[10px] text-gray-400 pt-0.5">
+                          <Info className="w-3 h-3 text-gray-500 shrink-0" />
+                          <span>Solid circles represent goals; hollow circles represent shots.</span>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                  )}
+                    );
+                  })()}
                 </div>
 
                 {/* Pass location */}

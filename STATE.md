@@ -14,7 +14,7 @@
   - Live UI Ground Truth: `benchmarks/raw/veo_stats_live.json` (all 13 stats rows, 25 shot coordinates, pass/possession distributions, 16-player roster).
   - Dual-Camera Extrinsics & Calibration: `benchmarks/raw/skyline_camera_alignment.veo`, `benchmarks/raw/baltimore_armor_camera_alignment.veo`.
   - Secondary Match Multi-Video Sample: `backend/.local/media/baltimore_armor_sample_30s.mp4`.
-- **Baseline Verification**: **`pass=12 fail=0 skip=0`** (probes `d1`–`d12`), **69 pytest tests passing**, **21 vitest tests passing** (non-interactive).
+- **Baseline Verification**: **`pass=12 fail=0 skip=0`** (probes `d1`–`d12`), **69 pytest tests passing**, **22 vitest tests passing** (non-interactive).
 
 ---
 
@@ -100,9 +100,10 @@ Legend: ☑ Done & Verified · ◐ In Progress · ⊘ Blocked · ⏸ Deferred ·
 | **U2** | Jersey-only identity (no fabricated player names) | ☑ | Blank number convention; 0 invented names |
 | **U3** | 16-type capability surface in Events drawer | ☑ | Renders count or measured unavailable reason |
 | **U4** | Singular stat labels & disabled derived rows | ☑ | Accordion integration; comment threads at `#/highlights/<uuid>/comments/` |
-| **P7** | Non-interactive Vitest frontend test suite | ☑ | 21 tests passing; covers radar absence, stats, and honesty |
+| **P7** | Non-interactive Vitest frontend test suite | ☑ | 22 tests passing; covers radar absence, stats, and honesty |
 | **U5** | Live Veo UI audit & ground-truth parity | ☑ | `benchmarks/raw/veo_stats_live.json`, `docs/ui_parity_comparison.md`, 69 pytest tests |
 | **U6** | Live Veo Benchmark comparison drawer & API | ☑ | `/api/matches/{id}/benchmark`, `stats_benchmark.py`, toggleable side-by-side delta cards in Stats drawer, live UI verified |
+| **U7** | Tactical half-pitch Shot Map & 5-metric breakdown | ☑ | Attacking half SVG, wing labels, 5 conversion metrics, Veo live GT shot markers, 22 vitest tests |
 
 ---
 

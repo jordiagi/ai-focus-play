@@ -180,6 +180,22 @@ it('toggles benchmark mode and displays ground truth comparison rows', async () 
       exact_match_count: 0,
       exact_match_ratio: 0.0,
     },
+    live_ground_truth: {
+      shot_map: {
+        own: {
+          goals: 3, shots: 9, total_attempts: 12, conversion_rate_pct: 25,
+          inside_box_conversion_rate_pct: 50, outside_box_conversion_rate_pct: 0,
+          attempts_inside_box_pct: 50, attempts_outside_box_pct: 50,
+          markers: [{ type: 'goal', time_str: '02:43', time_s: 163, left_pct: 90.28, bottom_pct: 55.84 }],
+        },
+        opponent: {
+          goals: 3, shots: 10, total_attempts: 13, conversion_rate_pct: 23,
+          inside_box_conversion_rate_pct: 20, outside_box_conversion_rate_pct: 25,
+          attempts_inside_box_pct: 38, attempts_outside_box_pct: 62,
+          markers: [{ type: 'shot', time_str: '07:59', time_s: 479, left_pct: 86.66, bottom_pct: 63.70 }],
+        },
+      },
+    },
   };
   vi.spyOn(api, 'getBenchmark').mockResolvedValueOnce(fakeBenchmark);
 
@@ -191,4 +207,27 @@ it('toggles benchmark mode and displays ground truth comparison rows', async () 
   expect(await screen.findByText('Veo Benchmark Reference')).toBeTruthy();
   expect(screen.getByText(/Arlington vs Skyline/)).toBeTruthy();
   expect(screen.getByText('Δ-1')).toBeTruthy();
+  expect(screen.getByText('Veo: 25%')).toBeTruthy();
+  expect(screen.getAllByText('Veo: 50%').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('Veo Goal')).toBeTruthy();
+  expect(screen.getByText('Veo Shot')).toBeTruthy();
+});
+
+it('renders tactical half-pitch shot map with 5 conversion breakdown lines', () => {
+  const analyticsWithShots: AnalyticsData = {
+    ...analytics,
+    shot_map: [
+      { id: 's1', timestamp: 10, period: 1, team: 'home', player_jersey: '10', outcome: 'goal', x: 95, y: 34, is_inside_box: true, label: 'Goal' },
+      { id: 's2', timestamp: 25, period: 1, team: 'home', player_jersey: '8', outcome: 'saved', x: 80, y: 25, is_inside_box: false, label: 'Shot' },
+    ],
+  };
+  renderDrawer(analyticsWithShots);
+
+  const conversionLines = screen.getAllByText(/conversion rate\./);
+  expect(conversionLines.length).toBeGreaterThanOrEqual(3);
+  expect(screen.getByText(/of total attempts inside box\./)).toBeTruthy();
+  expect(screen.getByText(/of total attempts outside box\./)).toBeTruthy();
+  expect(screen.getByText(/LEFT WING →/)).toBeTruthy();
+  expect(screen.getByText(/RIGHT WING →/)).toBeTruthy();
+  expect(screen.getByRole('img', { name: '2D soccer half-pitch shot map' })).toBeTruthy();
 });
