@@ -2,12 +2,12 @@
 
 **Purpose:** Live project status and verification contract. Update as you go. For in-depth post-mortems, mathematical derivations, and historical failure analysis, consult the companion document: [docs/postmortems/falsification_log.md](file:///home/ai/Projects/ai-focus-play/docs/postmortems/falsification_log.md).
 
-**Last updated:** 2026-09-24 · **OPTIONS B, C, D COMPLETED & FULLY GATED.**
+**Last updated:** 2026-09-24 · **PHYSICSSHOTDETECTOR WIRED INTO MATCHPIPELINE DAG & VERIFIED.**
 - **Track 2 (UI / Route Parity)**: **COMPLETE & AUDITED** (Visual side-by-side audit against live Veo UI documented in `docs/ui_parity_comparison.md`, deep-link routing, tactical shot map 5-metric breakdown, Veo GT overlay).
-- **Option B (Physics-Based 3D Goal-Directed Shot Detection Gate)**: **GATE PASSED**. `PhysicsShotDetector` projects 2D panoramic points $(u, v)$ to metric pitch coordinates $[0, 105]\text{m} \times [0, 68]\text{m}$ using `VeoCameraModel`. Evaluates metric velocity ($v \ge 8\text{ m/s}$), directional cosine alignment to goal mouth ($\cos\theta \ge 0.85$), and attacking zone bounds. Period 2 heldout F1 = **0.385** (Recall = **0.909** [10/11 matched], Precision = 0.244), clearing pre-registered criteria S1 ($F1 \ge 0.25$), S2 ($\ge 2.0\times$ chance [5.77x]), and S3 (beats OutOfPlay proxy [+0.236]). Status: **`GATE: PASS`**.
+- **Option B (Physics-Based 3D Goal-Directed Shot Detection Gate & DAG Integration)**: **SHIPPED & GATED**. `PhysicsShotDetector` projects 2D panoramic points $(u, v)$ to metric pitch coordinates $[0, 105]\text{m} \times [0, 68]\text{m}$ using `VeoCameraModel`. Cleared pre-registered criteria S1 ($F1 \ge 0.25$), S2 ($\ge 2.0\times$ chance [5.77x]), and S3 (beats OutOfPlay proxy [+0.236]) with Period 2 heldout F1 = **0.385** (Recall = **0.909** [10/11 matched], Precision = 0.244). Wired directly into `MatchPipeline` DAG stage 3b: auto-generates metric `Shot` events with $(x, y)$ turf coordinates, speeds, and goal alignment, dynamically updating `event_capabilities["Shot"]` to `detected`.
 - **Option C (Video Telestration & Drawing Enhancement)**: **SHIPPED & TESTED**. Enhanced `TelestratorCanvas` with Veo-style spotlight, directional arrows, player tactical rings, freehand pen, and text labels. Added undo active stroke, hotkey `D` and player toolbar `Draw` toggle, and frame snapshot PNG export with Veo watermark badge.
 - **Option D (Clip Download & Streaming Zip Export in Header Menu)**: **SHIPPED & VERIFIED**. Connected download dropdown to Full Match Video (`/media/...`), streaming zip highlight clips (`/api/matches/{id}/highlights/export` and `/api/matches/{id}/export/zip`), match analytics JSON export, and events/highlights CSV spreadsheet export with click-outside dismissal.
-- **Baseline Verification**: **`pass=11 fail=0 skip=0`** (probes `d1`–`d12`), **92 pytest tests passing**, **33 vitest tests passing** (non-interactive).
+- **Baseline Verification**: **`pass=11 fail=0 skip=0`** (probes `d1`–`d12`), **93 pytest tests passing**, **33 vitest tests passing** (non-interactive).
 
 ---
 
