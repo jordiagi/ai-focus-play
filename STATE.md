@@ -2,21 +2,12 @@
 
 **Purpose:** Live project status and verification contract. Update as you go. For in-depth post-mortems, mathematical derivations, and historical failure analysis, consult the companion document: [docs/postmortems/falsification_log.md](file:///home/ai/Projects/ai-focus-play/docs/postmortems/falsification_log.md).
 
-**Last updated:** 2026-09-24 · **ROADMAP OPTIONS 1, 2, 3, 4 COMPLETED & MULTI-MATCH PIPELINE VERIFIED.**
+**Last updated:** 2026-09-24 · **OPTIONS B, C, D COMPLETED & FULLY GATED.**
 - **Track 2 (UI / Route Parity)**: **COMPLETE & AUDITED** (Visual side-by-side audit against live Veo UI documented in `docs/ui_parity_comparison.md`, deep-link routing, tactical shot map 5-metric breakdown, Veo GT overlay).
-- **Track 3 (D-B Pixel-Space Detection)**: **SHIPPED & GATED**. 6 of 14 types scored against the 447-event Veo benchmark (141 events, 32% of mass). Macro-F1: **0.278** reported / **0.253** conservative ($p < 0.05$ permutation-cleared).
-- **Option 1 (2D Pitch Radar Physical Calibration)**: **RESOLVED & SHIPPED**. Unconstrained 8-point homography failure resolved by physical camera extrinsics (`VeoCameraModel` & `CalibratedPitchRadar`). 99.9% (10,978 / 10,994) of ball track points and 100% of sampled player footprints land validly within pitch bounds $[0, 105]\text{m} \times [0, 68]\text{m}$.
-- **Option 2 (Foot-Level Spatial Masking / Tier B Resurrection)**: **GATE PASSED**. Root cause of previous failure was 2D whole-body depth conflation. Restricting ball proximity strictly to the bottom 15% foot-contact zone (`route_foot_contact`) achieves Period 1 accuracy **0.696**, Period 2 held-out accuracy **0.645** (beating 0.613 majority baseline), and balanced accuracy **0.649** (exceeding 0.55 floor). `gate_fps15.json` status: **`GATE: PASS`**.
-- **Option 4 (Unified MatchPipeline DAG Runner)**: **SHIPPED**. Refactored `pipeline_runner.py` orchestrating asset resolution, physical calibration, calibrated radar frames, event ingestion, and capability manifest verification.
-- **Secondary Match Discovery & Veo Parity Verification**: **COMPLETE & VERIFIED**.
-  - Connected to live Veo session via `browser-harness` and selected **Arlington SA U16B ECNL (26-27) vs. Fairfax Union** (Sept 20, 2026, 3-0 result, Match UUID `45cf9155-0ea3-4d56-957a-e454de77e216`).
-  - Extracted `.veo` camera alignment to `benchmarks/raw/fairfax_union_camera_alignment.veo` (camera height 4.17m, 105.0m × 70.26m pitch).
-  - Extracted 30-second 1080p sample video from signed CDN stream to `backend/.local/media/fairfax_union_sample_30s.mp4`.
-  - Extracted complete live analysis and stats ground-truth to `benchmarks/raw/fairfax_union_stats.json` (13 metrics table, 23 shots + 3 goals breakdown, 389 events, 26 AI highlights, pass & possession distributions).
-  - Executed and validated `MatchPipeline` across both ML and demo modes on the new match, generating calibrated 2D pitch radar frames and event capability manifest.
-  - Multi-match switcher deployed to local UI header with instant match switching, query URL synchronization, and dynamic match-specific Veo ground-truth benchmark comparison.
-  - Protected sample video fixtures from unlinking during match cleanup in `MatchRepository`.
-- **Baseline Verification**: **`pass=11 fail=0 skip=0`** (probes `d1`–`d12`), **92 pytest tests passing**, **28 vitest tests passing** (non-interactive).
+- **Option B (Physics-Based 3D Goal-Directed Shot Detection Gate)**: **GATE PASSED**. `PhysicsShotDetector` projects 2D panoramic points $(u, v)$ to metric pitch coordinates $[0, 105]\text{m} \times [0, 68]\text{m}$ using `VeoCameraModel`. Evaluates metric velocity ($v \ge 8\text{ m/s}$), directional cosine alignment to goal mouth ($\cos\theta \ge 0.85$), and attacking zone bounds. Period 2 heldout F1 = **0.385** (Recall = **0.909** [10/11 matched], Precision = 0.244), clearing pre-registered criteria S1 ($F1 \ge 0.25$), S2 ($\ge 2.0\times$ chance [5.77x]), and S3 (beats OutOfPlay proxy [+0.236]). Status: **`GATE: PASS`**.
+- **Option C (Video Telestration & Drawing Enhancement)**: **SHIPPED & TESTED**. Enhanced `TelestratorCanvas` with Veo-style spotlight, directional arrows, player tactical rings, freehand pen, and text labels. Added undo active stroke, hotkey `D` and player toolbar `Draw` toggle, and frame snapshot PNG export with Veo watermark badge.
+- **Option D (Clip Download & Streaming Zip Export in Header Menu)**: **SHIPPED & VERIFIED**. Connected download dropdown to Full Match Video (`/media/...`), streaming zip highlight clips (`/api/matches/{id}/highlights/export` and `/api/matches/{id}/export/zip`), match analytics JSON export, and events/highlights CSV spreadsheet export with click-outside dismissal.
+- **Baseline Verification**: **`pass=11 fail=0 skip=0`** (probes `d1`–`d12`), **92 pytest tests passing**, **33 vitest tests passing** (non-interactive).
 
 ---
 
@@ -111,6 +102,8 @@ Legend: ☑ Done & Verified · ◐ In Progress · ⊘ Blocked · ⏸ Deferred ·
 | **U7** | Tactical half-pitch Shot Map & 5-metric breakdown | ☑ | Attacking half SVG, wing labels, 5 conversion metrics, Veo live GT shot markers, 22 vitest tests |
 | **U8** | Multi-Match Switcher & dynamic match-specific Veo benchmark comparison | ☑ | Dropdown in Header, query param sync, `fairfax_union_stats.json` & `veo_stats_live.json`, 24 vitest tests |
 | **U9** | Player Moments & Jersey Tag Filtering in Video Timeline & Drawers | ☑ | Cross-linked jersey selection across `PlayerMomentsBar`, `Timeline`, `Highlights`, `Events`, and dedicated player view in `Players` drawer; 28 vitest tests |
+| **U10** | Video Telestration & Frame Snapshot PNG Export (Option C) | ☑ | Spotlight, directional arrow, player tactical ring, freehand pen, text labels, undo active stroke, hotkey `D` & player toolbar `Draw` toggle, Veo watermark snapshot; 32 vitest tests |
+| **U11** | Clip Download & Streaming Zip Export in Header Menu (Option D) | ☑ | Full match video MP4, streaming zip highlights (`/export/zip`), match analytics JSON, and tagged events/highlights CSV export; 33 vitest tests |
 
 ---
 
