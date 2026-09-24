@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Drawing, DrawingCoordinate } from '../../types';
 import { 
-  Pencil, ArrowUpRight, Circle, Sun, Type, Trash2, Check, X
+  Pencil, ArrowUpRight, Circle, Sun, Type, Trash2, Check, X, Camera, Undo
 } from 'lucide-react';
 
 interface TelestratorProps {
@@ -10,6 +10,7 @@ interface TelestratorProps {
   existingDrawings: Drawing[];
   onSaveDrawing: (drawing: Omit<Drawing, 'id'>) => void;
   onClose: () => void;
+  videoElement?: HTMLVideoElement | null;
 }
 
 type ToolType = 'arrow' | 'spotlight' | 'circle' | 'pen' | 'text';
@@ -100,6 +101,7 @@ export const TelestratorCanvas: React.FC<TelestratorProps> = ({
   existingDrawings,
   onSaveDrawing,
   onClose,
+  videoElement,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [selectedTool, setSelectedTool] = useState<ToolType>('arrow');
@@ -200,6 +202,62 @@ export const TelestratorCanvas: React.FC<TelestratorProps> = ({
     }
   };
 
+  const handleUndo = () => {
+    if (currentCoords.length > 0) {
+      if (selectedTool === 'pen' && currentCoords.length > 5) {
+        setCurrentCoords(prev => prev.slice(0, Math.max(1, prev.length - 10)));
+      } else {
+        setCurrentCoords([]);
+      }
+    }
+  };
+
+  const handleExportSnapshot = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = canvas.width || 1280;
+    exportCanvas.height = canvas.height || 720;
+    const ctx = exportCanvas.getContext('2d');
+    if (!ctx) return;
+
+    // Draw video frame if accessible
+    if (videoElement && videoElement.readyState >= 2) {
+      try {
+        ctx.drawImage(videoElement, 0, 0, exportCanvas.width, exportCanvas.height);
+      } catch {
+        ctx.fillStyle = '#14281e';
+        ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+      }
+    } else {
+      ctx.fillStyle = '#14281e';
+      ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+    }
+
+    // Draw annotations overlay
+    ctx.drawImage(canvas, 0, 0);
+
+    // Watermark
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(12, exportCanvas.height - 36, 170, 26);
+    ctx.fillStyle = '#00E676';
+    ctx.font = 'bold 12px sans-serif';
+    const mins = Math.floor(currentTime / 60);
+    const secs = Math.floor(currentTime % 60);
+    ctx.fillText(`VEO COACH • ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`, 20, exportCanvas.height - 18);
+
+    try {
+      const dataUrl = exportCanvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `veo-telestration-${Math.round(currentTime)}s.png`;
+      a.click();
+    } catch (err) {
+      console.warn('Snapshot download failed:', err);
+    }
+  };
+
   return (
     <div className="absolute inset-0 z-20 pointer-events-auto flex flex-col justify-between">
       {/* Top Floating Toolbar */}
@@ -264,6 +322,25 @@ export const TelestratorCanvas: React.FC<TelestratorProps> = ({
         <div className="h-5 w-[1px] bg-[#2d3342]" />
 
         {/* Actions */}
+        <button
+          onClick={handleExportSnapshot}
+          className="p-1.5 text-gray-300 hover:text-[#00E676] hover:bg-[#202634] rounded-lg transition"
+          title="Export Frame Snapshot PNG"
+          aria-label="Export frame snapshot"
+        >
+          <Camera className="w-4 h-4" />
+        </button>
+
+        <button
+          onClick={handleUndo}
+          disabled={currentCoords.length === 0}
+          className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 hover:bg-[#202634] rounded-lg transition"
+          title="Undo active stroke"
+          aria-label="Undo active stroke"
+        >
+          <Undo className="w-4 h-4" />
+        </button>
+
         <button
           onClick={() => setCurrentCoords([])}
           className="p-1.5 text-gray-400 hover:text-white hover:bg-[#202634] rounded-lg transition"

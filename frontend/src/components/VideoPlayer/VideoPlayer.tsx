@@ -537,6 +537,7 @@ export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
             matchId={match.id}
             currentTime={currentTime}
             existingDrawings={drawings}
+            videoElement={videoRef.current}
             onSaveDrawing={onSaveDrawing}
             onClose={() => setIsTelestratorOpen(false)}
           />
@@ -640,6 +641,18 @@ export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
           </div>
 
           <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setIsTelestratorOpen(!isTelestratorOpen)}
+              className={`px-2.5 py-1 rounded border text-xs font-semibold transition flex items-center space-x-1 ${
+                isTelestratorOpen ? 'bg-[#00E676] text-black border-[#00E676]' : 'bg-[#141414] text-gray-300 border-[#222] hover:border-gray-500'
+              }`}
+              title="Toggle Telestrator / Drawing (Hotkey D)"
+              aria-label="Toggle Telestrator drawing tools"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              <span>Draw</span>
+            </button>
+
             <button
               onClick={() => setIsRadarVisible(!isRadarVisible)}
               className={`px-2.5 py-1 rounded border text-xs font-semibold transition ${
