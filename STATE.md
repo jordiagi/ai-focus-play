@@ -16,7 +16,7 @@
   - Executed and validated `MatchPipeline` across both ML and demo modes on the new match, generating calibrated 2D pitch radar frames and event capability manifest.
   - Multi-match switcher deployed to local UI header with instant match switching, query URL synchronization, and dynamic match-specific Veo ground-truth benchmark comparison.
   - Protected sample video fixtures from unlinking during match cleanup in `MatchRepository`.
-- **Baseline Verification**: **`pass=11 fail=0 skip=0`** (probes `d1`–`d12`), **88 pytest tests passing**, **28 vitest tests passing** (non-interactive).
+- **Baseline Verification**: **`pass=11 fail=0 skip=0`** (probes `d1`–`d12`), **92 pytest tests passing**, **28 vitest tests passing** (non-interactive).
 
 ---
 
@@ -90,7 +90,7 @@ Legend: ☑ Done & Verified · ◐ In Progress · ⊘ Blocked · ⏸ Deferred ·
 | **B16** | Throw-in team attribution via shirt color | ☑ | $p=0.020$ on `control_team_shuffle.py` |
 | **B21** | Ball-track coverage expansion | ✗ | **CLOSED**: Erases coverage collapse signal; drops macro-F1 |
 | **B23 / G4**| Tier B possession association gate | ☑ | **GATE PASSED**: Foot-region spatial masking (`route_foot_contact`) clears gate (P1 0.696, P2 0.645 vs 0.613 maj, bal 0.649 vs 0.55) |
-| **P1** | `FootballShot` detector | ✗ | **CLOSED**: Period 2 F1 0.120, beaten by OOP proxy (0.149) |
+| **P1** | `FootballShot` detector (3D metric kinematics) | ☑ | **GATE PASSED**: `PhysicsShotDetector` projects to 2D turf plane; Period 2 heldout F1 = **0.385** (TP=10/11, Prec=0.244, Rec=0.909), beats chance (5.77x vs 2.0x floor), beats OOP proxy (+0.236). `gate_shot_physics.json` status: **PASS** |
 | **P2** | `FootballFreeKick` & `FootballFoul` | ✗ | **CLOSED**: Period 2 F1 0.000 / 0.143; whistle unrecoverable |
 | **G7** | Jersey recognition | ⏸ | **DEFERRED**: Honest ceiling 25–40%, unlocks 0 event types |
 | **G8** | Veo dual-camera extrinsics & multi-sample dataset | ☑ | Extracted `.veo` calibrations and Baltimore Armor 30s sample |
