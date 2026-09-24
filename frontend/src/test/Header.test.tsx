@@ -84,4 +84,29 @@ describe('Header component', () => {
     fireEvent.click(secondMatchBtn);
     expect(onSelectMatch).toHaveBeenCalledWith(mockMatch2);
   });
+
+  it('opens download menu and renders full match video, zip, json, and csv options', async () => {
+    render(
+      <Header
+        currentMatch={mockMatch1}
+        matches={[mockMatch1]}
+        onOpenBurgerMenu={vi.fn()}
+        onOpenUpload={vi.fn()}
+      />
+    );
+
+    const downloadTrigger = screen.getByRole('button', { name: /download match media/i });
+    fireEvent.click(downloadTrigger);
+
+    expect(screen.getByText('Full Match Video')).toBeTruthy();
+    expect(screen.getByText('Export Highlights (ZIP)')).toBeTruthy();
+    expect(screen.getByText('Match Analytics (JSON)')).toBeTruthy();
+    expect(screen.getByText('Events & Highlights (CSV)')).toBeTruthy();
+
+    const videoLink = screen.getByText('Full Match Video').closest('a');
+    expect(videoLink?.getAttribute('href')).toBe('/media/demo_match.mp4');
+
+    const zipLink = screen.getByText('Export Highlights (ZIP)').closest('a');
+    expect(zipLink?.getAttribute('href')).toContain('/matches/demo-arlington-skyline/highlights/export');
+  });
 });

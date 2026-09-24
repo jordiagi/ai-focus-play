@@ -401,6 +401,11 @@ def export_highlights_zip(match_id: str):
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
+@router.get("/{match_id}/export/zip", include_in_schema=False)
+def export_highlights_zip_alias(match_id: str):
+    """Direct alias for /{match_id}/highlights/export."""
+    return export_highlights_zip(match_id)
+
 @router.get("/{match_id}/events", response_model=List[Event])
 def get_events(match_id: str):
     return match_repo.get_events(match_id)

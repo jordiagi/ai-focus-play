@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Match } from '../types';
-import { Upload, Download, Check, Video, FileArchive, ChevronDown } from 'lucide-react';
+import { Upload, Download, Check, Video, FileArchive, ChevronDown, FileText, FileSpreadsheet } from 'lucide-react';
 import { api } from '../services/api';
 
 interface HeaderProps {
@@ -23,34 +23,100 @@ export const Header: React.FC<HeaderProps> = ({
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [showMatchPicker, setShowMatchPicker] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const matchPickerRef = useRef<HTMLDivElement>(null);
+  const downloadMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (matchPickerRef.current && !matchPickerRef.current.contains(e.target as Node)) {
         setShowMatchPicker(false);
       }
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target as Node)) {
+        setShowDownloadMenu(false);
+      }
     };
-    if (showMatchPicker) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showMatchPicker]);
+  }, []);
 
   const handleShare = () => {
     const shareUrl = new URL(window.location.href);
     if (currentMatch) {
       shareUrl.searchParams.set('match', currentMatch.id);
     }
-    // window.location.href already carries the current hash route, but set it
-    // explicitly so a shared link keeps whichever drawer is open even if that
-    // ever stops being true.
     shareUrl.hash = window.location.hash;
     navigator.clipboard.writeText(shareUrl.toString());
     setCopiedShare(true);
     setTimeout(() => setCopiedShare(false), 2000);
+  };
+
+  const handleDownloadAnalyticsJson = async () => {
+    if (!currentMatch) return;
+    try {
+      setIsExporting(true);
+      const data = await api.getAnalytics(currentMatch.id);
+      const jsonStr = JSON.stringify(data ?? { match_id: currentMatch.id }, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${currentMatch.id}-analytics.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export analytics JSON:', err);
+    } finally {
+      setIsExporting(false);
+      setShowDownloadMenu(false);
+    }
+  };
+
+  const handleDownloadCsv = async () => {
+    if (!currentMatch) return;
+    try {
+      setIsExporting(true);
+      const [events, highlights] = await Promise.all([
+        api.getEvents(currentMatch.id).catch(() => []),
+        api.getHighlights(currentMatch.id).catch(() => []),
+      ]);
+      const rows = [
+        ['Record Type', 'Timestamp (s)', 'Formatted Time', 'Team', 'Jersey', 'Title/Description', 'Tags'],
+        ...events.map(e => [
+          'Event',
+          e.timestamp.toFixed(2),
+          `${Math.floor(e.timestamp / 60)}:${Math.floor(e.timestamp % 60).toString().padStart(2, '0')}`,
+          e.team || '',
+          e.player_jersey || '',
+          `"${(e.description || e.event_type || '').replace(/"/g, '""')}"`,
+          '',
+        ]),
+        ...highlights.map(h => [
+          'Highlight',
+          h.start_time.toFixed(2),
+          `${Math.floor(h.start_time / 60)}:${Math.floor(h.start_time % 60).toString().padStart(2, '0')}`,
+          h.team || '',
+          h.player_jersey || '',
+          `"${(h.title || h.event_type || '').replace(/"/g, '""')}"`,
+          `"${(h.tags || []).join(';')}"`,
+        ]),
+      ];
+      const csvContent = rows.map(r => r.join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${currentMatch.id}-events-summary.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export CSV summary:', err);
+    } finally {
+      setIsExporting(false);
+      setShowDownloadMenu(false);
+    }
   };
 
   const mode = currentMatch?.analysis_mode || 'demo';
@@ -206,7 +272,7 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
 
         {/* Download Dropdown */}
-        <div className="relative">
+        <div className="relative" ref={downloadMenuRef}>
           <button
             onClick={() => setShowDownloadMenu(!showDownloadMenu)}
             className="flex items-center space-x-1.5 text-[#e1e1e1] hover:text-white text-xs font-medium transition cursor-pointer"
@@ -217,7 +283,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {showDownloadMenu && currentMatch && (
-            <div className="absolute right-0 mt-2 w-60 bg-[#12141a] border border-[#262c3b] rounded-xl shadow-2xl py-1 z-50">
+            <div className="absolute right-0 mt-2 w-64 bg-[#12141a] border border-[#262c3b] rounded-xl shadow-2xl py-1 z-50">
               <a
                 href={currentMatch.video_url}
                 download
@@ -242,6 +308,28 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="text-[10px] text-gray-400">Download all clips package</div>
                 </div>
               </a>
+              <button
+                onClick={handleDownloadAnalyticsJson}
+                disabled={isExporting}
+                className="w-full text-left flex items-center space-x-2.5 px-3 py-2 text-xs text-gray-200 hover:bg-[#1a1e28] transition border-t border-[#222] cursor-pointer disabled:opacity-40"
+              >
+                <FileText className="w-4 h-4 text-amber-400" />
+                <div>
+                  <div className="font-semibold text-white">Match Analytics (JSON)</div>
+                  <div className="text-[10px] text-gray-400">Match statistics and metrics report</div>
+                </div>
+              </button>
+              <button
+                onClick={handleDownloadCsv}
+                disabled={isExporting}
+                className="w-full text-left flex items-center space-x-2.5 px-3 py-2 text-xs text-gray-200 hover:bg-[#1a1e28] transition border-t border-[#222] cursor-pointer disabled:opacity-40"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                <div>
+                  <div className="font-semibold text-white">Events & Highlights (CSV)</div>
+                  <div className="text-[10px] text-gray-400">Spreadsheet table of all tagged plays</div>
+                </div>
+              </button>
             </div>
           )}
         </div>
