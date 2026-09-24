@@ -2,13 +2,20 @@
 
 **Purpose:** Live project status and verification contract. Update as you go. For in-depth post-mortems, mathematical derivations, and historical failure analysis, consult the companion document: [docs/postmortems/falsification_log.md](file:///home/ai/Projects/ai-focus-play/docs/postmortems/falsification_log.md).
 
-**Last updated:** 2026-09-24 · **ROADMAP OPTIONS 1, 2, 3, 4 COMPLETED & VERIFIED.**
+**Last updated:** 2026-09-24 · **ROADMAP OPTIONS 1, 2, 3, 4 COMPLETED & MULTI-MATCH PIPELINE VERIFIED.**
 - **Track 2 (UI / Route Parity)**: **COMPLETE & AUDITED** (Visual side-by-side audit against live Veo UI documented in `docs/ui_parity_comparison.md`, deep-link routing, tactical shot map 5-metric breakdown, Veo GT overlay).
 - **Track 3 (D-B Pixel-Space Detection)**: **SHIPPED & GATED**. 6 of 14 types scored against the 447-event Veo benchmark (141 events, 32% of mass). Macro-F1: **0.278** reported / **0.253** conservative ($p < 0.05$ permutation-cleared).
 - **Option 1 (2D Pitch Radar Physical Calibration)**: **RESOLVED & SHIPPED**. Unconstrained 8-point homography failure resolved by physical camera extrinsics (`VeoCameraModel` & `CalibratedPitchRadar`). 99.9% (10,978 / 10,994) of ball track points and 100% of sampled player footprints land validly within pitch bounds $[0, 105]\text{m} \times [0, 68]\text{m}$.
 - **Option 2 (Foot-Level Spatial Masking / Tier B Resurrection)**: **GATE PASSED**. Root cause of previous failure was 2D whole-body depth conflation. Restricting ball proximity strictly to the bottom 15% foot-contact zone (`route_foot_contact`) achieves Period 1 accuracy **0.696**, Period 2 held-out accuracy **0.645** (beating 0.613 majority baseline), and balanced accuracy **0.649** (exceeding 0.55 floor). `gate_fps15.json` status: **`GATE: PASS`**.
 - **Option 4 (Unified MatchPipeline DAG Runner)**: **SHIPPED**. Refactored `pipeline_runner.py` orchestrating asset resolution, physical calibration, calibrated radar frames, event ingestion, and capability manifest verification.
-- **Baseline Verification**: **`pass=11 fail=0 skip=0`** (probes `d1`–`d12`), **81 pytest tests passing**, **22 vitest tests passing** (non-interactive).
+- **Secondary Match Discovery & Veo Parity Verification**: **COMPLETE & VERIFIED**.
+  - Connected to live Veo session via `browser-harness` and selected **Arlington SA U16B ECNL (26-27) vs. Fairfax Union** (Sept 20, 2026, 3-0 result, Match UUID `45cf9155-0ea3-4d56-957a-e454de77e216`).
+  - Extracted `.veo` camera alignment to `benchmarks/raw/fairfax_union_camera_alignment.veo` (camera height 4.17m, 105.0m × 70.26m pitch).
+  - Extracted 30-second 1080p sample video from signed CDN stream to `backend/.local/media/fairfax_union_sample_30s.mp4`.
+  - Extracted complete live analysis and stats ground-truth to `benchmarks/raw/fairfax_union_stats.json` (13 metrics table, 23 shots + 3 goals breakdown, 389 events, 26 AI highlights, pass & possession distributions).
+  - Executed and validated `MatchPipeline` across both ML and demo modes on the new match, generating calibrated 2D pitch radar frames and event capability manifest.
+  - Protected sample video fixtures from unlinking during match cleanup in `MatchRepository`.
+- **Baseline Verification**: **`pass=11 fail=0 skip=0`** (probes `d1`–`d12`), **88 pytest tests passing**, **22 vitest tests passing** (non-interactive).
 
 ---
 

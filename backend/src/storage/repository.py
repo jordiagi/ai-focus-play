@@ -143,9 +143,14 @@ class MatchRepository:
         # Safely unlink files after DB transaction completes
         for fpath in files_to_remove:
             try:
-                # Guard unlink: must be within MEDIA_DIR and not demo fixtures
+                # Guard unlink: must be within MEDIA_DIR and not demo fixtures or benchmark samples
                 resolved = fpath.resolve()
-                if resolved.is_relative_to(media_root) and "demo_match" not in resolved.name and "demo_thumb" not in resolved.name:
+                if (
+                    resolved.is_relative_to(media_root)
+                    and "demo_match" not in resolved.name
+                    and "demo_thumb" not in resolved.name
+                    and "sample_30s" not in resolved.name
+                ):
                     if resolved.exists():
                         resolved.unlink(missing_ok=True)
                         logger.info(f"Unlinked match media file: {resolved}")

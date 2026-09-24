@@ -71,9 +71,15 @@ class MatchPipeline:
 
     def _run_demo_pipeline(self, match: Match) -> Dict[str, Any]:
         """Run the frozen demo fallback engine."""
+        from backend.src.config import MEDIA_DIR
         from backend.src.services.pipeline.cv_engine import cv_engine
 
-        video_path = REPO / match.video_url.lstrip("/")
+        if match.video_url.startswith("/media/"):
+            video_path = MEDIA_DIR / match.video_url[len("/media/"):]
+        elif (MEDIA_DIR / match.video_url.lstrip("/")).exists():
+            video_path = MEDIA_DIR / match.video_url.lstrip("/")
+        else:
+            video_path = REPO / match.video_url.lstrip("/")
         radar_frames, events, highlights, analytics = cv_engine.process_video(
             video_path=video_path,
         )

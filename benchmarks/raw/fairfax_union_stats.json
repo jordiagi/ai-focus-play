@@ -1,0 +1,427 @@
+{
+  "$comment": "Veo Analytics UI live ground truth extracted via browser-harness directly from app.veo.co on 2026-09-24",
+  "match": {
+    "title": "Arlington SA U16B ECNL (26-27) vs. Fairfax Union",
+    "uuid": "45cf9155-0ea3-4d56-957a-e454de77e216",
+    "slug": "20260920-arlington-sa-u16b-ecnl-26-27-vs-fairfax-union-v43ba435",
+    "date": "2026-09-20",
+    "final_result": {
+      "own": 3,
+      "opponent": 0
+    },
+    "own_team": "Arlington SA U16B ECNL (26-27)",
+    "opponent_team": "Fairfax Union"
+  },
+  "periods": [
+    {
+      "period_id": 1,
+      "timeframe": [
+        241,
+        2806
+      ],
+      "duration": 2565,
+      "own_side": "left"
+    },
+    {
+      "period_id": 2,
+      "timeframe": [
+        3433,
+        5843
+      ],
+      "duration": 2410,
+      "own_side": "right"
+    }
+  ],
+  "top_cards": {
+    "goals_scored": {
+      "value": 3,
+      "match_diff": 0
+    },
+    "shots": {
+      "value": 15,
+      "match_diff": 6
+    },
+    "possession_percent": {
+      "value": 74,
+      "match_diff": 12
+    }
+  },
+  "stats_table": {
+    "period": "Full recording",
+    "rows": {
+      "goal": {
+        "own": 3,
+        "opponent": 0
+      },
+      "shot": {
+        "own": 15,
+        "opponent": 5
+      },
+      "total_attempts": {
+        "own": 18,
+        "opponent": 5
+      },
+      "corner": {
+        "own": 3,
+        "opponent": 4
+      },
+      "free_kick": {
+        "own": 14,
+        "opponent": 10
+      },
+      "throw_in": {
+        "own": 10,
+        "opponent": 21
+      },
+      "foul": {
+        "own": 9,
+        "opponent": 11
+      },
+      "penalty": {
+        "own": 0,
+        "opponent": 1
+      },
+      "tackle": {
+        "own": 31,
+        "opponent": 38
+      },
+      "passes_completed": {
+        "own": 378,
+        "opponent": 147
+      },
+      "possession_percent": {
+        "own": 74,
+        "opponent": 26
+      },
+      "possession_minutes": {
+        "own": 31,
+        "opponent": 11
+      },
+      "possession_won": {
+        "own": 123,
+        "opponent": 113
+      }
+    }
+  },
+  "shot_map": {
+    "own": {
+      "goals": 3,
+      "shots": 15,
+      "total_attempts": 18,
+      "conversion_rate_pct": 17,
+      "inside_box_conversion_rate_pct": 43,
+      "outside_box_conversion_rate_pct": 0,
+      "attempts_inside_box_pct": 39,
+      "attempts_outside_box_pct": 61,
+      "markers": [
+        {
+          "id": "45ba6a46-b55b-11f1-b282-57e1c4995013",
+          "type": "goal",
+          "time_str": "07:17",
+          "time_s": 437.3,
+          "period": 1,
+          "team": "Own",
+          "player_jersey": "49",
+          "left_pct": 93.42,
+          "bottom_pct": 51.83
+        },
+        {
+          "id": "45ba9804-b55b-11f1-b282-0fd756f04d72",
+          "type": "shot",
+          "time_str": "14:01",
+          "time_s": 841.8,
+          "period": 1,
+          "team": "Own",
+          "player_jersey": "12",
+          "left_pct": 72.39,
+          "bottom_pct": 61.19
+        },
+        {
+          "id": "45babaf0-b55b-11f1-b282-532126060f21",
+          "type": "shot",
+          "time_str": "17:38",
+          "time_s": 1058.8,
+          "period": 1,
+          "team": "Own",
+          "player_jersey": "49",
+          "left_pct": 92.41,
+          "bottom_pct": 48.13
+        },
+        {
+          "id": "45bafdf8-b55b-11f1-b282-1b722cb3825b",
+          "type": "shot",
+          "time_str": "20:31",
+          "time_s": 1231.0,
+          "period": 1,
+          "team": "Own",
+          "player_jersey": "7",
+          "left_pct": 81.64,
+          "bottom_pct": 56.73
+        },
+        {
+          "id": "45bb2a76-b55b-11f1-b282-af0977f14ad9",
+          "type": "goal",
+          "time_str": "22:23",
+          "time_s": 1343.4,
+          "period": 1,
+          "team": "Own",
+          "player_jersey": "49",
+          "left_pct": 94.4,
+          "bottom_pct": 49.41
+        },
+        {
+          "id": "45bb4ca4-b55b-11f1-b282-d76f8e8d2d7c",
+          "type": "shot",
+          "time_str": "27:43",
+          "time_s": 1663.7,
+          "period": 1,
+          "team": "Own",
+          "player_jersey": "35",
+          "left_pct": 79.57,
+          "bottom_pct": 45.58
+        },
+        {
+          "id": "45bb6be4-b55b-11f1-b282-4bad8e8a1369",
+          "type": "shot",
+          "time_str": "26:10",
+          "time_s": 1570.9,
+          "period": 1,
+          "team": "Own",
+          "player_jersey": "65",
+          "left_pct": 81.58,
+          "bottom_pct": 37.2
+        },
+        {
+          "id": "45bb9b96-b55b-11f1-b282-136ba2f39862",
+          "type": "shot",
+          "time_str": "30:53",
+          "time_s": 1853.0,
+          "period": 1,
+          "team": "Own",
+          "player_jersey": "38",
+          "left_pct": 74.49,
+          "bottom_pct": 37.89
+        },
+        {
+          "id": "45bbb950-b55b-11f1-b282-8b85d89c754c",
+          "type": "shot",
+          "time_str": "59:11",
+          "time_s": 3551.2,
+          "period": 2,
+          "team": "Own",
+          "player_jersey": "13",
+          "left_pct": 12.34,
+          "bottom_pct": 58.3
+        },
+        {
+          "id": "45bbe52e-b55b-11f1-b282-2bd9f86a6075",
+          "type": "shot",
+          "time_str": "60:27",
+          "time_s": 3627.9,
+          "period": 2,
+          "team": "Own",
+          "player_jersey": "12",
+          "left_pct": 4.86,
+          "bottom_pct": 44.1
+        },
+        {
+          "id": "45bc098c-b55b-11f1-b282-439c4d6d5890",
+          "type": "shot",
+          "time_str": "67:41",
+          "time_s": 4061.4,
+          "period": 2,
+          "team": "Own",
+          "player_jersey": "7",
+          "left_pct": 21.62,
+          "bottom_pct": 51.24
+        },
+        {
+          "id": "45bc5c70-b55b-11f1-b282-03509293a2da",
+          "type": "shot",
+          "time_str": "73:44",
+          "time_s": 4424.6,
+          "period": 2,
+          "team": "Own",
+          "player_jersey": "49",
+          "left_pct": 18.45,
+          "bottom_pct": 59.49
+        },
+        {
+          "id": "45bc8880-b55b-11f1-b282-db950f9a9484",
+          "type": "shot",
+          "time_str": "71:10",
+          "time_s": 4270.3,
+          "period": 2,
+          "team": "Own",
+          "player_jersey": "13",
+          "left_pct": 15.64,
+          "bottom_pct": 46.27
+        },
+        {
+          "id": "45bca856-b55b-11f1-b282-639dc5c277eb",
+          "type": "shot",
+          "time_str": "70:56",
+          "time_s": 4256.9,
+          "period": 2,
+          "team": "Own",
+          "player_jersey": "13",
+          "left_pct": 24.13,
+          "bottom_pct": 38.45
+        },
+        {
+          "id": "45bcc61a-b55b-11f1-b282-d78b4703fe34",
+          "type": "shot",
+          "time_str": "75:12",
+          "time_s": 4512.3,
+          "period": 2,
+          "team": "Own",
+          "player_jersey": "35",
+          "left_pct": 14.03,
+          "bottom_pct": 25.04
+        },
+        {
+          "id": "45bce4d8-b55b-11f1-b282-6f2dcd5a4a71",
+          "type": "goal",
+          "time_str": "80:21",
+          "time_s": 4821.1,
+          "period": 2,
+          "team": "Own",
+          "player_jersey": "49",
+          "left_pct": 4.17,
+          "bottom_pct": 64.85
+        },
+        {
+          "id": "45bd15e8-b55b-11f1-b282-9f1c23bddbe6",
+          "type": "shot",
+          "time_str": "79:13",
+          "time_s": 4753.6,
+          "period": 2,
+          "team": "Own",
+          "player_jersey": "7",
+          "left_pct": 19.38,
+          "bottom_pct": 50.76
+        },
+        {
+          "id": "45bd5fe4-b55b-11f1-b282-4be18b2b5232",
+          "type": "shot",
+          "time_str": "85:04",
+          "time_s": 5104.3,
+          "period": 2,
+          "team": "Own",
+          "player_jersey": "32",
+          "left_pct": 75.43,
+          "bottom_pct": 65.54
+        }
+      ]
+    },
+    "opponent": {
+      "goals": 0,
+      "shots": 5,
+      "total_attempts": 5,
+      "conversion_rate_pct": 0,
+      "inside_box_conversion_rate_pct": 0,
+      "outside_box_conversion_rate_pct": 0,
+      "attempts_inside_box_pct": 60,
+      "attempts_outside_box_pct": 40,
+      "markers": [
+        {
+          "id": "45badd28-b55b-11f1-b282-53d9d7e19889",
+          "type": "shot",
+          "time_str": "21:41",
+          "time_s": 1301.6,
+          "period": 1,
+          "team": "Opponent",
+          "player_jersey": "32",
+          "left_pct": 11.8,
+          "bottom_pct": 40.52
+        },
+        {
+          "id": "45bc2fa2-b55b-11f1-b282-bbf64b53a3b0",
+          "type": "shot",
+          "time_str": "72:22",
+          "time_s": 4342.4,
+          "period": 2,
+          "team": "Opponent",
+          "player_jersey": "7",
+          "left_pct": 80.74,
+          "bottom_pct": 24.97
+        },
+        {
+          "id": "45bd3dc0-b55b-11f1-b282-67909e898c5a",
+          "type": "shot",
+          "time_str": "84:29",
+          "time_s": 5069.6,
+          "period": 2,
+          "team": "Opponent",
+          "player_jersey": "24",
+          "left_pct": 75.83,
+          "bottom_pct": 47.77
+        },
+        {
+          "id": "45bd7e0c-b55b-11f1-b282-a71cd83466c1",
+          "type": "shot",
+          "time_str": "89:44",
+          "time_s": 5384.8,
+          "period": 2,
+          "team": "Opponent",
+          "player_jersey": "9",
+          "left_pct": 89.51,
+          "bottom_pct": 48.69
+        },
+        {
+          "id": "45bdab5c-b55b-11f1-b282-7b6ce68bbda5",
+          "type": "shot",
+          "time_str": "95:52",
+          "time_s": 5752.0,
+          "period": 2,
+          "team": "Opponent",
+          "player_jersey": "9",
+          "left_pct": 92.04,
+          "bottom_pct": 35.69
+        }
+      ]
+    }
+  },
+  "pass_location": {
+    "own": {
+      "defensive_pct": 5,
+      "middle_pct": 88,
+      "attacking_pct": 7
+    },
+    "opponent": {
+      "defensive_pct": 5,
+      "middle_pct": 88,
+      "attacking_pct": 7
+    }
+  },
+  "possession_location": {
+    "own": {
+      "defensive_pct": 36,
+      "middle_pct": 49,
+      "attacking_pct": 15
+    },
+    "opponent": {
+      "defensive_pct": 47,
+      "middle_pct": 38,
+      "attacking_pct": 15
+    }
+  },
+  "pass_strings": {
+    "own": {
+      "passes_3_to_5": 28,
+      "passes_6_or_more": 23,
+      "longest_string": 12
+    },
+    "opponent": {
+      "passes_3_to_5": 18,
+      "passes_6_or_more": 0,
+      "longest_string": 5
+    }
+  },
+  "events_summary": {
+    "total_count": 389
+  },
+  "highlights_summary": {
+    "total_count": 26
+  }
+}
