@@ -1,0 +1,147 @@
+{
+  "$comment": "Veo Analytics UI live ground truth extracted via browser-harness directly from app.veo.co on 2026-09-24",
+  "match": {
+    "title": "Arlington SA U16B ECNL (26-27) vs. Skyline U16B ECNL",
+    "uuid": "3ddc7b34-d737-4cd4-83ce-7490d9e07efa",
+    "slug": "20260913-arlington-sa-u16b-ecnl-26-27-vs-skyline-u16b-ecnl-v7228589",
+    "date": "2026-09-13",
+    "final_result": {
+      "own": 3,
+      "opponent": 3
+    },
+    "own_team": "Arlington SA U16B ECNL (26-27)",
+    "opponent_team": "Skyline U16B ECNL"
+  },
+  "top_cards": {
+    "goals_scored": { "value": 3, "match_diff": 1 },
+    "shots": { "value": 9, "match_diff": -5 },
+    "possession_percent": { "value": 62, "match_diff": -1 }
+  },
+  "stats_table": {
+    "period": "Full recording",
+    "rows": {
+      "goal": { "own": 3, "opponent": 3 },
+      "shot": { "own": 9, "opponent": 10 },
+      "total_attempts": { "own": 12, "opponent": 13 },
+      "corner": { "own": 3, "opponent": 6 },
+      "free_kick": { "own": 8, "opponent": 7 },
+      "throw_in": { "own": 14, "opponent": 24 },
+      "foul": { "own": 7, "opponent": 8 },
+      "penalty": { "own": 0, "opponent": 0 },
+      "tackle": { "own": 43, "opponent": 41 },
+      "passes_completed": { "own": 283, "opponent": 203 },
+      "possession_percent": { "own": 62, "opponent": 38 },
+      "possession_minutes": { "own": 22, "opponent": 14 },
+      "possession_won": { "own": 151, "opponent": 150 }
+    }
+  },
+  "shot_map": {
+    "own": {
+      "goals": 3,
+      "shots": 9,
+      "total_attempts": 12,
+      "conversion_rate_pct": 25,
+      "inside_box_conversion_rate_pct": 50,
+      "outside_box_conversion_rate_pct": 0,
+      "attempts_inside_box_pct": 50,
+      "attempts_outside_box_pct": 50,
+      "markers": [
+        { "type": "goal", "time_str": "02:43", "time_s": 163, "left_pct": 90.28, "bottom_pct": 55.84 },
+        { "type": "shot", "time_str": "05:30", "time_s": 330, "left_pct": 84.56, "bottom_pct": 59.35 },
+        { "type": "shot", "time_str": "10:53", "time_s": 653, "left_pct": 64.12, "bottom_pct": 18.46 },
+        { "type": "goal", "time_str": "11:38", "time_s": 698, "left_pct": 90.86, "bottom_pct": 47.52 },
+        { "type": "shot", "time_str": "25:11", "time_s": 1511, "left_pct": 61.06, "bottom_pct": 28.79 },
+        { "type": "shot", "time_str": "26:16", "time_s": 1576, "left_pct": 50.24, "bottom_pct": 63.17 },
+        { "type": "goal", "time_str": "32:44", "time_s": 1964, "left_pct": 86.44, "bottom_pct": 58.01 },
+        { "type": "shot", "time_str": "38:15", "time_s": 2295, "left_pct": 53.38, "bottom_pct": 43.04 },
+        { "type": "shot", "time_str": "42:43", "time_s": 2563, "left_pct": 62.74, "bottom_pct": 65.40 },
+        { "type": "shot", "time_str": "53:15", "time_s": 3195, "left_pct": 69.30, "bottom_pct": 57.08 },
+        { "type": "shot", "time_str": "61:26", "time_s": 3686, "left_pct": 78.50, "bottom_pct": 65.29 },
+        { "type": "shot", "time_str": "68:34", "time_s": 4114, "left_pct": 79.38, "bottom_pct": 59.52 }
+      ]
+    },
+    "opponent": {
+      "goals": 3,
+      "shots": 10,
+      "total_attempts": 13,
+      "conversion_rate_pct": 23,
+      "inside_box_conversion_rate_pct": 20,
+      "outside_box_conversion_rate_pct": 25,
+      "attempts_inside_box_pct": 38,
+      "attempts_outside_box_pct": 62,
+      "markers": [
+        { "type": "goal", "time_str": "03:31", "time_s": 211, "left_pct": 55.18, "bottom_pct": 28.70 },
+        { "type": "shot", "time_str": "07:59", "time_s": 479, "left_pct": 86.66, "bottom_pct": 63.70 },
+        { "type": "shot", "time_str": "14:55", "time_s": 895, "left_pct": 54.98, "bottom_pct": 49.75 },
+        { "type": "shot", "time_str": "21:45", "time_s": 1305, "left_pct": 76.60, "bottom_pct": 67.20 },
+        { "type": "shot", "time_str": "30:55", "time_s": 1855, "left_pct": 83.56, "bottom_pct": 76.67 },
+        { "type": "shot", "time_str": "33:51", "time_s": 2031, "left_pct": 56.54, "bottom_pct": 58.99 },
+        { "type": "goal", "time_str": "39:56", "time_s": 2396, "left_pct": 42.88, "bottom_pct": 42.93 },
+        { "type": "shot", "time_str": "55:45", "time_s": 3345, "left_pct": 48.22, "bottom_pct": 53.24 },
+        { "type": "shot", "time_str": "64:27", "time_s": 3867, "left_pct": 59.76, "bottom_pct": 30.61 },
+        { "type": "shot", "time_str": "70:08", "time_s": 4208, "left_pct": 87.06, "bottom_pct": 56.11 },
+        { "type": "goal", "time_str": "73:56", "time_s": 4436, "left_pct": 84.80, "bottom_pct": 62.86 },
+        { "type": "shot", "time_str": "76:55", "time_s": 4615, "left_pct": 37.96, "bottom_pct": 72.33 },
+        { "type": "shot", "time_str": "79:51", "time_s": 4791, "left_pct": 57.68, "bottom_pct": 18.11 }
+      ]
+    }
+  },
+  "pass_location": {
+    "own": { "defensive_pct": 7, "middle_pct": 83, "attacking_pct": 10 },
+    "opponent": { "defensive_pct": 7, "middle_pct": 78, "attacking_pct": 15 }
+  },
+  "possession_location": {
+    "own": { "defensive_pct": 49, "middle_pct": 34, "attacking_pct": 17 },
+    "opponent": { "defensive_pct": 33, "middle_pct": 44, "attacking_pct": 23 }
+  },
+  "pass_strings": {
+    "own": {
+      "three_to_five_passes": 26,
+      "six_or_more_passes": 9,
+      "longest_pass_string": 11,
+      "histogram": {
+        "3": 15,
+        "4": 10,
+        "5": 1,
+        "6": 4,
+        "7": 2,
+        "8": 0,
+        "9": 1,
+        "10+": 2
+      }
+    },
+    "opponent": {
+      "three_to_five_passes": 17,
+      "six_or_more_passes": 1,
+      "longest_pass_string": 6,
+      "histogram": {
+        "3": 12,
+        "4": 3,
+        "5": 2,
+        "6": 1,
+        "7": 0,
+        "8": 0,
+        "9": 0,
+        "10+": 0
+      }
+    }
+  },
+  "lineup_roster": [
+    "Abdul Mestoui",
+    "Ahmad Karwar",
+    "Ali Ali",
+    "Andrew Fonseka",
+    "Anthony Ventura",
+    "Ben Viser",
+    "Brooks Olson",
+    "Caden Clemmer",
+    "Elias Colon",
+    "Eric Yeh-Fuentes",
+    "Evan Curry",
+    "Luis Aleman",
+    "Mitchell Leutner",
+    "Renis Kapshtica",
+    "Xavier G",
+    "Zain Deen Ashparie"
+  ]
+}

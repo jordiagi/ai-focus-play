@@ -4,6 +4,7 @@ import {
   Play, ArrowLeftRight, ArrowUpRight, ChevronDown, X
 } from 'lucide-react';
 import { Match, Highlight, Event, AnalyticsData, EventTypeLabel } from '../../types';
+import { api } from '../../services/api';
 import { Unavailable } from './Unavailable';
 import { ThirdsBar } from './ThirdsBar';
 
@@ -26,6 +27,22 @@ const EVENT_TYPES: EventTypeLabel[] = [
 ];
 
 const DEFAULT_DETECTED_TYPES = new Set<EventTypeLabel>(['Kickoff', 'Goal', 'Shot']);
+
+const METRIC_KEY_MAP: Record<string, string> = {
+  goals: 'goal',
+  shots: 'shot',
+  attempts: 'total_attempts',
+  corners: 'corner',
+  free_kicks: 'free_kick',
+  throw_ins: 'throw_in',
+  fouls: 'foul',
+  penalties: 'penalty',
+  tackles: 'tackle',
+  passes_completed: 'passes_completed',
+  possession_percent: 'possession_percent',
+  possession_minutes: 'possession_minutes',
+  possession_won: 'possession_won',
+};
 
 const normalizeEventType = (eventType: string) =>
   eventType.toLowerCase().replace(/[-_\s]/g, '');
@@ -62,6 +79,30 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
   const [highlightFilter, setHighlightFilter] = useState<string>('all');
   const [eventPeriod, setEventPeriod] = useState<number>(1);
   const [openSections, setOpenSections] = useState<Record<AnalyticsSectionKey, boolean>>(ANALYTICS_SECTION_DEFAULTS);
+  const [shotMapTeam, setShotMapTeam] = useState<'home' | 'away'>('home');
+  const [passLocTeam, setPassLocTeam] = useState<'home' | 'away'>('home');
+  const [possLocTeam, setPossLocTeam] = useState<'home' | 'away'>('home');
+  const [passStringsTeam, setPassStringsTeam] = useState<'home' | 'away'>('home');
+  const [showBenchmark, setShowBenchmark] = useState(false);
+  const [benchmarkData, setBenchmarkData] = useState<any>(null);
+  const [loadingBenchmark, setLoadingBenchmark] = useState(false);
+
+  const handleToggleBenchmark = async () => {
+    const next = !showBenchmark;
+    setShowBenchmark(next);
+    if (next && !benchmarkData && match?.id) {
+      setLoadingBenchmark(true);
+      try {
+        const data = await api.getBenchmark(match.id);
+        setBenchmarkData(data);
+      } catch (err) {
+        console.warn('Could not load Veo benchmark data', err);
+      } finally {
+        setLoadingBenchmark(false);
+      }
+    }
+  };
+
   const toggleSection = (key: AnalyticsSectionKey) =>
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -379,20 +420,66 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
               />
             ) : (
               <>
+                {/* Top KPI Delta Cards */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-[#12141a] border border-[#1e222d] rounded-xl p-2.5 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-gray-400 font-medium">Goals scored</span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-[#00E676]/20 text-[#00E676]">+1</span>
+                    </div>
+                    <div className="text-lg font-bold text-white my-0.5">
+                      {renderStatValue(analytics.home_stats.goals, '', analytics.unavailable?.goals)}
+                    </div>
+                    <span className="text-[8px] text-gray-500 leading-tight">Diff of 1 vs last match</span>
+                  </div>
+                  <div className="bg-[#12141a] border border-[#1e222d] rounded-xl p-2.5 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-gray-400 font-medium">Shots attempted</span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-red-500/20 text-red-400">-5</span>
+                    </div>
+                    <div className="text-lg font-bold text-white my-0.5">
+                      {renderStatValue(analytics.home_stats.shots, '', analytics.unavailable?.shots)}
+                    </div>
+                    <span className="text-[8px] text-gray-500 leading-tight">Diff of 5 vs last match</span>
+                  </div>
+                  <div className="bg-[#12141a] border border-[#1e222d] rounded-xl p-2.5 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-gray-400 font-medium">Match possession</span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400">-1%</span>
+                    </div>
+                    <div className="text-lg font-bold text-white my-0.5">
+                      {renderStatValue(analytics.home_stats.possession_percent, '%', analytics.unavailable?.possession_percent)}
+                    </div>
+                    <span className="text-[8px] text-gray-500 leading-tight">Diff of 1% vs last match</span>
+                  </div>
+                </div>
+
                 {/* Stats */}
                 <div className="bg-[#12141a] border border-[#1e222d] rounded-xl overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => toggleSection('stats')}
-                    aria-expanded={openSections.stats}
-                    aria-controls="analytics-section-stats"
-                    className="w-full flex items-center justify-between p-3 text-left cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2">
+                  <div className="w-full flex items-center justify-between p-3 text-left">
+                    <button
+                      type="button"
+                      onClick={() => toggleSection('stats')}
+                      aria-expanded={openSections.stats}
+                      aria-controls="analytics-section-stats"
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
                       <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${openSections.stats ? '' : '-rotate-90'}`} aria-hidden="true" />
                       <span className="text-xs font-bold text-white uppercase tracking-wider">Stats</span>
-                    </span>
-                  </button>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleToggleBenchmark}
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition cursor-pointer ${
+                        showBenchmark
+                          ? 'bg-[#00E676]/20 border-[#00E676]/50 text-[#00E676]'
+                          : 'bg-[#1b1f2b] border-[#2c3242] text-gray-400 hover:text-gray-200'
+                      }`}
+                      title="Compare predictions against live Veo ground truth"
+                    >
+                      {loadingBenchmark ? 'Loading...' : showBenchmark ? 'Veo Benchmark ON' : 'Compare Veo'}
+                    </button>
+                  </div>
                   {openSections.stats && (
                   <div id="analytics-section-stats" className="px-3 pb-3 text-xs space-y-2">
                     <div className="flex items-center justify-between font-bold text-gray-300 pb-1.5 border-b border-[#222]">
@@ -414,19 +501,64 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                       { label: 'Possession won', statKey: 'possession_won', h: analytics.home_stats.possession_won, a: analytics.away_stats.possession_won, derived: true, eventTypes: [] },
                       { label: 'Tackle', statKey: 'tackles', h: analytics.home_stats.tackles, a: analytics.away_stats.tackles, eventTypes: ['Tackle'] },
                       { label: 'Throw-in', statKey: 'throw_ins', h: analytics.home_stats.throw_ins, a: analytics.away_stats.throw_ins, eventTypes: ['Throw-in'] },
-                    ].map((r, i) => (
-                      <button
-                        type="button"
-                        key={i}
-                        disabled={r.derived}
-                        onClick={() => seekToFirstEventOfType(r.eventTypes)}
-                        className="w-full flex items-center justify-between py-1 border-b border-[#1a1e28] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <div className="w-12 text-left">{renderStatValue(r.h, r.suffix, analytics.unavailable?.[r.statKey])}</div>
-                        <span className="text-gray-400 text-[11px]">{r.label}</span>
-                        <div className="w-12 text-right">{renderStatValue(r.a, r.suffix, analytics.unavailable?.[r.statKey])}</div>
-                      </button>
-                    ))}
+                    ].map((r, i) => {
+                      const metricKey = METRIC_KEY_MAP[r.statKey] || r.statKey;
+                      const bm = showBenchmark && benchmarkData?.comparison?.metrics?.[metricKey];
+                      return (
+                        <div key={i} className="border-b border-[#1a1e28] pb-0.5">
+                          <button
+                            type="button"
+                            disabled={r.derived}
+                            onClick={() => seekToFirstEventOfType(r.eventTypes)}
+                            className="w-full flex items-center justify-between py-1 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <div className="w-12 text-left">{renderStatValue(r.h, r.suffix, analytics.unavailable?.[r.statKey])}</div>
+                            <span className="text-gray-400 text-[11px]">{r.label}</span>
+                            <div className="w-12 text-right">{renderStatValue(r.a, r.suffix, analytics.unavailable?.[r.statKey])}</div>
+                          </button>
+                          {bm && (
+                            <div className="flex items-center justify-between px-1.5 py-0.5 bg-[#0b0e14] rounded text-[9px] text-gray-400 font-mono mb-1">
+                              <span className="flex items-center space-x-1">
+                                <span className="text-gray-500">Veo:</span>
+                                <span className="text-gray-300 font-semibold">{bm.ref_home !== null ? `${bm.ref_home}${r.suffix || ''}` : '—'}</span>
+                                {bm.home_delta !== null && (
+                                  <span className={`px-1 py-0.2 rounded font-bold ${bm.home_delta === 0 ? 'text-[#00E676] bg-[#00E676]/10' : 'text-amber-400 bg-amber-500/10'}`}>
+                                    Δ{Math.round(bm.home_delta * 10) / 10 > 0 ? `+${Math.round(bm.home_delta * 10) / 10}` : Math.round(bm.home_delta * 10) / 10}
+                                  </span>
+                                )}
+                              </span>
+                              <span className="text-[8px] uppercase tracking-wider">
+                                {bm.exact_match ? <span className="text-[#00E676] font-bold">✓ Match</span> : <span className="text-gray-500">Benchmark</span>}
+                              </span>
+                              <span className="flex items-center space-x-1">
+                                {bm.away_delta !== null && (
+                                  <span className={`px-1 py-0.2 rounded font-bold ${bm.away_delta === 0 ? 'text-[#00E676] bg-[#00E676]/10' : 'text-amber-400 bg-amber-500/10'}`}>
+                                    Δ{Math.round(bm.away_delta * 10) / 10 > 0 ? `+${Math.round(bm.away_delta * 10) / 10}` : Math.round(bm.away_delta * 10) / 10}
+                                  </span>
+                                )}
+                                <span className="text-gray-300 font-semibold">{bm.ref_away !== null ? `${bm.ref_away}${r.suffix || ''}` : '—'}</span>
+                                <span className="text-gray-500">:Veo</span>
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {showBenchmark && benchmarkData?.comparison && (
+                      <div className="p-2 mt-2 rounded-lg bg-[#0e1117] border border-[#1e2433] space-y-1">
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-gray-400 font-medium">Veo Benchmark Reference</span>
+                          <span className="text-[#00E676] font-bold">
+                            {benchmarkData.comparison.exact_match_count} / {benchmarkData.comparison.evaluated_count} exact ({Math.round(benchmarkData.comparison.exact_match_ratio * 100)}%)
+                          </span>
+                        </div>
+                        <div className="text-[9px] text-gray-500 truncate">
+                          {typeof benchmarkData.benchmark_match === 'string'
+                            ? benchmarkData.benchmark_match
+                            : benchmarkData.benchmark_match?.title || 'Veo Ground Truth'}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   )}
                 </div>
@@ -451,7 +583,29 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                     </span>
                   </button>
                   {openSections.shotMap && (
-                  <div id="analytics-section-shot-map" className="px-3 pb-3">
+                  <div id="analytics-section-shot-map" className="px-3 pb-3 space-y-2.5">
+                    {/* Team toggle */}
+                    <div className="flex items-center space-x-1">
+                      <button
+                        type="button"
+                        onClick={() => setShotMapTeam('home')}
+                        className={`px-2.5 py-0.5 rounded text-[11px] font-bold transition ${
+                          shotMapTeam === 'home' ? 'bg-[#FFD700]/20 text-[#FFD700] border border-[#FFD700]/40' : 'bg-[#181818] text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {match.home_team.split(' ')[0] || 'Home'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShotMapTeam('away')}
+                        className={`px-2.5 py-0.5 rounded text-[11px] font-bold transition ${
+                          shotMapTeam === 'away' ? 'bg-[#2979FF]/20 text-[#2979FF] border border-[#2979FF]/40' : 'bg-[#181818] text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {match.away_team.split(' ')[0] || 'Away'}
+                      </button>
+                    </div>
+
                     <div className="relative w-full aspect-[105/68] bg-[#1a472a] rounded-lg border border-[#2d5f3e] overflow-hidden">
                       <svg viewBox="0 0 105 68" className="w-full h-full" role="img" aria-label="2D soccer shot map">
                         <rect x="1" y="1" width="103" height="66" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
@@ -474,6 +628,29 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                         ))}
                       </svg>
                     </div>
+
+                    {/* Shot breakdown cards */}
+                    <div className="grid grid-cols-3 gap-1.5 text-center">
+                      <div className="bg-[#181c25] rounded p-1.5 border border-[#222836]">
+                        <div className="text-[10px] text-gray-400">Goal count</div>
+                        <div className="text-xs font-bold text-[#00E676]">{shotMapTeam === 'home' ? analytics.home_stats.goals ?? 0 : analytics.away_stats.goals ?? 0}</div>
+                      </div>
+                      <div className="bg-[#181c25] rounded p-1.5 border border-[#222836]">
+                        <div className="text-[10px] text-gray-400">Shot count</div>
+                        <div className="text-xs font-bold text-white">{shotMapTeam === 'home' ? analytics.home_stats.shots ?? 0 : analytics.away_stats.shots ?? 0}</div>
+                      </div>
+                      <div className="bg-[#181c25] rounded p-1.5 border border-[#222836]">
+                        <div className="text-[10px] text-gray-400">Conversion</div>
+                        <div className="text-xs font-bold text-[#FFD700]">
+                          {(() => {
+                            const g = (shotMapTeam === 'home' ? analytics.home_stats.goals : analytics.away_stats.goals) ?? 0;
+                            const s = (shotMapTeam === 'home' ? analytics.home_stats.shots : analytics.away_stats.shots) ?? 0;
+                            const att = g + s;
+                            return att > 0 ? `${Math.round((g / att) * 100)}%` : '0%';
+                          })()}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   )}
                 </div>
@@ -493,10 +670,31 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                     </span>
                   </button>
                   {openSections.passLocation && (
-                  <div id="analytics-section-pass-location" className="px-3 pb-3">
+                  <div id="analytics-section-pass-location" className="px-3 pb-3 space-y-2">
+                    {/* Team toggle */}
+                    <div className="flex items-center space-x-1">
+                      <button
+                        type="button"
+                        onClick={() => setPassLocTeam('home')}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                          passLocTeam === 'home' ? 'bg-[#FFD700]/20 text-[#FFD700] border border-[#FFD700]/40' : 'bg-[#181818] text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {match.home_team.split(' ')[0] || 'Home'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPassLocTeam('away')}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                          passLocTeam === 'away' ? 'bg-[#2979FF]/20 text-[#2979FF] border border-[#2979FF]/40' : 'bg-[#181818] text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {match.away_team.split(' ')[0] || 'Away'}
+                      </button>
+                    </div>
                     <ThirdsBar
                       label="Passes"
-                      home={analytics.pass_locations?.home}
+                      data={passLocTeam === 'home' ? analytics.pass_locations?.home : analytics.pass_locations?.away}
                       unavailableReason="No pass location data for this match — the pipeline that produced these analytics did not compute a pass-location breakdown."
                     />
                   </div>
@@ -518,10 +716,31 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                     </span>
                   </button>
                   {openSections.possessionLocation && (
-                  <div id="analytics-section-possession-location" className="px-3 pb-3">
+                  <div id="analytics-section-possession-location" className="px-3 pb-3 space-y-2">
+                    {/* Team toggle */}
+                    <div className="flex items-center space-x-1">
+                      <button
+                        type="button"
+                        onClick={() => setPossLocTeam('home')}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                          possLocTeam === 'home' ? 'bg-[#FFD700]/20 text-[#FFD700] border border-[#FFD700]/40' : 'bg-[#181818] text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {match.home_team.split(' ')[0] || 'Home'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPossLocTeam('away')}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                          possLocTeam === 'away' ? 'bg-[#2979FF]/20 text-[#2979FF] border border-[#2979FF]/40' : 'bg-[#181818] text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {match.away_team.split(' ')[0] || 'Away'}
+                      </button>
+                    </div>
                     <ThirdsBar
                       label="Possession"
-                      home={analytics.possession_locations?.home}
+                      data={possLocTeam === 'home' ? analytics.possession_locations?.home : analytics.possession_locations?.away}
                       unavailableReason="No possession location data for this match — the pipeline that produced these analytics did not compute a possession-location breakdown."
                     />
                   </div>
@@ -543,22 +762,75 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                     </span>
                   </button>
                   {openSections.passStrings && (
-                  <div id="analytics-section-pass-strings" className="px-3 pb-3">
-                    {analytics.pass_strings.home.length > 0 ? (
-                      <div className="flex items-end space-x-2 h-16 pt-2">
-                        {analytics.pass_strings.home.map((val, idx) => (
-                          <div key={idx} className="flex-1 flex flex-col items-center">
-                            <div
-                              style={{ height: `${Math.max(10, val * 5)}%` }}
-                              className="w-full bg-[#00E676] rounded-t hover:bg-[#00c968] transition"
-                            />
-                            <span className="text-[9px] text-gray-400 mt-1">{idx + 3}</span>
+                  <div id="analytics-section-pass-strings" className="px-3 pb-3 space-y-2">
+                    {/* Team toggle */}
+                    <div className="flex items-center space-x-1">
+                      <button
+                        type="button"
+                        onClick={() => setPassStringsTeam('home')}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                          passStringsTeam === 'home' ? 'bg-[#FFD700]/20 text-[#FFD700] border border-[#FFD700]/40' : 'bg-[#181818] text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {match.home_team.split(' ')[0] || 'Home'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPassStringsTeam('away')}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                          passStringsTeam === 'away' ? 'bg-[#2979FF]/20 text-[#2979FF] border border-[#2979FF]/40' : 'bg-[#181818] text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {match.away_team.split(' ')[0] || 'Away'}
+                      </button>
+                    </div>
+
+                    {(() => {
+                      const strings = passStringsTeam === 'home' ? analytics.pass_strings.home : analytics.pass_strings.away;
+                      if (!strings || strings.length === 0) {
+                        return <Unavailable reason="No pass-sequencing detection exists in this pipeline, so there is no pass-string distribution to show." />;
+                      }
+                      const count3to5 = (strings[0] ?? 0) + (strings[1] ?? 0) + (strings[2] ?? 0);
+                      const count6plus = strings.slice(3).reduce((acc, v) => acc + v, 0);
+                      let longest = 0;
+                      for (let i = strings.length - 1; i >= 0; i--) {
+                        if (strings[i] > 0) {
+                          longest = i + 3;
+                          break;
+                        }
+                      }
+                      return (
+                        <div className="space-y-2.5">
+                          {/* Summary containers */}
+                          <div className="grid grid-cols-3 gap-1.5 text-center">
+                            <div className="bg-[#181c25] rounded p-1 border border-[#222836]">
+                              <div className="text-[9px] text-gray-400">3 to 5 passes</div>
+                              <div className="text-xs font-bold text-[#00E676]">{count3to5}</div>
+                            </div>
+                            <div className="bg-[#181c25] rounded p-1 border border-[#222836]">
+                              <div className="text-[9px] text-gray-400">6+ passes</div>
+                              <div className="text-xs font-bold text-white">{count6plus}</div>
+                            </div>
+                            <div className="bg-[#181c25] rounded p-1 border border-[#222836]">
+                              <div className="text-[9px] text-gray-400">Longest string</div>
+                              <div className="text-xs font-bold text-[#FFD700]">{longest}</div>
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <Unavailable reason="No pass-sequencing detection exists in this pipeline, so there is no pass-string distribution to show." />
-                    )}
+                          {/* Histogram chart */}
+                          <div className="flex items-end space-x-2 h-16 pt-2">
+                            {strings.map((val, idx) => (
+                              <div key={idx} className="flex-1 flex flex-col items-center">
+                                <div
+                                  style={{ height: `${Math.max(10, val * 5)}%` }}
+                                  className="w-full bg-[#00E676] rounded-t hover:bg-[#00c968] transition"
+                                />
+                                <span className="text-[9px] text-gray-400 mt-1">{idx === 7 ? '+10' : idx + 3}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                   )}
                 </div>

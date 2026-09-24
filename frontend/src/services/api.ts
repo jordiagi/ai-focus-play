@@ -163,5 +163,11 @@ export const api = {
 
   getExportHighlightsUrl(matchId: string): string {
     return `${API_BASE}/matches/${matchId}/highlights/export`;
+  },
+
+  async getBenchmark(matchId: string, signal?: AbortSignal): Promise<any> {
+    const url = `${API_BASE}/matches/${matchId}/benchmark`;
+    const res = await fetch(url, { signal });
+    return handleResponse<any>(res, url);
   }
 };

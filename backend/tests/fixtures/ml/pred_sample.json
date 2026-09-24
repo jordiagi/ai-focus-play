@@ -1,0 +1,10 @@
+{
+  "events": [
+    {"video_s": 563.3, "event_type": "FootballKickOff", "period": 1},
+    {"video_s": 631.9, "event_type": "FootballThrowIn", "team": "Opponent", "period": 1},
+    {"video_s": 681.5, "event_type": "FootballOutOfPlay", "period": 1},
+    {"video_s": 775.3, "event_type": "FootballGoal", "team": "Own", "period": 1},
+    {"video_s": 912.0, "event_type": "FootballGoalKick", "team": "Own", "period": 1},
+    {"video_s": 1204.0, "event_type": "FootballCornerKick", "team": "Opponent", "period": 1}
+  ]
+}

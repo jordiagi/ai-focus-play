@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import { SidebarDrawer } from '../components/Sidebar/SidebarTabs';
+import { api } from '../services/api';
 import type { AnalyticsData, Match } from '../types';
 
 const match: Match = {
@@ -133,4 +134,61 @@ it('still renders a real number when the row is not named in unavailable', () =>
   const row = screen.getByRole('button', { name: '3 Shot 1' });
   expect(within(row).getByText('3')).toBeTruthy();
   expect(within(row).queryByText('—')).toBeNull();
+});
+
+it('renders top KPI delta cards with measured metrics and diff badges', () => {
+  renderDrawer(analytics);
+  expect(screen.getByText('Goals scored')).toBeTruthy();
+  expect(screen.getByText('+1')).toBeTruthy();
+  expect(screen.getByText('Shots attempted')).toBeTruthy();
+  expect(screen.getByText('-5')).toBeTruthy();
+  expect(screen.getByText('Match possession')).toBeTruthy();
+  expect(screen.getByText('-1%')).toBeTruthy();
+});
+
+it('renders pass strings summary metrics when data is present', () => {
+  const analyticsWithStrings: AnalyticsData = {
+    ...analytics,
+    pass_strings: {
+      home: [15, 10, 1, 4, 2, 0, 1, 2], // 3..10+
+      away: [12, 3, 2, 1, 0, 0, 0, 0],
+    },
+  };
+  renderDrawer(analyticsWithStrings);
+  // Expand pass strings accordion
+  const passStringsSummary = screen.getByRole('button', { name: /Pass strings/ });
+  fireEvent.click(passStringsSummary);
+
+  expect(screen.getByText('3 to 5 passes')).toBeTruthy();
+  expect(screen.getByText('26')).toBeTruthy(); // 15 + 10 + 1
+  const sixPlusContainer = screen.getByText('6+ passes').parentElement!;
+  expect(within(sixPlusContainer).getByText('9')).toBeTruthy(); // 4 + 2 + 0 + 1 + 2
+  expect(screen.getByText('Longest string')).toBeTruthy();
+  expect(screen.getByText('10')).toBeTruthy();
+});
+
+it('toggles benchmark mode and displays ground truth comparison rows', async () => {
+  const fakeBenchmark = {
+    match_id: 'literal-match',
+    benchmark_match: 'Arlington vs Skyline',
+    comparison: {
+      metrics: {
+        goal: { ref_home: 3, ref_away: 3, pred_home: 2, pred_away: 0, status: 'measured', reason: null, home_delta: -1, away_delta: -3, exact_match: false },
+        shot: { ref_home: 9, ref_away: 10, pred_home: 3, pred_away: 1, status: 'measured', reason: null, home_delta: -6, away_delta: -9, exact_match: false },
+      },
+      evaluated_count: 2,
+      exact_match_count: 0,
+      exact_match_ratio: 0.0,
+    },
+  };
+  vi.spyOn(api, 'getBenchmark').mockResolvedValueOnce(fakeBenchmark);
+
+  renderDrawer();
+  const toggleBtn = screen.getByRole('button', { name: 'Compare Veo' });
+  fireEvent.click(toggleBtn);
+
+  expect(await screen.findByText('Veo Benchmark ON')).toBeTruthy();
+  expect(await screen.findByText('Veo Benchmark Reference')).toBeTruthy();
+  expect(screen.getByText(/Arlington vs Skyline/)).toBeTruthy();
+  expect(screen.getByText('Δ-1')).toBeTruthy();
 });

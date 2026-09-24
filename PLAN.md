@@ -1,23 +1,20 @@
 # Veo feature parity on gpu-box
 
-> **STATUS as of 2026-09-20 — read `STATE.md` first.**
+> **STATUS as of 2026-09-23 — read `STATE.md` and `docs/postmortems/falsification_log.md`.**
 >
-> This document is the *roadmap and reasoning*. It is not a status report, and parts of
-> it were overtaken by measurement:
+> This document is the *roadmap and architectural reasoning*. It is preserved as the
+> initial engineering thesis, but key modeling assumptions were subsequently tested and
+> closed by empirical measurement:
 >
-> - **Track 2 (UI/route parity) is COMPLETE** — U1, U2, U3 merged and verified.
-> - **G0 (benchmark rebuild), G1 (ball-detection gate) and G5 (scoring harness) are
->   DONE.** G1 passed on both halves: tiled inference 0.833 / 0.828.
-> - **G2 (metric pitch calibration) was attempted three times and failed each time**, for
->   a diagnosed structural reason. Work is stopped by decision. The two ways forward are
->   specified in `specs/deferred.md` as **D-A** (stitch the panorama, then calibrate it)
->   and **D-B** (pixel-space Tier A detection, which needs no metres at all).
-> - Because G2 is unsolved, **G3, G4, G6 and G7 are deferred** — they depend on it or sit
->   behind it.
->
-> The realistic-parity estimate below still stands as an estimate. **Nothing in it has
-> been demonstrated**: no event detector has been built, and the 447-event benchmark has
-> not yet been scored against any output of ours.
+> - **Track 2 (UI/route parity) is COMPLETE** — U1, U2, U3, and comment routes merged and verified.
+> - **D-B Pixel-Space Detection is LIVE** — 6 of 14 types scored against the 447-event benchmark
+>   (141 events, 32% mass, macro-F1 0.278 / 0.253 conservative).
+> - **All 14 types now have a measured verdict**: Tier B (possession, tackles, interceptions) failed
+>   due to 2D bounding box depth ambiguity (shirt AUC 0.503); Shot and FreeKick failed against
+>   pre-registered stoppage controls; and metric calibration (G2/D-A) failed because grazing
+>   camera angles invert to a square (105m × 105m).
+> - **See "Post-Falsification Recommendations & Next-Phase Roadmap" below** for how to proceed,
+>   including the multi-video evaluation opportunity.
 
 
 ## Context
@@ -468,7 +465,37 @@ the `demo` fallback — do not extend it.**
 
 `scripts/README.md` documents `run-job.sh`, `ingest-artifacts.py` and
 `score-benchmark.py` **which do not exist yet**. Those three are the first executables to
-build.
+
+---
+
+## Post-Falsification Recommendations & Next-Phase Roadmap (2026-09-23)
+
+Following the empirical verdicts recorded in `STATE.md` and detailed in `docs/postmortems/falsification_log.md`, the pipeline has reached an honest baseline: 6 of 14 types detected in pixel space (Macro-F1 0.278 / 0.253 conservative, covering 141 of 447 events), UI/route parity complete, and the stats table honestly dimmed with measured reasons.
+
+To advance the system toward full parity without relitigating dead ends, the following architectural and modeling strategies are recommended:
+
+### 1. Multi-Video Generalization & Sample Diversity (Crucial Product Constraint)
+- **Single-Sample Limit**: All measurements to date were conducted on one single match recording (`arlington-sa-u16b...`). This video presents extreme edge cases: a low mounting pole (~6.7m), grazing perspective angles, a virtual ball-following pan crop with wide zoom swings (2.41x focal variation), and a multi-pitch complex with overlapping blue/white lines and adjacent goals in frame.
+- **Additional Video Ingestion**: The user has confirmed the ability to provide additional Veo match MP4s with different parameters (e.g. higher camera elevation $\ge 8\text{m}$, cleaner isolated pitches, different lighting, and different turf/grass textures).
+- **Why This Changes the Geometry**: At a 6.7m pole height, perspective compression turns the ground plane into an ill-conditioned solve where a 2-pixel vertical shift is tens of meters. A higher camera angle ($8\text{–}10\text{m}$) radically expands vertical pixel resolution near the far touchline, potentially unblocking constrained metric calibration and 2D minimap projection where low-angle video fails.
+
+### 2. Beyond Whole-Body 2D Containment: Foot-Level Contact Modeling
+- **Why Tier B Failed**: Whole-body 2D bounding boxes contain no depth. When a ball is kicked in the air, its 2D projection falls inside the bounding boxes of distant players, driving shirt-color AUC to 0.503 (chance).
+- **Foot-Region Spatial Masking**: Restrict ball-player proximity testing strictly to the bottom 15–20% of the player bounding box (the foot/ground contact zone).
+- **Trajectory & Velocity Alignment**: True possession requires spatial proximity *plus* co-linear velocity vectors: the ball and player must share speed and direction over $\ge 0.5\text{s}$. If the ball velocity exceeds sprinting speed (>8 m/s) or changes vector abruptly without player foot contact, it must be classified as airborne transit.
+
+### 3. Parametric Extrinsics Solver with Hard Physical Priors
+- **Why Homography Failed**: Unconstrained 8-D searches and academic broadcast TV models (PnLCalib) fail on amateur footage because SIFT features latch onto background clutter, inverting the ground plane to a 105m × 105m square.
+- **Physical Parameterization**: We have measured ground-truth priors: camera height $H = 6.71\text{m}$, centre circle radius $R = 9.15\text{m}$, and tilt $\approx 0.87^\circ$. Rather than solving an unconstrained homography, parameterize camera extrinsics strictly via camera height, pitch, roll, yaw, and focal length.
+- **Occupancy-Masked Line Selection**: Mask line-detection algorithms to the convex hull of detected player footprints to strictly ignore adjacent soccer pitches and diagonal auxiliary field markings.
+
+### 4. Architectural Modernization: Ending the Split Brain
+- **The Current Duality**: The codebase is split between `cv_engine.py` (a frozen 580-line heuristic engine reporting `mode: "demo"`) and `ml_ingest.py` (a batch ingestion script reading static JSON files).
+- **Modular Pipeline Runner**: Refactor `backend/src/services/pipeline/` into a unified DAG runner (`MatchPipeline`) that can ingest any uploaded video, run proven detectors, and dynamically generate the `EventCapability` manifest and `AnalyticsData` without hardcoded match ID checks.
+
+### 5. Hermetic Testing & Verification Decoupling
+- **Decouple Tests from `.local/artifacts/`**: Place minimal verified JSON fixtures (`pred_all.json`, `score_all.json`, `manifest_all.json`) in `backend/tests/fixtures/ml/` so tests and CI run hermetically on clean clones without needing gitignored local artifacts.
+- **Non-Interactive Test Suites**: Ensure test commands (such as Vitest) run non-interactively (`vitest run`) in automated and headless environments.
 
 ---
 

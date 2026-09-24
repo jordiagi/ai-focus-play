@@ -270,6 +270,32 @@ def get_analytics(match_id: str):
         raise HTTPException(status_code=404, detail="Analytics not found for match")
     return analytics
 
+@router.get("/{match_id}/benchmark")
+def get_benchmark_comparison(match_id: str):
+    """Compare match analytics against live Veo ground-truth benchmark."""
+    match = match_repo.get_match(match_id)
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    analytics = match_repo.get_analytics(match_id)
+    if not analytics:
+        raise HTTPException(status_code=404, detail="Analytics not found for match")
+    try:
+        from backend.src.services.pipeline.stats_benchmark import compare_stats_table, load_live_veo_benchmark
+        gt_raw = load_live_veo_benchmark()
+        comparison = compare_stats_table(
+            analytics.home_stats.model_dump(),
+            analytics.away_stats.model_dump(),
+            analytics.unavailable
+        )
+        return {
+            "match_id": match_id,
+            "benchmark_match": gt_raw["match"],
+            "comparison": comparison,
+            "live_ground_truth": gt_raw
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Benchmark error: {str(e)}")
+
 @router.post("/{match_id}/teams/swap")
 def swap_teams(match_id: str):
     """Swap home and away team assignments across events, highlights, radar frames, and stats (P1-2)."""

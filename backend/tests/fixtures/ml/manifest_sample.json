@@ -1,0 +1,16 @@
+{
+  "command": "backend/src/services/pipeline/gpu_job/mosaic/merge_predictions.py",
+  "attempted": [
+    "FootballCornerKick",
+    "FootballGoal",
+    "FootballGoalKick",
+    "FootballKickOff",
+    "FootballOutOfPlay",
+    "FootballThrowIn"
+  ],
+  "tuned_on": "period1",
+  "not_attempted": {
+    "FootballFreeKick": "its (xi, eta) cloud sits inside ThrowIn's with no separating cue"
+  },
+  "note": "team is predicted only for types with team field"
+}

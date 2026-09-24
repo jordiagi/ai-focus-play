@@ -1,0 +1,21 @@
+{
+  "tuned_on": "period1",
+  "n_ref": 447,
+  "n_pred": 6,
+  "team_agnostic": {
+    "FootballKickOff": {"f1": 0.667},
+    "FootballGoal": {"f1": 0.444},
+    "FootballGoalKick": {"f1": 0.276},
+    "FootballThrowIn": {"f1": 0.244},
+    "FootballOutOfPlay": {"f1": 0.356},
+    "FootballCornerKick": {"f1": 0.100}
+  },
+  "overall": {
+    "FootballKickOff": {"f1": 0.500},
+    "FootballGoal": {"f1": 0.444},
+    "FootballGoalKick": {"f1": 0.276},
+    "FootballThrowIn": {"f1": 0.200},
+    "FootballOutOfPlay": {"f1": 0.147},
+    "FootballCornerKick": {"f1": 0.100}
+  }
+}
