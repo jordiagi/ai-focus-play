@@ -60,6 +60,29 @@ def route_last_contact(t, pl, ball, keys, pad):
     return hit
 
 
+def route_foot_contact(t, pl, ball, keys, foot_pct=0.15, pad_x=0.15):
+    """Latest frame where the ball sits strictly in the foot contact zone (bottom foot_pct of box)."""
+    hit = None
+    for k in keys:
+        b = top_candidate(ball, k)
+        if b is None or k not in pl:
+            continue
+        inside = []
+        for bb in pl[k]["boxes"]:
+            if not bb["shirt"]:
+                continue
+            x1, y1, x2, y2 = bb["box"]
+            h = y2 - y1
+            foot_y_top = y2 - foot_pct * h
+            foot_y_bot = y2 + 0.05 * h
+            m_x = pad_x * h
+            if (x1 - m_x <= b[0] <= x2 + m_x) and (foot_y_top <= b[1] <= foot_y_bot):
+                inside.append(bb)
+        if len(inside) == 1:
+            hit = inside[0]["shirt"]["lab"][0]      # latest wins
+    return hit
+
+
 def route_strike_frame(t, pl, ball, keys, pad, maxd):
     """Player nearest the ball at the frame of largest ball acceleration."""
     pts = [(k, top_candidate(ball, k)) for k in keys]
@@ -159,6 +182,7 @@ def main():
 
     for name, fn, params in (
             ("last_contact", route_last_contact, [{"pad": p} for p in (0.0, 0.10, 0.20)]),
+            ("foot_contact", route_foot_contact, [{"foot_pct": fp, "pad_x": 0.15} for fp in (0.15, 0.20, 0.30)]),
             ("strike_frame", route_strike_frame,
              [{"pad": p, "maxd": d} for p in (0.0, 0.10) for d in (0.3, 0.6, 1.0)])):
         cells = []

@@ -149,3 +149,90 @@ class VeoCameraModel:
 
         d_cam = R_v2c @ d_vcam
         return self.camera_ray_to_ground(d_cam)
+
+    def frame_pixel_to_ground(
+        self,
+        u: float,
+        v: float,
+        K: np.ndarray,
+        R: np.ndarray,
+    ) -> Optional[Tuple[float, float]]:
+        """Map a pixel (u, v) in a video frame with intrinsic K and rotation R to ground metric (x_m, z_m)."""
+        p_pix = np.array([u, v, 1.0], dtype=np.float64)
+        K_inv = np.linalg.inv(K)
+        d_local = K_inv @ p_pix
+        norm = np.linalg.norm(d_local)
+        if norm < 1e-9:
+            return None
+        d_local = d_local / norm
+        d_cam = R @ d_local
+        return self.camera_ray_to_ground(d_cam)
+
+    def panorama_pixel_to_ground(
+        self,
+        u: float,
+        v: float,
+        scale: float,
+        origin: Tuple[float, float] | list,
+    ) -> Optional[Tuple[float, float]]:
+        """Map a pixel (u, v) in a spherical panorama with scale and origin to ground metric (x_m, z_m)."""
+        x0, y0 = origin
+        theta = (u + x0) / scale
+        psi = np.pi - (v + y0) / scale
+        d_cam = np.array(
+            [np.sin(psi) * np.sin(theta), np.cos(psi), np.sin(psi) * np.cos(theta)],
+            dtype=np.float64,
+        )
+        norm = np.linalg.norm(d_cam)
+        if norm < 1e-9:
+            return None
+        d_cam = d_cam / norm
+        return self.camera_ray_to_ground(d_cam)
+
+    def ground_to_radar(self, x_m: float, z_m: float) -> Tuple[float, float]:
+        """Convert metric (x_m, z_m) to standard 2D Pitch Radar coordinates (x in [0, 105], y in [0, 68])."""
+        x_norm, z_norm = self.metric_to_normalized(x_m, z_m)
+        return float(x_norm * 105.0), float(z_norm * 68.0)
+
+    def frame_pixel_to_radar(
+        self,
+        u: float,
+        v: float,
+        K: np.ndarray,
+        R: np.ndarray,
+    ) -> Optional[Tuple[float, float]]:
+        """Map a frame pixel directly to 2D Pitch Radar coordinates (x in [0, 105], y in [0, 68])."""
+        pt = self.frame_pixel_to_ground(u, v, K, R)
+        if pt is None:
+            return None
+        return self.ground_to_radar(*pt)
+
+    def panorama_pixel_to_radar(
+        self,
+        u: float,
+        v: float,
+        scale: float,
+        origin: Tuple[float, float] | list,
+    ) -> Optional[Tuple[float, float]]:
+        """Map a panorama pixel directly to 2D Pitch Radar coordinates (x in [0, 105], y in [0, 68])."""
+        pt = self.panorama_pixel_to_ground(u, v, scale, origin)
+        if pt is None:
+            return None
+        return self.ground_to_radar(*pt)
+
+    def project_bounding_box_to_radar(
+        self,
+        box: list | Tuple[float, float, float, float],
+        K: np.ndarray,
+        R: np.ndarray,
+        foot_ratio: float = 1.0,
+    ) -> Optional[Tuple[float, float]]:
+        """
+        Project a player bounding box [x1, y1, x2, y2] to 2D Pitch Radar coordinates.
+
+        foot_ratio: 1.0 means bottom edge (feet contact on turf), 0.9 means lower 10%.
+        """
+        x1, y1, x2, y2 = box[:4]
+        foot_u = (x1 + x2) / 2.0
+        foot_v = y1 + foot_ratio * (y2 - y1)
+        return self.frame_pixel_to_radar(foot_u, foot_v, K, R)
