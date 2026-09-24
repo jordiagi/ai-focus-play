@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Video, List, Shirt, BarChart2, LayoutGrid, FileText,
-  Play, ArrowLeftRight, ArrowUpRight, ChevronDown, X, Info
+  Play, ArrowLeftRight, ArrowUpRight, ArrowLeft, ChevronDown, X, Info
 } from 'lucide-react';
 import { Match, Highlight, Event, AnalyticsData, EventTypeLabel } from '../../types';
 import { api } from '../../services/api';
@@ -115,11 +115,55 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
   };
 
   const filteredHighlights = highlights.filter(h => {
+    if (selectedJersey && h.player_jersey !== selectedJersey) return false;
     if (highlightFilter === 'all') return true;
     if (highlightFilter === 'goals') return h.event_type === 'goal';
     if (highlightFilter === 'shots') return h.event_type === 'shot';
     return true;
   });
+
+  const getPlayerMoments = (jersey: string) => {
+    const list: Array<{
+      id: string;
+      timestamp: number;
+      title: string;
+      event_type: string;
+      tags?: string[];
+      team?: string;
+    }> = [];
+
+    // Add highlights matching jersey
+    highlights
+      .filter(h => h.player_jersey === jersey)
+      .forEach(h => {
+        list.push({
+          id: `hl-${h.id}`,
+          timestamp: h.start_time,
+          title: h.title,
+          event_type: h.event_type,
+          tags: h.tags,
+          team: h.team,
+        });
+      });
+
+    // Add events matching jersey, deduplicating if an existing highlight covers this moment within 2.5s
+    events
+      .filter(e => e.player_jersey === jersey)
+      .forEach(e => {
+        const isCovered = list.some(m => Math.abs(m.timestamp - e.timestamp) <= 2.5);
+        if (!isCovered) {
+          list.push({
+            id: `evt-${e.id}`,
+            timestamp: e.timestamp,
+            title: e.description,
+            event_type: e.event_type,
+            team: e.team,
+          });
+        }
+      });
+
+    return list.sort((a, b) => a.timestamp - b.timestamp);
+  };
 
   const eventCount = (label: EventTypeLabel) => events.filter(
     event => normalizeEventType(event.event_type) === normalizeEventType(label),
@@ -232,6 +276,23 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
               ))}
             </div>
 
+            {/* Active player filter badge if jersey selected */}
+            {selectedJersey && (
+              <div className="flex items-center justify-between bg-[#14261c] border border-[#00E676]/40 text-[#00E676] px-2.5 py-1.5 rounded-lg text-xs animate-in fade-in duration-150">
+                <div className="flex items-center space-x-1.5 truncate">
+                  <Shirt className="w-3.5 h-3.5 shrink-0" />
+                  <span className="font-semibold">Filtered to #{selectedJersey}</span>
+                  <span className="text-gray-400 font-normal">({filteredHighlights.length} clip{filteredHighlights.length === 1 ? '' : 's'})</span>
+                </div>
+                <button
+                  onClick={() => onSelectJersey(null)}
+                  className="text-gray-400 hover:text-white transition text-[11px] underline shrink-0 ml-2"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+
             {/* Clips List */}
             <div className="space-y-2.5">
               {filteredHighlights.map(h => {
@@ -307,6 +368,22 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
               </div>
             </div>
 
+            {/* Active player filter badge if jersey selected */}
+            {selectedJersey && (
+              <div className="flex items-center justify-between bg-[#14261c] border border-[#00E676]/40 text-[#00E676] px-2.5 py-1.5 rounded-lg text-xs animate-in fade-in duration-150">
+                <div className="flex items-center space-x-1.5 truncate">
+                  <Shirt className="w-3.5 h-3.5 shrink-0" />
+                  <span className="font-semibold">Filtered to #{selectedJersey}</span>
+                </div>
+                <button
+                  onClick={() => onSelectJersey(null)}
+                  className="text-gray-400 hover:text-white transition text-[11px] underline shrink-0 ml-2"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+
             <div className="flex items-center justify-between pb-2 border-b border-[#181818]">
               <span className="text-xs text-gray-400 font-medium">Timeline Events</span>
               <div className="flex space-x-1">
@@ -330,48 +407,75 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
             </div>
 
             <div className="space-y-2">
-              {events.filter(e => e.period === eventPeriod).map(e => {
-                const isActive = currentTime >= e.timestamp - 1.0 && currentTime <= e.timestamp + 3.0;
-                return (
-                  <div
-                    key={e.id}
-                    className={`p-2.5 border rounded-xl transition flex items-center justify-between ${
-                      isActive
-                        ? 'bg-[#14261c] border-[#00E676] shadow-lg shadow-[#00E676]/10'
-                        : 'bg-[#12141a] border-[#1e222d]'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold ${
-                        isActive ? 'bg-[#00E676] text-black' : 'text-[#00E676] bg-[#00E676]/10'
-                      }`}>
-                        {formatTime(e.timestamp)}
-                      </span>
-                      <span className="text-xs text-white font-medium">{e.description}</span>
+              {(() => {
+                const periodEvents = events.filter(e => e.period === eventPeriod && (!selectedJersey || e.player_jersey === selectedJersey));
+                if (periodEvents.length === 0) {
+                  return (
+                    <div className="p-6 text-center text-xs text-gray-500 bg-[#12141a] rounded-xl border border-[#1e222d]">
+                      {selectedJersey ? `No events detected for #${selectedJersey} in Half ${eventPeriod}` : 'No events in this half'}
                     </div>
-                    <div className="flex items-center space-x-1">
-                      <button
-                        type="button"
-                        disabled
-                        title="No backend endpoint exists to promote an event to a clip yet"
-                        aria-label={`Add ${e.description} as a clip (not available)`}
-                        className="p-1.5 rounded-md text-gray-400 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        <Video className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onSeek(e.timestamp)}
-                        className="p-1.5 rounded-md text-gray-400 hover:text-[#00E676] hover:bg-[#20252f] transition"
-                        aria-label={`Seek to ${e.description} at ${formatTime(e.timestamp)}`}
-                        title="Seek to event"
-                      >
-                        <ArrowUpRight className={`w-3.5 h-3.5 ${isActive ? 'text-[#00E676]' : ''}`} />
-                      </button>
+                  );
+                }
+                return periodEvents.map(e => {
+                  const isActive = currentTime >= e.timestamp - 1.0 && currentTime <= e.timestamp + 3.0;
+                  const isPlayerMatch = selectedJersey && e.player_jersey === selectedJersey;
+                  return (
+                    <div
+                      key={e.id}
+                      className={`p-2.5 border rounded-xl transition flex items-center justify-between ${
+                        isActive
+                          ? 'bg-[#14261c] border-[#00E676] shadow-lg shadow-[#00E676]/10'
+                          : isPlayerMatch
+                          ? 'bg-[#14261c]/60 border-[#00E676]/60'
+                          : 'bg-[#12141a] border-[#1e222d]'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2 min-w-0 pr-2">
+                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                          isActive ? 'bg-[#00E676] text-black' : 'text-[#00E676] bg-[#00E676]/10'
+                        }`}>
+                          {formatTime(e.timestamp)}
+                        </span>
+                        {e.player_jersey && (
+                          <button
+                            type="button"
+                            onClick={() => onSelectJersey(selectedJersey === e.player_jersey ? null : e.player_jersey!)}
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition shrink-0 ${
+                              selectedJersey === e.player_jersey
+                                ? 'bg-[#00E676] text-black'
+                                : 'bg-[#1f2430] text-[#FFD700] hover:bg-[#283244]'
+                            }`}
+                            title={`Filter to Player #${e.player_jersey}`}
+                          >
+                            #{e.player_jersey}
+                          </button>
+                        )}
+                        <span className="text-xs text-white font-medium truncate">{e.description}</span>
+                      </div>
+                      <div className="flex items-center space-x-1 shrink-0">
+                        <button
+                          type="button"
+                          disabled
+                          title="No backend endpoint exists to promote an event to a clip yet"
+                          aria-label={`Add ${e.description} as a clip (not available)`}
+                          className="p-1.5 rounded-md text-gray-400 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <Video className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onSeek(e.timestamp)}
+                          className="p-1.5 rounded-md text-gray-400 hover:text-[#00E676] hover:bg-[#20252f] transition"
+                          aria-label={`Seek to ${e.description} at ${formatTime(e.timestamp)}`}
+                          title="Seek to event"
+                        >
+                          <ArrowUpRight className={`w-3.5 h-3.5 ${isActive ? 'text-[#00E676]' : ''}`} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           </div>
         )}
@@ -1021,39 +1125,115 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
               {selectedJersey && (
                 <button
                   onClick={() => onSelectJersey(null)}
-                  className="text-xs text-[#00E676] hover:underline"
+                  className="flex items-center space-x-1 text-xs text-[#00E676] hover:underline"
                 >
-                  Show All Players
+                  <ArrowLeft className="w-3 h-3" />
+                  <span>All Players</span>
                 </button>
               )}
             </div>
 
-            <div className="space-y-2">
-              {match.lineup.map(player => (
-                <div
-                  key={player.jersey}
-                  onClick={() => onSelectJersey(player.jersey)}
-                  className={`p-2.5 border rounded-xl cursor-pointer transition flex items-center justify-between ${
-                    selectedJersey === player.jersey
-                      ? 'bg-[#14261c] border-[#00E676]'
-                      : 'bg-[#12141a] hover:bg-[#181c25] border-[#1e222d]'
-                  }`}
-                >
-                  <div className="flex items-center space-x-2.5">
-                    <span className="w-7 h-7 rounded-full bg-[#1f2430] text-[#00E676] font-bold text-xs flex items-center justify-center border border-[#2a2a2a]">
-                      {player.jersey}
-                    </span>
-                    <div>
-                      <div className="text-xs font-bold text-white">{player.name}</div>
-                      <div className="text-[10px] text-gray-400">{player.position} • {player.minutes_played == null ? '\u2014' : player.minutes_played} mins played</div>
+            {selectedJersey ? (
+              /* Selected Player View */
+              <div className="space-y-3 animate-in fade-in duration-150">
+                {(() => {
+                  const player = match.lineup.find(p => p.jersey === selectedJersey);
+                  const moments = getPlayerMoments(selectedJersey);
+                  const displayName = player?.name || `Player ${selectedJersey}`;
+
+                  return (
+                    <>
+                      {/* Player Banner */}
+                      <div className="bg-[#14261c] border border-[#00E676]/40 rounded-xl p-3 flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 rounded-full bg-[#00E676] text-black font-extrabold text-sm flex items-center justify-center shadow-lg">
+                            {selectedJersey}
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-white">{displayName}</div>
+                            <div className="text-[10px] text-gray-300">
+                              {player?.position || 'Player'} • {player?.minutes_played != null ? `${player.minutes_played} mins played` : '— mins played'}
+                            </div>
+                          </div>
+                        </div>
+                        <span className="text-xs font-bold text-[#00E676] bg-[#00E676]/10 px-2 py-1 rounded-md border border-[#00E676]/20">
+                          {moments.length} moments
+                        </span>
+                      </div>
+
+                      {/* Moments Timeline List */}
+                      <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1">
+                        Timeline Moments
+                      </div>
+
+                      {moments.length === 0 ? (
+                        <div className="p-6 text-center text-xs text-gray-500 bg-[#12141a] rounded-xl border border-[#1e222d]">
+                          No detected moments for #{selectedJersey}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {moments.map(m => (
+                            <div
+                              key={m.id}
+                              onClick={() => onSeek(m.timestamp)}
+                              className="p-2.5 bg-[#12141a] hover:bg-[#181c25] border border-[#1e222d] hover:border-[#00E676]/40 rounded-xl cursor-pointer transition flex items-center justify-between group"
+                            >
+                              <div className="flex items-center space-x-2.5 min-w-0 pr-2">
+                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded font-bold text-[#00E676] bg-[#00E676]/10 shrink-0">
+                                  {formatTime(m.timestamp)}
+                                </span>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-semibold text-white group-hover:text-[#00E676] transition truncate">
+                                    {m.title}
+                                  </div>
+                                  <div className="text-[10px] text-gray-400 flex items-center space-x-1.5 mt-0.5">
+                                    <span className="capitalize">{m.event_type}</span>
+                                    {m.tags && m.tags.length > 0 && (
+                                      <>
+                                        <span>•</span>
+                                        <span className="truncate">{m.tags.join(', ')}</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <Play className="w-3.5 h-3.5 text-gray-400 group-hover:text-[#00E676] group-hover:scale-110 transition shrink-0" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            ) : (
+              /* All Players Roster List */
+              <div className="space-y-2">
+                {match.lineup.map(player => {
+                  const momentsCount = getPlayerMoments(player.jersey).length;
+                  return (
+                    <div
+                      key={player.jersey}
+                      onClick={() => onSelectJersey(player.jersey)}
+                      className="p-2.5 border rounded-xl cursor-pointer transition flex items-center justify-between bg-[#12141a] hover:bg-[#181c25] border-[#1e222d] hover:border-[#00E676]/30"
+                    >
+                      <div className="flex items-center space-x-2.5">
+                        <span className="w-7 h-7 rounded-full bg-[#1f2430] text-[#00E676] font-bold text-xs flex items-center justify-center border border-[#2a2a2a]">
+                          {player.jersey}
+                        </span>
+                        <div>
+                          <div className="text-xs font-bold text-white">{player.name}</div>
+                          <div className="text-[10px] text-gray-400">{player.position} • {player.minutes_played == null ? '—' : player.minutes_played} mins played</div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-[#00E676] font-semibold bg-[#00E676]/10 px-2 py-0.5 rounded">
+                        {momentsCount} moments
+                      </span>
                     </div>
-                  </div>
-                  <span className="text-[10px] text-[#00E676] font-semibold bg-[#00E676]/10 px-2 py-0.5 rounded">
-                    {highlights.filter(h => h.player_jersey === player.jersey).length} moments
-                  </span>
-                </div>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

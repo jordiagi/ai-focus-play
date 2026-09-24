@@ -16,7 +16,7 @@
   - Executed and validated `MatchPipeline` across both ML and demo modes on the new match, generating calibrated 2D pitch radar frames and event capability manifest.
   - Multi-match switcher deployed to local UI header with instant match switching, query URL synchronization, and dynamic match-specific Veo ground-truth benchmark comparison.
   - Protected sample video fixtures from unlinking during match cleanup in `MatchRepository`.
-- **Baseline Verification**: **`pass=11 fail=0 skip=0`** (probes `d1`–`d12`), **88 pytest tests passing**, **24 vitest tests passing** (non-interactive).
+- **Baseline Verification**: **`pass=11 fail=0 skip=0`** (probes `d1`–`d12`), **88 pytest tests passing**, **28 vitest tests passing** (non-interactive).
 
 ---
 
@@ -110,6 +110,7 @@ Legend: ☑ Done & Verified · ◐ In Progress · ⊘ Blocked · ⏸ Deferred ·
 | **U6** | Live Veo Benchmark comparison drawer & API | ☑ | `/api/matches/{id}/benchmark`, `stats_benchmark.py`, toggleable side-by-side delta cards in Stats drawer, live UI verified |
 | **U7** | Tactical half-pitch Shot Map & 5-metric breakdown | ☑ | Attacking half SVG, wing labels, 5 conversion metrics, Veo live GT shot markers, 22 vitest tests |
 | **U8** | Multi-Match Switcher & dynamic match-specific Veo benchmark comparison | ☑ | Dropdown in Header, query param sync, `fairfax_union_stats.json` & `veo_stats_live.json`, 24 vitest tests |
+| **U9** | Player Moments & Jersey Tag Filtering in Video Timeline & Drawers | ☑ | Cross-linked jersey selection across `PlayerMomentsBar`, `Timeline`, `Highlights`, `Events`, and dedicated player view in `Players` drawer; 28 vitest tests |
 
 ---
 

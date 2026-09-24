@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { X } from 'lucide-react';
 import { Highlight, Event } from '../../types';
 
 interface TimelineProps {
@@ -10,6 +11,8 @@ interface TimelineProps {
   clipStart?: number | null;
   clipEnd?: number | null;
   onSetClipBounds?: (start: number, end: number) => void;
+  selectedJersey?: string | null;
+  onSelectJersey?: (jersey: string | null) => void;
 }
 
 export const Timeline: React.FC<TimelineProps> = ({
@@ -20,6 +23,8 @@ export const Timeline: React.FC<TimelineProps> = ({
   onSeek,
   clipStart,
   clipEnd,
+  selectedJersey,
+  onSelectJersey,
 }) => {
   const barRef = useRef<HTMLDivElement | null>(null);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
@@ -61,8 +66,42 @@ export const Timeline: React.FC<TimelineProps> = ({
     }
   };
 
+  const playerMomentsCount = selectedJersey
+    ? events.filter(e => e.player_jersey === selectedJersey).length +
+      highlights.filter(h => h.player_jersey === selectedJersey).length
+    : 0;
+
   return (
     <div className="w-full select-none relative group py-2">
+      {/* Active Player Filter Indicator */}
+      {selectedJersey && (
+        <div className="flex items-center justify-between mb-1.5 px-1 text-[11px] animate-in fade-in duration-150">
+          <div className="flex items-center space-x-1.5 bg-[#14261c] border border-[#00E676]/40 text-[#00E676] px-2.5 py-0.5 rounded-full font-semibold shadow-md">
+            <span>Filtered: #{selectedJersey}</span>
+            <span className="text-gray-400 font-normal">
+              ({playerMomentsCount} moment{playerMomentsCount === 1 ? '' : 's'})
+            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectJersey?.(null);
+              }}
+              className="ml-1 p-0.5 hover:text-white rounded-full transition"
+              title="Clear player filter"
+              aria-label="Clear player filter"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+          <button
+            onClick={() => onSelectJersey?.(null)}
+            className="text-[11px] text-gray-400 hover:text-white transition underline"
+          >
+            Show All
+          </button>
+        </div>
+      )}
+
       {/* Timecode Hover Preview */}
       {hoverTime !== null && (
         <div
@@ -97,10 +136,19 @@ export const Timeline: React.FC<TimelineProps> = ({
         {highlights.map((h) => {
           const leftPct = (h.start_time / safeDuration) * 100;
           const widthPct = ((h.end_time - h.start_time) / safeDuration) * 100;
+          const isPlayerMatch = selectedJersey && h.player_jersey === selectedJersey;
+          const isDimmed = selectedJersey && !isPlayerMatch;
+
           return (
             <div
               key={h.id}
-              className="absolute top-0 bottom-0 bg-[#00E676]/20 border-x border-[#00E676]/60 pointer-events-none"
+              className={`absolute top-0 bottom-0 pointer-events-none transition-all ${
+                isPlayerMatch
+                  ? 'bg-[#00E676]/40 border-x-2 border-[#00E676] z-10'
+                  : isDimmed
+                  ? 'bg-[#00E676]/5 opacity-20'
+                  : 'bg-[#00E676]/20 border-x border-[#00E676]/60'
+              }`}
               style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
             />
           );
@@ -121,6 +169,9 @@ export const Timeline: React.FC<TimelineProps> = ({
         {events.map((evt) => {
           const leftPct = (evt.timestamp / safeDuration) * 100;
           const isGoal = evt.event_type.toLowerCase() === 'goal';
+          const isPlayerMatch = selectedJersey && evt.player_jersey === selectedJersey;
+          const isDimmed = selectedJersey && !isPlayerMatch;
+
           return (
             <button
               key={evt.id}
@@ -128,12 +179,22 @@ export const Timeline: React.FC<TimelineProps> = ({
                 e.stopPropagation();
                 onSeek(evt.timestamp);
               }}
-              onMouseEnter={() => setHoverEvent(`${evt.event_type} (${evt.team.toUpperCase()})`)}
-              className={`absolute -translate-x-1/2 z-20 transition hover:scale-150 ${
+              onMouseEnter={() => {
+                const jerseyStr = evt.player_jersey ? ` #${evt.player_jersey}` : '';
+                setHoverEvent(`${evt.event_type}${jerseyStr} (${evt.team.toUpperCase()})`);
+              }}
+              className={`absolute -translate-x-1/2 z-20 transition-all ${
                 isGoal ? 'w-3.5 h-3.5 ring-2 ring-white animate-pulse' : 'w-2.5 h-2.5'
+              } ${
+                isPlayerMatch
+                  ? 'ring-2 ring-white scale-150 z-30 opacity-100 shadow-lg'
+                  : isDimmed
+                  ? 'opacity-20 hover:opacity-80 scale-75'
+                  : 'opacity-100 hover:scale-150'
               } rounded-full ${getMarkerColor(evt.event_type)}`}
               style={{ left: `${leftPct}%` }}
-              title={`${evt.event_type}: ${evt.description}`}
+              title={evt.player_jersey ? `#${evt.player_jersey} • ${evt.event_type}: ${evt.description}` : `${evt.event_type}: ${evt.description}`}
+              aria-label={evt.player_jersey ? `Player ${evt.player_jersey} ${evt.event_type}` : evt.event_type}
             />
           );
         })}

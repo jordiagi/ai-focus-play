@@ -263,6 +263,8 @@ export const App: React.FC = () => {
                 events={events}
                 drawings={drawings}
                 radarFrames={radarFrames}
+                selectedJersey={selectedJersey}
+                onSelectJersey={handleSelectJersey}
                 onSaveDrawing={handleSaveDrawing}
                 onTimeUpdate={setCurrentTime}
               />

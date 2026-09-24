@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import { SidebarDrawer } from '../components/Sidebar/SidebarTabs';
 import { api } from '../services/api';
-import type { AnalyticsData, Match } from '../types';
+import type { AnalyticsData, Match, Highlight, Event } from '../types';
 
 const match: Match = {
   id: 'literal-match', title: 'Test match', home_team: 'Home', away_team: 'Away',
@@ -230,4 +230,167 @@ it('renders tactical half-pitch shot map with 5 conversion breakdown lines', () 
   expect(screen.getByText(/LEFT WING →/)).toBeTruthy();
   expect(screen.getByText(/RIGHT WING →/)).toBeTruthy();
   expect(screen.getByRole('img', { name: '2D soccer half-pitch shot map' })).toBeTruthy();
+});
+
+it('renders player moments list and allows seeking when a player jersey is selected', () => {
+  const onSeek = vi.fn();
+  const onSelectJersey = vi.fn();
+  const testMatch: Match = {
+    ...match,
+    lineup: [
+      { jersey: '10', name: 'Player 10', position: 'FWD', is_starter: true, minutes_played: 80 },
+      { jersey: '14', name: 'Player 14', position: 'MID', is_starter: true, minutes_played: null },
+    ],
+  };
+  const testHighlights: Highlight[] = [
+    {
+      id: 'h1',
+      match_id: testMatch.id,
+      title: 'Goal - #10',
+      event_type: 'goal',
+      start_time: 18.0,
+      end_time: 28.0,
+      period: 1,
+      team: 'home',
+      player_jersey: '10',
+      is_ai_detected: true,
+      tags: ['Goal', 'Inside Box'],
+      comments_count: 0,
+    },
+  ];
+  const testEvents: Event[] = [
+    {
+      id: 'e1',
+      match_id: testMatch.id,
+      timestamp: 45.0,
+      period: 1,
+      event_type: 'Shot',
+      team: 'home',
+      player_jersey: '10',
+      description: 'Shot on goal by #10',
+      pitch_x: 95.0,
+      pitch_y: 34.0,
+    },
+  ];
+
+  // 1. Render all players view (selectedJersey = null)
+  const { rerender } = render(
+    <SidebarDrawer
+      activeTab="players"
+      onClose={vi.fn()}
+      match={testMatch}
+      highlights={testHighlights}
+      events={testEvents}
+      analytics={analytics}
+      onSeek={onSeek}
+      onPlayAllHighlights={vi.fn()}
+      selectedJersey={null}
+      onSelectJersey={onSelectJersey}
+    />
+  );
+
+  // Checks both players exist with honest unmeasured / measured minutes
+  expect(screen.getByText('Player 10')).toBeTruthy();
+  expect(screen.getByText('FWD • 80 mins played')).toBeTruthy();
+  expect(screen.getByText('Player 14')).toBeTruthy();
+  expect(screen.getByText('MID • — mins played')).toBeTruthy();
+
+  // Click on Player 10 card to select
+  fireEvent.click(screen.getByText('Player 10'));
+  expect(onSelectJersey).toHaveBeenCalledWith('10');
+
+  // 2. Re-render with selectedJersey="10"
+  rerender(
+    <SidebarDrawer
+      activeTab="players"
+      onClose={vi.fn()}
+      match={testMatch}
+      highlights={testHighlights}
+      events={testEvents}
+      analytics={analytics}
+      onSeek={onSeek}
+      onPlayAllHighlights={vi.fn()}
+      selectedJersey="10"
+      onSelectJersey={onSelectJersey}
+    />
+  );
+
+  // Verify dedicated player header and moments count
+  expect(screen.getByText('2 moments')).toBeTruthy();
+  expect(screen.getByText('Timeline Moments')).toBeTruthy();
+
+  // Verify moments items
+  expect(screen.getByText('Goal - #10')).toBeTruthy();
+  expect(screen.getByText('Shot on goal by #10')).toBeTruthy();
+
+  // Click on a moment to seek
+  fireEvent.click(screen.getByText('Goal - #10'));
+  expect(onSeek).toHaveBeenCalledWith(18.0);
+
+  // Click "All Players" button to clear
+  const allPlayersBtn = screen.getByRole('button', { name: /All Players/ });
+  fireEvent.click(allPlayersBtn);
+  expect(onSelectJersey).toHaveBeenCalledWith(null);
+});
+
+it('filters highlights list when a player jersey is selected', () => {
+  const onSelectJersey = vi.fn();
+  const testHighlights: Highlight[] = [
+    {
+      id: 'h1',
+      match_id: 'literal-match',
+      title: 'Goal - #10',
+      event_type: 'goal',
+      start_time: 12.0,
+      end_time: 24.0,
+      period: 1,
+      team: 'home',
+      player_jersey: '10',
+      is_ai_detected: true,
+      tags: ['Goal'],
+      comments_count: 0,
+    },
+    {
+      id: 'h2',
+      match_id: 'literal-match',
+      title: 'Shot - #14',
+      event_type: 'shot',
+      start_time: 32.0,
+      end_time: 42.0,
+      period: 1,
+      team: 'home',
+      player_jersey: '14',
+      is_ai_detected: true,
+      tags: ['Shot'],
+      comments_count: 0,
+    },
+  ];
+
+  render(
+    <SidebarDrawer
+      activeTab="highlights"
+      onClose={vi.fn()}
+      match={match}
+      highlights={testHighlights}
+      events={[]}
+      analytics={analytics}
+      onSeek={vi.fn()}
+      onPlayAllHighlights={vi.fn()}
+      selectedJersey="10"
+      onSelectJersey={onSelectJersey}
+    />
+  );
+
+  // Active filter badge is displayed
+  expect(screen.getByText('Filtered to #10')).toBeTruthy();
+  expect(screen.getByText('(1 clip)')).toBeTruthy();
+
+  // Only Player 10 highlight is rendered
+  expect(screen.getByText('Goal - #10')).toBeTruthy();
+  expect(screen.queryByText('Shot - #14')).toBeNull();
+
+  // Clicking Clear invokes onSelectJersey(null)
+  const clearBtn = screen.getByRole('button', { name: 'Clear' });
+  fireEvent.click(clearBtn);
+  expect(onSelectJersey).toHaveBeenCalledWith(null);
 });

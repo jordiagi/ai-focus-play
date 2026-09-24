@@ -29,6 +29,8 @@ interface VideoPlayerProps {
   onTimeUpdate?: (time: number) => void;
   onDurationChange?: (duration: number) => void;
   onEnded?: () => void;
+  selectedJersey?: string | null;
+  onSelectJersey?: (jersey: string | null) => void;
 }
 
 export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
@@ -41,6 +43,8 @@ export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
   onTimeUpdate,
   onDurationChange,
   onEnded,
+  selectedJersey,
+  onSelectJersey,
 }, ref) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -567,6 +571,8 @@ export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
           duration={duration}
           highlights={highlights}
           events={events}
+          selectedJersey={selectedJersey}
+          onSelectJersey={onSelectJersey}
           onSeek={(t) => {
             stopHighlightReel();
             seekTo(t);
