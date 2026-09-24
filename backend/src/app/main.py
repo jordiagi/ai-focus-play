@@ -149,7 +149,49 @@ def get_capabilities():
     return {
         "read_only": READ_ONLY,
         "allow_uploads": not READ_ONLY,
-        "supported_analysis_modes": ["demo", "heuristic", "ml"]
+        "supported_analysis_modes": ["demo", "heuristic", "ml"],
+        "execution_targets": [
+            {
+                "id": "local",
+                "name": "Local Engine",
+                "status": "online",
+                "badge": "Active",
+                "description": "Hermetic in-process CPU/GPU ML pipeline"
+            },
+            {
+                "id": "gpu_box",
+                "name": "Remote GPU-Box (H100)",
+                "status": "auth_required",
+                "badge": "Tailscale Auth Required",
+                "auth_url": "https://login.tailscale.com/a/lb70eee53af031",
+                "description": "Tailscale cluster host (root@gpu-box)"
+            }
+        ],
+        "default_target": "local"
+    }
+
+@app.get("/api/pipeline/execution-targets")
+def get_pipeline_execution_targets():
+    """List available pipeline execution targets (Local hermetic engine vs remote GPU-box)."""
+    return {
+        "targets": [
+            {
+                "id": "local",
+                "name": "Local Engine",
+                "status": "online",
+                "badge": "Active",
+                "description": "Hermetic in-process CPU/GPU ML pipeline"
+            },
+            {
+                "id": "gpu_box",
+                "name": "Remote GPU-Box (H100)",
+                "status": "auth_required",
+                "badge": "Tailscale Auth Required",
+                "auth_url": "https://login.tailscale.com/a/lb70eee53af031",
+                "description": "Tailscale cluster host (root@gpu-box)"
+            }
+        ],
+        "default": "local"
     }
 
 @app.get("/")

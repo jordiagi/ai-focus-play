@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Match } from '../types';
-import { Upload, Download, Check, Video, FileArchive, ChevronDown, FileText, FileSpreadsheet } from 'lucide-react';
+import { Upload, Download, Check, Video, FileArchive, ChevronDown, FileText, FileSpreadsheet, Share2, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
 
 interface HeaderProps {
@@ -9,6 +9,8 @@ interface HeaderProps {
   onSelectMatch?: (match: Match) => void;
   onOpenBurgerMenu: () => void;
   onOpenUpload: () => void;
+  onOpenSocialShare?: () => void;
+  onDeleteMatch?: (matchId: string) => void;
   canUpload?: boolean;
 }
 
@@ -18,6 +20,8 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectMatch,
   onOpenBurgerMenu,
   onOpenUpload,
+  onOpenSocialShare,
+  onDeleteMatch,
   canUpload = true,
 }) => {
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
@@ -210,19 +214,21 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <div className="space-y-1 max-h-64 overflow-y-auto">
                 {matches.map(m => (
-                  <button
+                  <div
                     key={m.id}
-                    onClick={() => {
-                      onSelectMatch?.(m);
-                      setShowMatchPicker(false);
-                    }}
-                    className={`w-full text-left p-2.5 rounded-lg flex items-center justify-between transition cursor-pointer ${
+                    className={`w-full p-2.5 rounded-lg flex items-center justify-between transition group ${
                       m.id === currentMatch?.id
                         ? 'bg-[#1e2433] border border-[#00E676]/40 text-white'
                         : 'hover:bg-[#181c26] text-gray-300 hover:text-white'
                     }`}
                   >
-                    <div className="min-w-0 pr-2">
+                    <button
+                      onClick={() => {
+                        onSelectMatch?.(m);
+                        setShowMatchPicker(false);
+                      }}
+                      className="flex-1 text-left min-w-0 pr-2 cursor-pointer"
+                    >
                       <div className="text-xs font-semibold truncate">{m.title}</div>
                       <div className="text-[10px] text-gray-400 mt-0.5 flex items-center space-x-2">
                         <span>{m.date}</span>
@@ -233,9 +239,26 @@ export const Header: React.FC<HeaderProps> = ({
                           {m.analysis_mode === 'ml' ? 'AI' : 'Demo'}
                         </span>
                       </div>
+                    </button>
+                    <div className="flex items-center space-x-1.5 shrink-0">
+                      {m.id === currentMatch?.id && <Check className="w-4 h-4 text-[#00E676]" />}
+                      {onDeleteMatch && m.id !== currentMatch?.id && m.analysis_mode !== 'demo' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Delete "${m.title}"? This cannot be undone.`)) {
+                              onDeleteMatch(m.id);
+                              setShowMatchPicker(false);
+                            }
+                          }}
+                          className="p-1 rounded hover:bg-red-900/40 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                          title={`Delete ${m.title}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
-                    {m.id === currentMatch?.id && <Check className="w-4 h-4 text-[#00E676] shrink-0" />}
-                  </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -270,6 +293,18 @@ export const Header: React.FC<HeaderProps> = ({
           )}
           <span>{copiedShare ? 'Copied' : 'Share'}</span>
         </button>
+
+        {/* Social Media Recap Button */}
+        {onOpenSocialShare && (
+          <button
+            onClick={onOpenSocialShare}
+            className="flex items-center space-x-1.5 text-[#e1e1e1] hover:text-white text-xs font-medium transition cursor-pointer"
+            aria-label="Generate social media recap"
+          >
+            <Share2 className="w-4 h-4" />
+            <span>Social</span>
+          </button>
+        )}
 
         {/* Download Dropdown */}
         <div className="relative" ref={downloadMenuRef}>

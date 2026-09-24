@@ -169,5 +169,23 @@ export const api = {
     const url = `${API_BASE}/matches/${matchId}/benchmark`;
     const res = await fetch(url, { signal });
     return handleResponse<any>(res, url);
+  },
+
+  async deleteMatch(matchId: string): Promise<void> {
+    const url = `${API_BASE}/matches/${matchId}`;
+    const res = await fetch(url, { method: 'DELETE' });
+    if (!res.ok) throw new ApiError(`Failed to delete match ${matchId}`, res.status, url);
+  },
+
+  async getSocialRecap(matchId: string, signal?: AbortSignal): Promise<{ match_id: string; short: string; medium: string; long: string; char_count_short: number }> {
+    const url = `${API_BASE}/matches/${matchId}/social-recap`;
+    const res = await fetch(url, { signal });
+    return handleResponse(res, url);
+  },
+
+  async getExecutionTargets(signal?: AbortSignal): Promise<{ targets: any[]; default_target: string }> {
+    const url = `${API_BASE}/pipeline/execution-targets`;
+    const res = await fetch(url, { signal });
+    return handleResponse(res, url);
   }
 };

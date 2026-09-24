@@ -8,6 +8,7 @@ import { PlayerMomentsBar } from './components/PlayerMomentsBar';
 import { RightToolbar, ActiveDrawerType } from './components/Sidebar/RightToolbar';
 import { SidebarDrawer } from './components/Sidebar/SidebarTabs';
 import { UploadModal } from './components/UploadModal';
+import { SocialShareModal } from './components/SocialShareModal';
 import { Loader2, AlertTriangle, X } from 'lucide-react';
 
 const DRAWER_ROUTES: Record<Exclude<ActiveDrawerType, null>, string> = {
@@ -40,6 +41,7 @@ export const App: React.FC = () => {
   const [selectedJersey, setSelectedJersey] = useState<string | null>(null);
   const [isBurgerOpen, setIsBurgerOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isSocialShareOpen, setIsSocialShareOpen] = useState(false);
   const [activeDrawer, setActiveDrawer] = useState<ActiveDrawerType>(getDrawerFromHash);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -177,6 +179,22 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleDeleteMatch = async (matchId: string) => {
+    try {
+      await api.deleteMatch(matchId);
+      setMatches(prev => {
+        const remaining = prev.filter(m => m.id !== matchId);
+        // If we deleted the currently active match, switch to another
+        if (currentMatch?.id === matchId && remaining.length > 0) {
+          selectMatch(remaining[0]);
+        }
+        return remaining;
+      });
+    } catch (err) {
+      console.error('Failed to delete match:', err);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#000000] text-white">
       {/* 1. Exact Veo Header with Match Switcher */}
@@ -186,6 +204,8 @@ export const App: React.FC = () => {
         onSelectMatch={selectMatch}
         onOpenBurgerMenu={() => setIsBurgerOpen(true)}
         onOpenUpload={() => setIsUploadOpen(true)}
+        onOpenSocialShare={() => setIsSocialShareOpen(true)}
+        onDeleteMatch={handleDeleteMatch}
         canUpload={true}
       />
 
@@ -222,6 +242,13 @@ export const App: React.FC = () => {
           setMatches(prev => [newMatch, ...prev]);
           selectMatch(newMatch);
         }}
+      />
+
+      {/* 3b. Social Share Modal */}
+      <SocialShareModal
+        isOpen={isSocialShareOpen}
+        onClose={() => setIsSocialShareOpen(false)}
+        match={currentMatch}
       />
 
       {/* 4. Main Workspace Split Layout */}

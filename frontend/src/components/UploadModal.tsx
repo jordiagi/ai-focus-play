@@ -22,6 +22,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [date, setDate] = useState('Sep 17, 2026');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [executionTarget, setExecutionTarget] = useState<'local' | 'gpu_box'>('local');
 
   if (!isOpen) return null;
 
@@ -54,6 +55,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     formData.append('away_team', awayTeam);
     formData.append('date', date);
     formData.append('title', `${homeTeam} vs. ${awayTeam}`);
+    formData.append('execution_target', executionTarget);
 
     try {
       const match = await api.uploadMatch(formData);
@@ -159,6 +161,69 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               required
               className="w-full bg-[#111317] border border-[#2d3342] rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00E676]"
             />
+          </div>
+
+          {/* Pipeline Execution Target Toggle */}
+          <div>
+            <label className="block text-xs font-medium text-gray-300 mb-1.5 flex items-center justify-between">
+              <span>Pipeline Execution Target</span>
+              <span className="text-[10px] text-gray-400">Where AI models run</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setExecutionTarget('local')}
+                className={`p-2 rounded-xl border text-left transition ${
+                  executionTarget === 'local'
+                    ? 'bg-[#00E676]/10 border-[#00E676] text-white'
+                    : 'bg-[#111317] border-[#2d3342] text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-sm">🖥️</span>
+                  <span className="text-xs font-bold text-white">Local Engine</span>
+                  <span className="text-[9px] bg-emerald-500/20 text-[#00E676] px-1.5 py-0.2 rounded-full font-mono ml-auto">Active</span>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">Hermetic in-process CPU/GPU</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setExecutionTarget('gpu_box')}
+                className={`p-2 rounded-xl border text-left transition ${
+                  executionTarget === 'gpu_box'
+                    ? 'bg-amber-500/10 border-amber-500 text-white'
+                    : 'bg-[#111317] border-[#2d3342] text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-sm">⚡</span>
+                  <span className="text-xs font-bold text-white">Remote GPU-Box</span>
+                  <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.2 rounded-full font-mono ml-auto">H100</span>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">Tailscale cluster node</p>
+              </button>
+            </div>
+
+            {executionTarget === 'gpu_box' && (
+              <div className="mt-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300">
+                <div className="font-semibold flex items-center space-x-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>Tailscale SSH Re-authentication Required</span>
+                </div>
+                <p className="mt-1 text-gray-300">
+                  Remote dispatch to <code className="text-amber-200">root@gpu-box</code> requires web auth approval:{' '}
+                  <a
+                    href="https://login.tailscale.com/a/lb70eee53af031"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline text-amber-300 hover:text-white"
+                  >
+                    Authenticate Session
+                  </a>.
+                </p>
+              </div>
+            )}
           </div>
 
           {uploadError && (

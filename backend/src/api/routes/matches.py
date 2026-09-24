@@ -297,6 +297,22 @@ def get_benchmark_comparison(match_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Benchmark error: {str(e)}")
 
+@router.get("/{match_id}/social-recap")
+def get_social_recap(match_id: str):
+    """Generate Short, Medium, and Long text analysis for social media and match reports."""
+    match = match_repo.get_match(match_id)
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    analytics = match_repo.get_analytics(match_id)
+    benchmark = None
+    try:
+        from backend.src.services.pipeline.stats_benchmark import load_live_veo_benchmark
+        benchmark = load_live_veo_benchmark(f"{match.id} {match.title}")
+    except Exception:
+        pass
+    from backend.src.services.social_generator import SocialRecapGenerator
+    return SocialRecapGenerator.generate(match, analytics, benchmark)
+
 @router.post("/{match_id}/teams/swap")
 def swap_teams(match_id: str):
     """Swap home and away team assignments across events, highlights, radar frames, and stats (P1-2)."""
