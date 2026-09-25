@@ -20,6 +20,8 @@ import numpy as np
 from backend.src.domain.models.match import RadarBall, RadarFrame, RadarPlayer
 from backend.src.services.pipeline.veo_calibrator import VeoCameraModel
 
+REPO = Path(__file__).resolve().parents[4]
+
 
 class CalibratedPitchRadar:
     """Projects detection bounding boxes and ball trajectories to standard 2D Pitch Radar coordinates."""
@@ -66,6 +68,14 @@ class CalibratedPitchRadar:
             cameras = c_data.get("cameras", [])
             scale = float(c_data.get("scale", scale))
             origin = c_data.get("origin", origin)
+
+        if not cameras:
+            fallback_cams = REPO / "backend/.local/artifacts/mosaic/cameras.json"
+            if fallback_cams.exists():
+                c_data = json.loads(fallback_cams.read_text())
+                cameras = c_data.get("cameras", [])
+                scale = float(c_data.get("scale", scale))
+                origin = c_data.get("origin", origin)
 
         ball_track = []
         if ball_track_path and Path(ball_track_path).exists():
@@ -184,9 +194,19 @@ class CalibratedPitchRadar:
         pid = 1
 
         for b in frame_det.get("boxes", []):
-            if float(b.get("conf", 1.0)) < min_conf:
+            if isinstance(b, (list, tuple)):
+                if len(b) >= 5 and float(b[4]) < min_conf:
+                    continue
+                box = b[:4]
+                shirt_data = None
+            elif isinstance(b, dict):
+                if float(b.get("conf", 1.0)) < min_conf:
+                    continue
+                box = b.get("box", [0, 0, 0, 0])
+                shirt_data = b.get("shirt")
+            else:
                 continue
-            box = b["box"]
+
             foot_u = ((box[0] + box[2]) / 2.0) * sx
             foot_v = (box[1] + foot_ratio * (box[3] - box[1])) * sy
 
@@ -199,7 +219,7 @@ class CalibratedPitchRadar:
             rx = float(np.clip(rx, 0.0, 105.0))
             ry = float(np.clip(ry, 0.0, 68.0))
 
-            team = self.classify_team(b.get("shirt"))
+            team = self.classify_team(shirt_data)
             players.append(
                 RadarPlayer(
                     id=pid,

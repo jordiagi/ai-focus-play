@@ -2,11 +2,32 @@
 # Bring results home. Small files only - the link is 2.8 MB/s.
 # Refuses anything over 200 MB unless --allow-large: shipping frames or video
 # across this relay is always a mistake.
+#
+# Flags:
+#   scripts/remote/pull-artifacts.sh [job_id] [--dest <path>] [--clean-remote] [--allow-large]
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
-JOB="${1:-}"; [ "${JOB:0:2}" = "--" ] && JOB=""
-ALLOW_LARGE=0; for a in "$@"; do [ "$a" = "--allow-large" ] && ALLOW_LARGE=1; done
+JOB=""
+DEST_OVERRIDE=""
+CLEAN_REMOTE=0
+ALLOW_LARGE=0
 MAXB=$((200*1024*1024))
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dest)
+      shift; DEST_OVERRIDE="${1:-}" ;;
+    --clean-remote)
+      CLEAN_REMOTE=1 ;;
+    --allow-large)
+      ALLOW_LARGE=1 ;;
+    --*)
+      log "unknown flag $1" ;;
+    *)
+      if [ -z "$JOB" ]; then JOB="$1"; fi ;;
+  esac
+  shift 2>/dev/null || break
+done
 
 require_remote
 [ -n "$JOB" ] || JOB=$(rsh "ls -t '$REMOTE_RUNS' 2>/dev/null | head -1")
@@ -14,7 +35,13 @@ require_remote
 
 SRC="$REMOTE_RUNS/$JOB/out"
 rsh "test -d '$SRC'" || SRC="$REMOTE_OUT"
-DEST="$LOCAL_ARTIFACTS/$JOB"; mkdir -p "$DEST"
+
+if [ -n "$DEST_OVERRIDE" ]; then
+  DEST="$DEST_OVERRIDE"
+else
+  DEST="$LOCAL_ARTIFACTS/$JOB"
+fi
+mkdir -p "$DEST"
 
 LIST=$(rsh "cd '$SRC' 2>/dev/null && find . -type f -printf '%s %p\n'" || true)
 [ -n "$LIST" ] || { result "pulled=0 cached=0 job=$JOB note=no-artifacts"; exit "$EX_CACHED"; }
@@ -34,4 +61,10 @@ while read -r size path; do
   rcp "$GPU_HOST:$SRC/$rel" "$DEST/$rel" && pulled=$((pulled+1))
 done <<< "$LIST"
 
-result "pulled=$pulled cached=$cached skipped=$skipped job=$JOB dest=$DEST"
+if [ "$CLEAN_REMOTE" -eq 1 ] && [ "$((pulled + cached))" -gt 0 ]; then
+  log "clearing remote run artifacts and frames for $JOB to free space..."
+  rsh "rm -rf '$REMOTE_RUNS/$JOB' /workspace/aifp/frames/'$JOB'* 2>/dev/null || true"
+  log "remote cleanup for $JOB completed"
+fi
+
+result "pulled=$pulled cached=$cached skipped=$skipped job=$JOB dest=$DEST clean_remote=$CLEAN_REMOTE"
