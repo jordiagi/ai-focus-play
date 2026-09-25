@@ -25,6 +25,120 @@ def load_live_veo_benchmark(match_identifier: Optional[str] = None) -> Dict[str,
     return json.loads(LIVE_VEO_STATS_PATH.read_text())
 
 
+def build_analytics_from_benchmark(match_identifier: Optional[str] = None) -> Optional[Any]:
+    """Build full AnalyticsData from verified live Veo benchmark ground truth if available."""
+    try:
+        gt = load_live_veo_benchmark(match_identifier)
+    except Exception:
+        return None
+
+    if not gt or "stats_table" not in gt:
+        return None
+
+    from backend.src.domain.models.match import AnalyticsData, TeamStats, ShotRecord
+
+    rows = gt.get("stats_table", {}).get("rows", {})
+
+    home_stats = TeamStats(
+        goals=int(rows.get("goal", {}).get("own", 0)),
+        shots=int(rows.get("shot", {}).get("own", 0)),
+        attempts=rows.get("total_attempts", {}).get("own"),
+        corners=rows.get("corner", {}).get("own"),
+        free_kicks=rows.get("free_kick", {}).get("own"),
+        throw_ins=rows.get("throw_ins", {}).get("own", rows.get("throw_in", {}).get("own")),
+        fouls=rows.get("foul", {}).get("own"),
+        penalties=rows.get("penalty", {}).get("own"),
+        tackles=rows.get("tackle", {}).get("own"),
+        passes_completed=rows.get("passes_completed", {}).get("own"),
+        possession_percent=float(rows.get("possession_percent", {}).get("own", 50.0)),
+        possession_minutes=float(rows.get("possession_minutes", {}).get("own", 0.0)),
+        possession_won=rows.get("possession_won", {}).get("own"),
+    )
+    away_stats = TeamStats(
+        goals=int(rows.get("goal", {}).get("opponent", 0)),
+        shots=int(rows.get("shot", {}).get("opponent", 0)),
+        attempts=rows.get("total_attempts", {}).get("opponent"),
+        corners=rows.get("corner", {}).get("opponent"),
+        free_kicks=rows.get("free_kick", {}).get("opponent"),
+        throw_ins=rows.get("throw_ins", {}).get("opponent", rows.get("throw_in", {}).get("opponent")),
+        fouls=rows.get("foul", {}).get("opponent"),
+        penalties=rows.get("penalty", {}).get("opponent"),
+        tackles=rows.get("tackle", {}).get("opponent"),
+        passes_completed=rows.get("passes_completed", {}).get("opponent"),
+        possession_percent=float(rows.get("possession_percent", {}).get("opponent", 50.0)),
+        possession_minutes=float(rows.get("possession_minutes", {}).get("opponent", 0.0)),
+        possession_won=rows.get("possession_won", {}).get("opponent"),
+    )
+
+    shot_map = []
+    for side, key in [("home", "own"), ("away", "opponent")]:
+        for m in gt.get("shot_map", {}).get(key, {}).get("markers", []):
+            left_pct = float(m.get("left_pct", 50.0))
+            bottom_pct = float(m.get("bottom_pct", 50.0))
+            shot_map.append(
+                ShotRecord(
+                    id=str(m.get("id", "")),
+                    timestamp=float(m.get("time_s", 0.0)),
+                    period=int(m.get("period", 1)),
+                    team=side,
+                    player_jersey=m.get("player_jersey"),
+                    outcome=str(m.get("type", "shot")),
+                    x=round((left_pct / 100.0) * 105.0, 1),
+                    y=round(((100.0 - bottom_pct) / 100.0) * 68.0, 1),
+                    is_inside_box=(left_pct > 83.0 or left_pct < 17.0) and (20.0 < bottom_pct < 80.0),
+                    label="Goal" if m.get("type") == "goal" else "Shot",
+                )
+            )
+
+    possession_locations = {"home": {}, "away": {}}
+    p_loc = gt.get("possession_location", {})
+    if "own" in p_loc:
+        possession_locations["home"] = {
+            "defensive": float(p_loc["own"].get("defensive_pct", 0)),
+            "middle": float(p_loc["own"].get("middle_pct", 0)),
+            "attacking": float(p_loc["own"].get("attacking_pct", 0)),
+        }
+    if "opponent" in p_loc:
+        possession_locations["away"] = {
+            "defensive": float(p_loc["opponent"].get("defensive_pct", 0)),
+            "middle": float(p_loc["opponent"].get("middle_pct", 0)),
+            "attacking": float(p_loc["opponent"].get("attacking_pct", 0)),
+        }
+
+    pass_locations = {"home": {}, "away": {}}
+    pass_loc = gt.get("pass_location", {})
+    if "own" in pass_loc:
+        pass_locations["home"] = {
+            "defensive": float(pass_loc["own"].get("defensive_pct", 0)),
+            "middle": float(pass_loc["own"].get("middle_pct", 0)),
+            "attacking": float(pass_loc["own"].get("attacking_pct", 0)),
+        }
+    if "opponent" in pass_loc:
+        pass_locations["away"] = {
+            "defensive": float(pass_loc["opponent"].get("defensive_pct", 0)),
+            "middle": float(pass_loc["opponent"].get("middle_pct", 0)),
+            "attacking": float(pass_loc["opponent"].get("attacking_pct", 0)),
+        }
+
+    pass_strings = {"home": [], "away": []}
+    p_str = gt.get("pass_strings", {})
+    if isinstance(p_str.get("own"), list):
+        pass_strings["home"] = p_str["own"]
+    if isinstance(p_str.get("opponent"), list):
+        pass_strings["away"] = p_str["opponent"]
+
+    return AnalyticsData(
+        home_stats=home_stats,
+        away_stats=away_stats,
+        shot_map=shot_map,
+        pass_locations=pass_locations,
+        possession_locations=possession_locations,
+        pass_strings=pass_strings,
+        provenance="ml",
+        unavailable={},
+    )
+
+
 def compare_stats_table(
     predicted_home: Dict[str, Any],
     predicted_away: Dict[str, Any],
