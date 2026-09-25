@@ -40,8 +40,20 @@ async def lifespan(app: FastAPI):
     # Startup: Ensure Fairfax Union match is registered if sample assets are present
     fairfax_id = "fairfax-union-20260920"
     from backend.src.storage.repository import match_repo
-    if not match_repo.get_match(fairfax_id):
-        fairfax_video = MEDIA_DIR / "fairfax_union_sample_30s.mp4"
+    m_existing = match_repo.get_match(fairfax_id)
+    fairfax_full = MEDIA_DIR / "fairfax_union_full.mp4"
+    fairfax_30s = MEDIA_DIR / "fairfax_union_sample_30s.mp4"
+    fairfax_video = fairfax_full if fairfax_full.exists() else fairfax_30s
+    fairfax_dur = 5876.5 if fairfax_full.exists() else 30.0
+    fairfax_url = f"/media/{fairfax_video.name}"
+
+    if m_existing:
+        if fairfax_full.exists() and m_existing.video_url != fairfax_url:
+            m_existing.video_url = fairfax_url
+            m_existing.panoramic_url = fairfax_url
+            m_existing.duration_seconds = fairfax_dur
+            match_repo.save_match(m_existing)
+    else:
         fairfax_calib = REPO_ROOT / "benchmarks" / "raw" / "fairfax_union_camera_alignment.veo"
         if fairfax_video.exists() and fairfax_calib.exists():
             import time
@@ -55,12 +67,12 @@ async def lifespan(app: FastAPI):
                 home_score=3,
                 away_score=0,
                 date="Sep 20, 2026",
-                duration_seconds=30.0,
+                duration_seconds=fairfax_dur,
                 status="ready",
                 processing_step="Complete",
                 processing_progress=100.0,
-                video_url="/media/fairfax_union_sample_30s.mp4",
-                panoramic_url="/media/fairfax_union_sample_30s.mp4",
+                video_url=fairfax_url,
+                panoramic_url=fairfax_url,
                 thumbnail_url="/media/demo_thumb.jpg",
                 views_count=32,
                 journal_notes="Dominant 3-0 clean sheet. Fluid central progression and clinical inside-box finishing.",
