@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Match, Highlight, Event, Drawing, RadarFrame, AnalyticsData } from './types';
+import { Match, Highlight, Event, Drawing, RadarFrame, AnalyticsData, DetectionFrame } from './types';
 import { api, ApiError } from './services/api';
 import { Header } from './components/Header';
 import { BurgerMenu } from './components/BurgerMenu';
@@ -9,6 +9,7 @@ import { RightToolbar, ActiveDrawerType } from './components/Sidebar/RightToolba
 import { SidebarDrawer } from './components/Sidebar/SidebarTabs';
 import { UploadModal } from './components/UploadModal';
 import { SocialShareModal } from './components/SocialShareModal';
+import { HelpShortcutsModal } from './components/HelpShortcutsModal';
 import { Loader2, AlertTriangle, X } from 'lucide-react';
 
 const DRAWER_ROUTES: Record<Exclude<ActiveDrawerType, null>, string> = {
@@ -35,6 +36,7 @@ export const App: React.FC = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [drawings, setDrawings] = useState<Drawing[]>([]);
   const [radarFrames, setRadarFrames] = useState<RadarFrame[]>([]);
+  const [detectionFrames, setDetectionFrames] = useState<DetectionFrame[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
 
   const [currentTime, setCurrentTime] = useState(0);
@@ -42,9 +44,25 @@ export const App: React.FC = () => {
   const [isBurgerOpen, setIsBurgerOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isSocialShareOpen, setIsSocialShareOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [activeDrawer, setActiveDrawer] = useState<ActiveDrawerType>(getDrawerFromHash);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Global keyboard shortcut to open Help & Shortcuts modal on '?'
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      if (e.key === '?') {
+        setIsHelpOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const selectMatch = useCallback(async (match: Match) => {
     if (abortControllerRef.current) {
@@ -66,12 +84,13 @@ export const App: React.FC = () => {
     }
 
     try {
-      const [h, e, d, r, a] = await Promise.all([
+      const [h, e, d, r, a, dets] = await Promise.all([
         api.getHighlights(match.id, controller.signal),
         api.getEvents(match.id, controller.signal),
         api.getDrawings(match.id, controller.signal),
         api.getRadarFrames(match.id, undefined, controller.signal),
         api.getAnalytics(match.id, controller.signal),
+        api.getDetections(match.id, undefined, controller.signal).catch(() => ({ match_id: match.id, frames_count: 0, detections: [] })),
       ]);
 
       if (!controller.signal.aborted) {
@@ -80,6 +99,7 @@ export const App: React.FC = () => {
         setDrawings(d);
         setRadarFrames(r);
         setAnalytics(a);
+        setDetectionFrames(dets?.detections || []);
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
@@ -251,6 +271,12 @@ export const App: React.FC = () => {
         match={currentMatch}
       />
 
+      {/* 3c. Help & Shortcuts Modal */}
+      <HelpShortcutsModal
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
+      />
+
       {/* 4. Main Workspace Split Layout */}
       {loading ? (
         <div className="flex-1 flex items-center justify-center space-x-2 text-gray-400">
@@ -290,6 +316,7 @@ export const App: React.FC = () => {
                 events={events}
                 drawings={drawings}
                 radarFrames={radarFrames}
+                detectionFrames={detectionFrames}
                 selectedJersey={selectedJersey}
                 onSelectJersey={handleSelectJersey}
                 onSaveDrawing={handleSaveDrawing}
@@ -331,6 +358,7 @@ export const App: React.FC = () => {
           <RightToolbar
             activeDrawer={activeDrawer}
             onToggleDrawer={navigateToDrawer}
+            onOpenHelp={() => setIsHelpOpen(true)}
           />
         </div>
       ) : null}

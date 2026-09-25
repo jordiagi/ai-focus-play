@@ -9,11 +9,13 @@ export type ActiveDrawerType = 'analytics' | 'players' | 'highlights' | 'events'
 interface RightToolbarProps {
   activeDrawer: ActiveDrawerType;
   onToggleDrawer: (drawer: ActiveDrawerType) => void;
+  onOpenHelp?: () => void;
 }
 
 export const RightToolbar: React.FC<RightToolbarProps> = ({
   activeDrawer,
   onToggleDrawer,
+  onOpenHelp,
 }) => {
   return (
     <aside className="w-12 bg-[#000000] border-l border-[#1a1a1a] flex flex-col justify-between py-3 items-center z-30 select-none shrink-0">
@@ -99,7 +101,7 @@ export const RightToolbar: React.FC<RightToolbarProps> = ({
       {/* Bottom Icons */}
       <div className="flex flex-col items-center space-y-3">
         <button
-          onClick={() => onToggleDrawer(activeDrawer === 'summary' ? null : 'summary')}
+          onClick={() => onOpenHelp ? onOpenHelp() : onToggleDrawer(activeDrawer === 'summary' ? null : 'summary')}
           className="text-gray-400 hover:text-white transition p-1"
           title="Help & Shortcuts"
           aria-label="Help and shortcuts"

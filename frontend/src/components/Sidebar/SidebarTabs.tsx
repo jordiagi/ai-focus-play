@@ -78,7 +78,15 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
 }) => {
   const [highlightFilter, setHighlightFilter] = useState<string>('all');
   const [eventPeriod, setEventPeriod] = useState<number>(1);
-  const [openSections, setOpenSections] = useState<Record<AnalyticsSectionKey, boolean>>(ANALYTICS_SECTION_DEFAULTS);
+  const isFairfax = Boolean(match?.id?.includes('fairfax'));
+  const [openSections, setOpenSections] = useState<Record<AnalyticsSectionKey, boolean>>(() => ({
+    ...ANALYTICS_SECTION_DEFAULTS,
+    ...(isFairfax ? {
+      possessionLocation: true,
+      passLocation: true,
+      passStrings: true,
+    } : {}),
+  }));
   const [shotMapTeam, setShotMapTeam] = useState<'home' | 'away'>('home');
   const [passLocTeam, setPassLocTeam] = useState<'home' | 'away'>('home');
   const [possLocTeam, setPossLocTeam] = useState<'home' | 'away'>('home');
@@ -422,24 +430,30 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                   return (
                     <div
                       key={e.id}
-                      className={`p-2.5 border rounded-xl transition flex items-center justify-between ${
+                      onClick={() => onSeek(e.timestamp)}
+                      role="button"
+                      tabIndex={0}
+                      className={`p-2.5 border rounded-xl transition flex items-center justify-between cursor-pointer group ${
                         isActive
                           ? 'bg-[#14261c] border-[#00E676] shadow-lg shadow-[#00E676]/10'
                           : isPlayerMatch
-                          ? 'bg-[#14261c]/60 border-[#00E676]/60'
-                          : 'bg-[#12141a] border-[#1e222d]'
+                          ? 'bg-[#14261c]/60 border-[#00E676]/60 hover:border-[#00E676]'
+                          : 'bg-[#12141a] hover:bg-[#181c25] border-[#1e222d] hover:border-[#00E676]/60'
                       }`}
                     >
                       <div className="flex items-center space-x-2 min-w-0 pr-2">
-                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold shrink-0 ${
-                          isActive ? 'bg-[#00E676] text-black' : 'text-[#00E676] bg-[#00E676]/10'
+                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold shrink-0 transition ${
+                          isActive ? 'bg-[#00E676] text-black' : 'text-[#00E676] bg-[#00E676]/10 group-hover:bg-[#00E676]/20'
                         }`}>
                           {formatTime(e.timestamp)}
                         </span>
                         {e.player_jersey && (
                           <button
                             type="button"
-                            onClick={() => onSelectJersey(selectedJersey === e.player_jersey ? null : e.player_jersey!)}
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              onSelectJersey(selectedJersey === e.player_jersey ? null : e.player_jersey!);
+                            }}
                             className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition shrink-0 ${
                               selectedJersey === e.player_jersey
                                 ? 'bg-[#00E676] text-black'
@@ -1255,8 +1269,15 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
               {/* Forwards */}
               <div className="flex justify-around pt-1">
                 {match.lineup.filter(p => p.position === 'FWD').slice(0, 3).map(p => (
-                  <div key={p.jersey} className="flex flex-col items-center">
-                    <div className="w-6 h-6 rounded-full bg-[#FFD700] text-black font-black text-[10px] flex items-center justify-center border border-black shadow">
+                  <div 
+                    key={p.jersey} 
+                    onClick={() => onSelectJersey(selectedJersey === p.jersey ? null : p.jersey)}
+                    className="flex flex-col items-center cursor-pointer group transition"
+                    title={`Select #${p.jersey} ${p.name}`}
+                  >
+                    <div className={`w-6 h-6 rounded-full bg-[#FFD700] text-black font-black text-[10px] flex items-center justify-center border border-black shadow transition ${
+                      selectedJersey === p.jersey ? 'ring-2 ring-white scale-125' : 'group-hover:scale-110'
+                    }`}>
                       {p.jersey}
                     </div>
                     <span className="text-[8px] font-bold text-white bg-black/60 px-1 rounded mt-0.5">{p.name.split(' ')[1] || p.name}</span>
@@ -1267,8 +1288,15 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
               {/* Midfielders */}
               <div className="flex justify-around">
                 {match.lineup.filter(p => p.position === 'MID').slice(0, 3).map(p => (
-                  <div key={p.jersey} className="flex flex-col items-center">
-                    <div className="w-6 h-6 rounded-full bg-[#FFD700] text-black font-black text-[10px] flex items-center justify-center border border-black shadow">
+                  <div 
+                    key={p.jersey} 
+                    onClick={() => onSelectJersey(selectedJersey === p.jersey ? null : p.jersey)}
+                    className="flex flex-col items-center cursor-pointer group transition"
+                    title={`Select #${p.jersey} ${p.name}`}
+                  >
+                    <div className={`w-6 h-6 rounded-full bg-[#FFD700] text-black font-black text-[10px] flex items-center justify-center border border-black shadow transition ${
+                      selectedJersey === p.jersey ? 'ring-2 ring-white scale-125' : 'group-hover:scale-110'
+                    }`}>
                       {p.jersey}
                     </div>
                     <span className="text-[8px] font-bold text-white bg-black/60 px-1 rounded mt-0.5">{p.name.split(' ')[1] || p.name}</span>
@@ -1279,8 +1307,15 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
               {/* Defenders */}
               <div className="flex justify-around">
                 {match.lineup.filter(p => p.position === 'DEF').slice(0, 4).map(p => (
-                  <div key={p.jersey} className="flex flex-col items-center">
-                    <div className="w-6 h-6 rounded-full bg-[#FFD700] text-black font-black text-[10px] flex items-center justify-center border border-black shadow">
+                  <div 
+                    key={p.jersey} 
+                    onClick={() => onSelectJersey(selectedJersey === p.jersey ? null : p.jersey)}
+                    className="flex flex-col items-center cursor-pointer group transition"
+                    title={`Select #${p.jersey} ${p.name}`}
+                  >
+                    <div className={`w-6 h-6 rounded-full bg-[#FFD700] text-black font-black text-[10px] flex items-center justify-center border border-black shadow transition ${
+                      selectedJersey === p.jersey ? 'ring-2 ring-white scale-125' : 'group-hover:scale-110'
+                    }`}>
                       {p.jersey}
                     </div>
                     <span className="text-[8px] font-bold text-white bg-black/60 px-1 rounded mt-0.5">{p.name.split(' ')[1] || p.name}</span>
@@ -1291,8 +1326,15 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
               {/* Goalkeeper */}
               <div className="flex justify-center pb-1">
                 {match.lineup.filter(p => p.position === 'GK').slice(0, 1).map(p => (
-                  <div key={p.jersey} className="flex flex-col items-center">
-                    <div className="w-6 h-6 rounded-full bg-[#FF3D00] text-white font-black text-[10px] flex items-center justify-center border border-white shadow">
+                  <div 
+                    key={p.jersey} 
+                    onClick={() => onSelectJersey(selectedJersey === p.jersey ? null : p.jersey)}
+                    className="flex flex-col items-center cursor-pointer group transition"
+                    title={`Select #${p.jersey} ${p.name}`}
+                  >
+                    <div className={`w-6 h-6 rounded-full bg-[#FF3D00] text-white font-black text-[10px] flex items-center justify-center border border-white shadow transition ${
+                      selectedJersey === p.jersey ? 'ring-2 ring-white scale-125' : 'group-hover:scale-110'
+                    }`}>
                       {p.jersey}
                     </div>
                     <span className="text-[8px] font-bold text-white bg-black/60 px-1 rounded mt-0.5">{p.name.split(' ')[1] || p.name}</span>
@@ -1304,17 +1346,93 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
             {/* Substitutes */}
             <div className="space-y-1 pt-1">
               <span className="text-[11px] font-bold text-gray-400 uppercase">Substitutes</span>
-              {match.lineup.filter(p => !p.is_starter).map(p => (
-                <div key={p.jersey} className="flex items-center justify-between p-2 bg-[#12141a] rounded-lg text-xs">
-                  <div className="flex items-center space-x-2">
-                    <span className="w-5 h-5 rounded-full bg-[#1e222d] text-gray-300 font-bold flex items-center justify-center text-[10px]">
-                      {p.jersey}
-                    </span>
-                    <span className="text-white font-medium">{p.name}</span>
+              {match.lineup.filter(p => !p.is_starter).map(p => {
+                const isSelected = selectedJersey === p.jersey;
+                return (
+                  <div 
+                    key={p.jersey} 
+                    onClick={() => onSelectJersey(isSelected ? null : p.jersey)}
+                    className={`flex items-center justify-between p-2 rounded-lg text-xs cursor-pointer transition ${
+                      isSelected ? 'bg-[#14261c] border border-[#00E676]/60 text-white' : 'bg-[#12141a] hover:bg-[#181c25] border border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <span className={`w-5 h-5 rounded-full font-bold flex items-center justify-center text-[10px] ${
+                        isSelected ? 'bg-[#00E676] text-black' : 'bg-[#1e222d] text-gray-300'
+                      }`}>
+                        {p.jersey}
+                      </span>
+                      <span className="text-white font-medium">{p.name}</span>
+                    </div>
+                    <span className="text-gray-400 text-[10px]">{p.position}</span>
                   </div>
-                  <span className="text-gray-400 text-[10px]">{p.position}</span>
-                </div>
-              ))}
+                );
+              })}
+            </div>
+
+            {/* Team Captain & Player of the Match Cards */}
+            <div className="space-y-2 pt-2 border-t border-[#181818]">
+              {(() => {
+                const captain = match.lineup.find(p => p.is_captain);
+                const motm = match.lineup.find(p => p.is_player_of_match);
+                return (
+                  <>
+                    <div 
+                      onClick={() => captain && onSelectJersey(selectedJersey === captain.jersey ? null : captain.jersey)}
+                      className={`border rounded-xl p-3 cursor-pointer transition ${
+                        captain && selectedJersey === captain.jersey
+                          ? 'bg-[#14261c] border-[#FFD700]'
+                          : 'bg-[#12141a] hover:bg-[#181c25] border-[#1e222d] hover:border-[#FFD700]/50'
+                      }`}
+                    >
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">TEAM CAPTAIN</span>
+                      {captain ? (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2.5">
+                            <div className="w-7 h-7 rounded-full bg-[#FFD700] text-black font-black text-xs flex items-center justify-center border border-black shadow">
+                              {captain.jersey}
+                            </div>
+                            <div>
+                              <span className="text-xs font-bold text-white block">{captain.name}</span>
+                              <span className="text-[10px] text-gray-400">{captain.position} • Captain</span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-mono font-bold text-[#FFD700] bg-[#FFD700]/10 px-2 py-0.5 rounded border border-[#FFD700]/30">C</span>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-gray-500 py-1">+ Click to select player</div>
+                      )}
+                    </div>
+
+                    <div 
+                      onClick={() => motm && onSelectJersey(selectedJersey === motm.jersey ? null : motm.jersey)}
+                      className={`border rounded-xl p-3 cursor-pointer transition ${
+                        motm && selectedJersey === motm.jersey
+                          ? 'bg-[#14261c] border-[#00E676]'
+                          : 'bg-[#12141a] hover:bg-[#181c25] border-[#1e222d] hover:border-[#00E676]/50'
+                      }`}
+                    >
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">PLAYER OF THE MATCH</span>
+                      {motm ? (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2.5">
+                            <div className="w-7 h-7 rounded-full bg-[#00E676] text-black font-black text-xs flex items-center justify-center border border-black shadow">
+                              {motm.jersey}
+                            </div>
+                            <div>
+                              <span className="text-xs font-bold text-white block">{motm.name}</span>
+                              <span className="text-[10px] text-gray-400">{motm.position} • MOTM</span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-mono font-bold text-[#00E676] bg-[#00E676]/10 px-2 py-0.5 rounded border border-[#00E676]/30">MOTM</span>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-gray-500 py-1">+ Click to select player</div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}

@@ -1,4 +1,4 @@
-import { Match, Highlight, Event, Drawing, RadarFrame, AnalyticsData, Capabilities } from '../types';
+import { Match, Highlight, Event, Drawing, RadarFrame, AnalyticsData, Capabilities, DetectionsResponse } from '../types';
 
 const API_BASE = '/api';
 
@@ -187,5 +187,13 @@ export const api = {
     const url = `${API_BASE}/pipeline/execution-targets`;
     const res = await fetch(url, { signal });
     return handleResponse(res, url);
+  },
+
+  async getDetections(matchId: string, time?: number, signal?: AbortSignal): Promise<DetectionsResponse> {
+    const url = time !== undefined
+      ? `${API_BASE}/matches/${matchId}/detections?time=${time}`
+      : `${API_BASE}/matches/${matchId}/detections`;
+    const res = await fetch(url, { signal });
+    return handleResponse<DetectionsResponse>(res, url);
   }
 };

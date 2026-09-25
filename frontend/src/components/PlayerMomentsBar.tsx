@@ -35,6 +35,13 @@ export const PlayerMomentsBar: React.FC<PlayerMomentsBarProps> = ({
       ) : (
         /* Dark Pill Container with Jersey Numbers */
         <div className="flex items-center space-x-1.5 bg-[#12141a] px-3.5 py-1.5 rounded-full border border-[#22242c] shadow-lg max-w-full overflow-x-auto">
+          {/* Team Crest Badge */}
+          <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-700 via-blue-500 to-red-500 p-0.5 flex items-center justify-center shrink-0 shadow border border-white/20" title="Team Crest">
+            <div className="w-full h-full rounded-full bg-[#12141a] flex items-center justify-center">
+              <span className="text-[8px] font-black text-white tracking-tighter">ARL</span>
+            </div>
+          </div>
+
           <button
             onClick={() => onSelectJersey(null)}
             className={`px-2 py-0.5 rounded-full text-[11px] font-bold transition shrink-0 ${
@@ -49,12 +56,13 @@ export const PlayerMomentsBar: React.FC<PlayerMomentsBarProps> = ({
             const jerseyVal = unknown ? '' : player.jersey;
             const isSelected = selectedJersey !== null && selectedJersey === jerseyVal;
             const label = unknown ? 'Player ' : `Player ${jerseyVal}`;
+            const badgeInitials = player.is_captain ? 'AV' : (player.is_player_of_match ? 'LA' : null);
 
             return (
               <button
                 key={player.jersey ? `${player.jersey}-${idx}` : `unknown-${idx}`}
                 onClick={() => onSelectJersey(isSelected ? null : jerseyVal)}
-                className={`w-7 h-7 rounded-full text-xs font-bold transition flex items-center justify-center shrink-0 ${
+                className={`h-7 px-1.5 min-w-[28px] rounded-full text-xs font-bold transition flex items-center justify-center shrink-0 ${
                   isSelected 
                     ? 'bg-[#FFD700] text-black ring-2 ring-white scale-110 shadow' 
                     : 'bg-[#1b1e28] text-gray-300 hover:bg-[#282d3c] hover:text-white'
@@ -62,7 +70,14 @@ export const PlayerMomentsBar: React.FC<PlayerMomentsBarProps> = ({
                 title={label}
                 aria-label={label}
               >
-                {jerseyVal}
+                <span>{jerseyVal}</span>
+                {badgeInitials && (
+                  <span className={`text-[8px] font-black ml-1 px-1 rounded ${
+                    player.is_captain ? 'bg-[#FFD700] text-black' : 'bg-[#00E676] text-black'
+                  }`}>
+                    {badgeInitials}
+                  </span>
+                )}
               </button>
             );
           })}

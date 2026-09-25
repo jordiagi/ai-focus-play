@@ -6,7 +6,8 @@ from backend.src.services.pipeline.cv_engine import SoccerCVEngine, PITCH_LENGTH
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    with TestClient(app) as c:
+        yield c
 
 def test_root_endpoint(client):
     response = client.get("/")
@@ -164,3 +165,25 @@ def test_drawing_crud(client):
     # Delete drawing
     del_res = client.delete(f"/api/matches/{match_id}/drawings/{d_id}")
     assert del_res.status_code == 200
+
+def test_detections_endpoint(client):
+    match_id = "demo-arlington-skyline"
+    res = client.get(f"/api/matches/{match_id}/detections")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["match_id"] == match_id
+    assert data["frames_count"] > 0
+    assert len(data["detections"]) > 0
+    assert "boxes" in data["detections"][0]
+
+    # Time filtering
+    first_t = data["detections"][0]["t"]
+    res_time = client.get(f"/api/matches/{match_id}/detections?time={first_t}")
+    assert res_time.status_code == 200
+    time_data = res_time.json()
+    assert time_data["frames_count"] == 1
+    assert abs(time_data["detections"][0]["t"] - first_t) < 0.1
+
+    # Non-existent match returns 404
+    res_404 = client.get("/api/matches/non-existent-match-xyz/detections")
+    assert res_404.status_code == 404

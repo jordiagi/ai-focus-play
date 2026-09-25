@@ -198,3 +198,17 @@ export interface Capabilities {
   allow_uploads: boolean;
   supported_analysis_modes: string[];
 }
+
+export interface DetectionFrame {
+  t: number;
+  w: number;
+  h: number;
+  boxes: [number, number, number, number, number][]; // [x1, y1, x2, y2, score]
+}
+
+export interface DetectionsResponse {
+  match_id: string;
+  frames_count: number;
+  detections: DetectionFrame[];
+}
+

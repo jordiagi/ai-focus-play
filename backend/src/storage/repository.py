@@ -113,6 +113,20 @@ class MatchRepository:
                     created_at=match.created_at,
                 )
                 db.add(db_m)
+            if match.lineup:
+                db.query(LineupPlayerDB).filter(LineupPlayerDB.match_id == match.id).delete()
+                for p in match.lineup:
+                    db.add(LineupPlayerDB(
+                        id=f"{match.id}_{p.jersey}",
+                        match_id=match.id,
+                        jersey=p.jersey,
+                        name=p.name,
+                        position=p.position,
+                        is_starter=p.is_starter,
+                        is_captain=p.is_captain,
+                        is_player_of_match=p.is_player_of_match,
+                        minutes_played=p.minutes_played
+                    ))
             db.commit()
 
     def delete_match(self, match_id: str):
@@ -257,6 +271,40 @@ class MatchRepository:
                     pitch_x=e.pitch_x,
                     pitch_y=e.pitch_y,
                     confidence=e.confidence
+                ))
+            db.commit()
+
+    # Lineup / Roster
+    def get_lineup(self, match_id: str) -> List[PlayerRoster]:
+        with self.get_db() as db:
+            db_lineup = db.query(LineupPlayerDB).filter(LineupPlayerDB.match_id == match_id).all()
+            return [
+                PlayerRoster(
+                    jersey=p.jersey,
+                    name=p.name,
+                    position=p.position,
+                    is_starter=p.is_starter,
+                    is_captain=p.is_captain,
+                    is_player_of_match=p.is_player_of_match,
+                    minutes_played=p.minutes_played
+                )
+                for p in db_lineup
+            ]
+
+    def set_lineup(self, match_id: str, lineup: List[PlayerRoster]):
+        with self.get_db() as db:
+            db.query(LineupPlayerDB).filter(LineupPlayerDB.match_id == match_id).delete()
+            for p in lineup:
+                db.add(LineupPlayerDB(
+                    id=f"{match_id}_{p.jersey}",
+                    match_id=match_id,
+                    jersey=p.jersey,
+                    name=p.name,
+                    position=p.position,
+                    is_starter=p.is_starter,
+                    is_captain=p.is_captain,
+                    is_player_of_match=p.is_player_of_match,
+                    minutes_played=p.minutes_played
                 ))
             db.commit()
 

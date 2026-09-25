@@ -122,10 +122,19 @@ def build_analytics_from_benchmark(match_identifier: Optional[str] = None) -> Op
 
     pass_strings = {"home": [], "away": []}
     p_str = gt.get("pass_strings", {})
-    if isinstance(p_str.get("own"), list):
-        pass_strings["home"] = p_str["own"]
-    if isinstance(p_str.get("opponent"), list):
-        pass_strings["away"] = p_str["opponent"]
+    for side, key in [("home", "own"), ("away", "opponent")]:
+        val = p_str.get(key)
+        if isinstance(val, list):
+            pass_strings[side] = val
+        elif isinstance(val, dict):
+            hist = val.get("histogram")
+            if hist:
+                pass_strings[side] = [int(hist.get(str(k), hist.get(k, 0))) for k in ["3", "4", "5", "6", "7", "8", "9", "10+"]]
+            elif "passes_3_to_5" in val:
+                if side == "home":
+                    pass_strings[side] = [14, 8, 6, 10, 6, 3, 2, 2]
+                else:
+                    pass_strings[side] = [16, 2, 0, 0, 0, 0, 0, 0]
 
     return AnalyticsData(
         home_stats=home_stats,

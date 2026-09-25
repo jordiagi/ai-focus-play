@@ -37,55 +37,16 @@ async def lifespan(app: FastAPI):
         logger.info("Generating default demo thumbnail...")
         VideoProcessor.extract_thumbnail(demo_video, demo_thumb, time_sec=5.0)
 
-    # Startup: Ensure Fairfax Union match is registered if sample assets are present
-    fairfax_id = "fairfax-union-20260920"
-    from backend.src.storage.repository import match_repo
-    m_existing = match_repo.get_match(fairfax_id)
-    fairfax_full = MEDIA_DIR / "fairfax_union_full.mp4"
-    fairfax_30s = MEDIA_DIR / "fairfax_union_sample_30s.mp4"
-    fairfax_video = fairfax_full if fairfax_full.exists() else fairfax_30s
-    fairfax_dur = 5876.5 if fairfax_full.exists() else 30.0
-    fairfax_url = f"/media/{fairfax_video.name}"
-
-    if m_existing:
-        if fairfax_full.exists() and m_existing.video_url != fairfax_url:
-            m_existing.video_url = fairfax_url
-            m_existing.panoramic_url = fairfax_url
-            m_existing.duration_seconds = fairfax_dur
-            match_repo.save_match(m_existing)
-    else:
-        fairfax_calib = REPO_ROOT / "benchmarks" / "raw" / "fairfax_union_camera_alignment.veo"
-        if fairfax_video.exists() and fairfax_calib.exists():
-            import time
-            from backend.src.domain.models.match import Match
-            from backend.src.services.pipeline.pipeline_runner import MatchPipeline
-            m = Match(
-                id=fairfax_id,
-                title="Arlington SA U16B ECNL (26-27) vs. Fairfax Union",
-                home_team="Arlington SA U16B ECNL",
-                away_team="Fairfax Union",
-                home_score=3,
-                away_score=0,
-                date="Sep 20, 2026",
-                duration_seconds=fairfax_dur,
-                status="ready",
-                processing_step="Complete",
-                processing_progress=100.0,
-                video_url=fairfax_url,
-                panoramic_url=fairfax_url,
-                thumbnail_url="/media/demo_thumb.jpg",
-                views_count=32,
-                journal_notes="Dominant 3-0 clean sheet. Fluid central progression and clinical inside-box finishing.",
-                analysis_mode="ml",
-                analysis_confidence="medium",
-                created_at=time.time(),
-            )
-            match_repo.save_match(m)
-            try:
-                pipeline = MatchPipeline(match_id=fairfax_id, mode="ml", calib_file=fairfax_calib, repo=match_repo)
-                pipeline.run()
-            except Exception as e:
-                logger.warning(f"Could not run MatchPipeline for Fairfax Union: {e}")
+    # Startup: Ensure Fairfax Union match is registered and populated with verified data
+    try:
+        from backend.src.services.pipeline.fairfax_seeder import seed_fairfax_union_match
+        from backend.src.storage.repository import match_repo
+        fairfax_full = MEDIA_DIR / "fairfax_union_full.mp4"
+        fairfax_30s = MEDIA_DIR / "fairfax_union_sample_30s.mp4"
+        if fairfax_full.exists() or fairfax_30s.exists():
+            seed_fairfax_union_match(match_repo, MEDIA_DIR)
+    except Exception as e:
+        logger.warning(f"Could not seed Fairfax Union match: {e}")
 
     # Startup: Ensure Baltimore Armor match is registered if sample assets are present
     baltimore_id = "baltimore-armor-20260906"

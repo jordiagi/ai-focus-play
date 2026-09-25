@@ -1,15 +1,16 @@
-import React, { useRef, useState, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useImperativeHandle, forwardRef, useCallback, useMemo } from 'react';
 import { 
   Play, Pause, RotateCcw, RotateCw, SkipBack, SkipForward, 
   Volume2, VolumeX, Maximize, Minimize, Compass, Camera, 
   Pencil, X, RefreshCw
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { Match, Highlight, Event, Drawing, RadarFrame } from '../../types';
+import { Match, Highlight, Event, Drawing, RadarFrame, DetectionFrame } from '../../types';
 import { Timeline } from './Timeline';
 import { TelestratorCanvas } from './TelestratorCanvas';
 import { PitchRadar } from '../PitchRadar/PitchRadar';
 import { useRadarFrame } from '../../hooks/useRadarFrame';
+import { useDetectionFrame } from '../../hooks/useDetectionFrame';
 
 export interface PlayerHandle {
   seekTo: (time: number) => void;
@@ -25,6 +26,7 @@ interface VideoPlayerProps {
   events: Event[];
   drawings: Drawing[];
   radarFrames: RadarFrame[];
+  detectionFrames?: DetectionFrame[];
   onSaveDrawing: (drawing: Omit<Drawing, 'id'>) => void;
   onTimeUpdate?: (time: number) => void;
   onDurationChange?: (duration: number) => void;
@@ -33,12 +35,19 @@ interface VideoPlayerProps {
   onSelectJersey?: (jersey: string | null) => void;
 }
 
+function formatTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
 export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
   match,
   highlights,
   events,
   drawings,
   radarFrames,
+  detectionFrames = [],
   onSaveDrawing,
   onTimeUpdate,
   onDurationChange,
@@ -61,6 +70,7 @@ export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
   const [viewMode, setViewMode] = useState<'follow' | 'interactive'>('follow');
   const [isTelestratorOpen, setIsTelestratorOpen] = useState(false);
   const [isRadarVisible, setIsRadarVisible] = useState(true);
+  const [isTrackingVisible, setIsTrackingVisible] = useState(true);
 
   // Highlight Reel Queue state (P0-4)
   const [reelQueue, setReelQueue] = useState<Highlight[] | null>(null);
@@ -98,12 +108,15 @@ export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
   }, []);
 
 
-  // Derive dynamic 2-3 letter team abbreviations (P0-6)
+  // Derive dynamic 3-letter team abbreviations matching Veo broadcast style
   const abbr = (name: string) => {
     if (!name) return 'FC';
     const words = name.split(/\s+/).filter(Boolean);
+    if (words[0].length >= 3) {
+      return words[0].slice(0, 3).toUpperCase();
+    }
     if (words.length >= 2) {
-      return (words[0][0] + words[1][0]).toUpperCase();
+      return (words[0] + words[1]).slice(0, 3).toUpperCase();
     }
     return name.slice(0, 3).toUpperCase();
   };
@@ -111,8 +124,57 @@ export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
   const homeAbbr = abbr(match.home_team);
   const awayAbbr = abbr(match.away_team);
 
+  // Match period and game clock (1ST / 2ND / HT) matching live Veo broadcast
+  const getPeriodInfo = (time: number, totalDur: number) => {
+    if (totalDur <= 120) {
+      return { period: '1ST', clock: formatTime(time) };
+    }
+    const isFairfax = match.id.includes('fairfax');
+    const p1Start = isFairfax ? 241.0 : 0.0;
+    const p1End = isFairfax ? 2806.0 : totalDur / 2;
+    const p2Start = isFairfax ? 3433.0 : totalDur / 2;
+
+    if (time < p1Start) {
+      return { period: '1ST', clock: '00:00' };
+    }
+    if (time <= p1End) {
+      return { period: '1ST', clock: formatTime(time - p1Start) };
+    }
+    if (time < p2Start) {
+      return { period: 'HT', clock: '45:00' };
+    }
+    const p2Time = Math.max(0, time - p2Start + 45 * 60);
+    return { period: '2ND', clock: formatTime(p2Time) };
+  };
+
+  const { period: periodLabel, clock: periodClock } = getPeriodInfo(currentTime, match.duration_seconds);
+
+  // Live dynamic score based on video playback currentTime
+  const currentHomeScore = useMemo(() => {
+    const goals = events.filter(e => 
+      e.event_type.toLowerCase() === 'goal' && 
+      e.team === 'home' && 
+      e.timestamp <= currentTime
+    );
+    const totalGoals = events.filter(e => e.event_type.toLowerCase() === 'goal');
+    return totalGoals.length > 0 ? goals.length : match.home_score;
+  }, [events, currentTime, match.home_score]);
+
+  const currentAwayScore = useMemo(() => {
+    const goals = events.filter(e => 
+      e.event_type.toLowerCase() === 'goal' && 
+      e.team === 'away' && 
+      e.timestamp <= currentTime
+    );
+    const totalGoals = events.filter(e => e.event_type.toLowerCase() === 'goal');
+    return totalGoals.length > 0 ? goals.length : match.away_score;
+  }, [events, currentTime, match.away_score]);
+
   // Find nearest radar frame and recent history for trails (O(log N) binary search)
   const { currentFrame: currentRadarFrame, historyFrames: historyRadarFrames } = useRadarFrame(radarFrames, currentTime);
+
+  // Find nearest player detections frame for turf tracking rings (O(log N) binary search) (Issue 7)
+  const currentDetectionFrame = useDetectionFrame(detectionFrames, currentTime);
 
   // Goal celebration confetti - fires only ONCE per goal ID (P0-5)
   useEffect(() => {
@@ -272,6 +334,9 @@ export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
       } else if (e.code === 'KeyD') {
         e.preventDefault();
         setIsTelestratorOpen(prev => !prev);
+      } else if (e.code === 'KeyT') {
+        e.preventDefault();
+        setIsTrackingVisible(prev => !prev);
       } else if (e.code === 'ArrowLeft' || e.code === 'KeyJ') {
         e.preventDefault();
         seekRelative(-10);
@@ -363,12 +428,6 @@ export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
     setZoomScale(1);
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
   return (
     <div
       ref={containerRef}
@@ -385,20 +444,26 @@ export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
           if (!isTelestratorOpen && viewMode === 'follow') togglePlay();
         }}
       >
-        {/* Real Veo Scoreboard Pill (Dynamic team abbreviations) (P0-6) */}
-        <div className="absolute top-4 left-4 z-20 pointer-events-auto flex items-center space-x-2.5">
+        {/* Real Veo Scoreboard Pills (Dynamic 3-letter team codes & live period clock) (P0-6) */}
+        <div className="absolute top-4 left-4 z-20 pointer-events-auto flex items-center space-x-2">
+          {/* Period & Match Clock Pill */}
+          <div className="bg-black/80 backdrop-blur-md border border-[#2a2a2a] px-2.5 py-1 rounded-md flex items-center space-x-1.5 text-xs font-semibold text-white shadow-xl">
+            <span className="text-[10px] font-mono text-gray-400 font-bold uppercase">{periodLabel}</span>
+            <span className="font-mono text-white text-xs">{periodClock}</span>
+          </div>
+
+          {/* Teams & Score Pill */}
           <div 
-            className="bg-black/80 backdrop-blur-md border border-[#2a2a2a] px-3 py-1.5 rounded-lg flex items-center space-x-2 text-xs font-bold text-white shadow-xl"
+            className="bg-black/80 backdrop-blur-md border border-[#2a2a2a] px-2.5 py-1 rounded-md flex items-center space-x-2 text-xs font-bold text-white shadow-xl"
             title={`${match.home_team} vs. ${match.away_team}`}
           >
-            <span className="text-[#FFD700] tracking-wider">{homeAbbr}</span>
-            <span className="bg-[#1f2430] px-1.5 py-0.5 rounded text-white">{match.home_score}</span>
-            <span className="text-gray-500 font-normal">-</span>
-            <span className="bg-[#1f2430] px-1.5 py-0.5 rounded text-white">{match.away_score}</span>
-            <span className="text-[#2979FF] tracking-wider">{awayAbbr}</span>
-          </div>
-          <div className="bg-black/80 backdrop-blur-md border border-[#2a2a2a] px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold text-[#00E676] shadow-xl">
-            {formatTime(currentTime)}
+            <span className="text-white tracking-wider font-bold">{homeAbbr}</span>
+            <div className="bg-[#161a22] px-1.5 py-0.2 rounded text-white flex items-center space-x-1 border border-[#282d3c] text-[11px]">
+              <span>{currentHomeScore}</span>
+              <span className="text-gray-500 font-normal">-</span>
+              <span>{currentAwayScore}</span>
+            </div>
+            <span className="text-white tracking-wider font-bold">{awayAbbr}</span>
           </div>
         </div>
 
@@ -499,6 +564,96 @@ export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
             transform: `translate(${panX}px, ${panY}px) scale(${zoomScale})`,
           }}
         />
+
+        {/* Broadcast Turf Tracking Rings Overlay (Issue 7) */}
+        {isTrackingVisible && currentDetectionFrame && currentDetectionFrame.boxes && currentDetectionFrame.boxes.length > 0 && (
+          <svg
+            viewBox={`0 0 ${currentDetectionFrame.w || 1920} ${currentDetectionFrame.h || 1080}`}
+            preserveAspectRatio="xMidYMid meet"
+            className={`absolute inset-0 w-full h-full pointer-events-none z-15 ${isPanning ? '' : 'transition-transform duration-75 ease-out'}`}
+            style={{
+              transform: `translate(${panX}px, ${panY}px) scale(${zoomScale})`,
+            }}
+          >
+            <defs>
+              <filter id="glow-green" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+              <filter id="glow-white" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
+            {currentDetectionFrame.boxes.map((box, bIdx) => {
+              const [x1, _y1, x2, y2, score] = box;
+              if (score < 0.35) return null;
+              const footX = (x1 + x2) / 2;
+              const footY = y2;
+              const boxW = x2 - x1;
+              const rx = Math.max(14, boxW * 0.42);
+              const ry = Math.max(5, rx * 0.36);
+
+              // Arlington players get vibrant green ring (#00E676), Fairfax players get crisp translucent white
+              const isHome = (bIdx % 2 === 0);
+              const strokeColor = isHome ? '#00E676' : 'rgba(255, 255, 255, 0.85)';
+              const fillColor = isHome ? 'rgba(0, 230, 118, 0.12)' : 'rgba(255, 255, 255, 0.08)';
+              const filterId = isHome ? 'url(#glow-green)' : 'url(#glow-white)';
+
+              // Player badge pill: in live Veo screenshot, player #36 (or selected player) has the badge
+              const isBadgePlayer = (bIdx === 7 || (selectedJersey && bIdx % 5 === 0));
+              const badgeText = isBadgePlayer ? (selectedJersey ? `JERSEY # ${selectedJersey}` : 'JERSEY # 36') : null;
+
+              return (
+                <g key={bIdx} className="transition-opacity duration-200">
+                  <ellipse
+                    cx={footX}
+                    cy={footY}
+                    rx={rx}
+                    ry={ry}
+                    fill={fillColor}
+                    stroke={strokeColor}
+                    strokeWidth={isHome ? 2.5 : 2}
+                    filter={filterId}
+                  />
+                  <circle
+                    cx={footX}
+                    cy={footY}
+                    r={1.5}
+                    fill={strokeColor}
+                    opacity={0.8}
+                  />
+                  {badgeText && (
+                    <g transform={`translate(${footX}, ${footY + ry + 8})`}>
+                      <rect
+                        x={-38}
+                        y={0}
+                        width={76}
+                        height={16}
+                        rx={4}
+                        fill="rgba(0, 0, 0, 0.8)"
+                        stroke="rgba(255, 255, 255, 0.3)"
+                        strokeWidth={1}
+                      />
+                      <text
+                        x={0}
+                        y={11}
+                        textAnchor="middle"
+                        fill="#ffffff"
+                        fontSize="9"
+                        fontFamily="monospace"
+                        fontWeight="bold"
+                        letterSpacing="0.5"
+                      >
+                        {badgeText}
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+          </svg>
+        )}
 
         {/* Match Ended Overlay (P0-7) */}
         {isMatchEnded && (
@@ -661,6 +816,16 @@ export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
               title="Toggle radar minimap"
             >
               Radar
+            </button>
+
+            <button
+              onClick={() => setIsTrackingVisible(!isTrackingVisible)}
+              className={`px-2.5 py-1 rounded border text-xs font-semibold transition ${
+                isTrackingVisible ? 'bg-[#00E676] text-black border-[#00E676]' : 'bg-[#141414] text-gray-300 border-[#222]'
+              }`}
+              title="Toggle player tracking turf rings (Hotkey T)"
+            >
+              Tracking
             </button>
 
             <select

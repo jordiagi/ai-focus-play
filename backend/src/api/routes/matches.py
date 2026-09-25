@@ -11,7 +11,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Background
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from backend.src.config import MAX_UPLOAD_BYTES, READ_ONLY, MEDIA_DIR
+from backend.src.config import MAX_UPLOAD_BYTES, READ_ONLY, MEDIA_DIR, REPO_ROOT
 from backend.src.domain.models.match import (
     Match, Highlight, Event, Drawing, RadarFrame, AnalyticsData, PlayerRoster
 )
@@ -262,6 +262,37 @@ def get_radar_window(
 def get_radar_meta(match_id: str):
     """Returns radar metadata (frame count, duration, fps) (P2-1)."""
     return match_repo.get_radar_meta(match_id)
+
+@router.get("/{match_id}/detections")
+def get_detections(
+    match_id: str,
+    time: Optional[float] = Query(None, description="Optional timestamp for closest frame")
+):
+    """Returns player detection bounding boxes and turf tracking frames (Issue 7)."""
+    match = match_repo.get_match(match_id)
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    artifacts_dir = REPO_ROOT / "backend" / ".local" / "artifacts"
+    match_file = artifacts_dir / match_id / "players_ko.json"
+    mosaic_file = artifacts_dir / "mosaic" / "players_ko.json"
+    target_file = match_file if match_file.exists() else (mosaic_file if mosaic_file.exists() else None)
+
+    if not target_file or not target_file.exists():
+        return {"match_id": match_id, "frames_count": 0, "detections": []}
+
+    try:
+        data = json.loads(target_file.read_text())
+        dets = data.get("detections", [])
+        if time is not None and dets:
+            closest = min(dets, key=lambda d: abs(d.get("t", 0.0) - time))
+            if abs(closest.get("t", 0.0) - time) <= 6.0:
+                return {"match_id": match_id, "frames_count": 1, "detections": [closest]}
+            return {"match_id": match_id, "frames_count": 0, "detections": []}
+        return {"match_id": match_id, "frames_count": len(dets), "detections": dets}
+    except Exception as e:
+        logger.warning(f"Failed to load detections for {match_id}: {e}")
+        return {"match_id": match_id, "frames_count": 0, "detections": []}
 
 @router.get("/{match_id}/analytics", response_model=AnalyticsData)
 def get_analytics(match_id: str):
