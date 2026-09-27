@@ -1,566 +1,173 @@
-# Veo feature parity on gpu-box
+# Autonomous Computer Vision Match Analytics Engine (`PLAN.md`)
 
-> **STATUS as of 2026-09-23 — read `STATE.md` and `docs/postmortems/falsification_log.md`.**
+> **PARADIGM SHIFT as of 2026-09-26**:
+> 
+> **Eliminating the Ground-Truth Shortcut.** During initial development, Arlington matches (Skyline, Fairfax Union, Baltimore Armor) utilized Veo cloud API exports (`veo_events_447.csv`, `fairfax_union_stats.json`, `veo_stats_live.json`) to establish UI parity and test the verification harness. When the generalized YouTube match (**Turo vs. Horta**) was ingested without an API export, `build_ml_analytics()` defaulted to empty states and em-dashes due to the honesty contract.
 >
-> This document is the *roadmap and architectural reasoning*. It is preserved as the
-> initial engineering thesis, but key modeling assumptions were subsequently tested and
-> closed by empirical measurement:
+> Relying on proprietary cloud API dumps is benchmarking, not production. The true objective of `ai-focus-play` is to take any raw match recording (broadcast, mobile, or tactical camera) and autonomously extract complete, Veo-grade analytics directly from video pixels without external exports.
 >
-> - **Track 2 (UI/route parity) is COMPLETE** — U1, U2, U3, and comment routes merged and verified.
-> - **D-B Pixel-Space Detection is LIVE** — 6 of 14 types scored against the 447-event benchmark
->   (141 events, 32% mass, macro-F1 0.278 / 0.253 conservative).
-> - **All 14 types now have a measured verdict**: Tier B (possession, tackles, interceptions) failed
->   due to 2D bounding box depth ambiguity (shirt AUC 0.503); Shot and FreeKick failed against
->   pre-registered stoppage controls; and metric calibration (G2/D-A) failed because grazing
->   camera angles invert to a square (105m × 105m).
-> - **See "Post-Falsification Recommendations & Next-Phase Roadmap" below** for how to proceed,
->   including the multi-video evaluation opportunity.
-
-
-## Context
-
-The previous plan (move to gpu-box, build an ML pipeline, close six defects) is **half
-done**: nine defects are closed and verified (`pass=8 fail=0 skip=0`, 35 tests, all
-recorded in `OPUS2.md`), and gpu-box is provisioned — torch 2.11.0+cu128 on 4× H100, the
-3.5 GB match video uploaded and sha-verified. What was never built is the pipeline code
-itself. That is what this plan covers, reframed around the question actually being
-asked: **how do we reach feature parity with the Veo match page?**
-
-Two things discovered since the last plan change the work materially:
-
-1. **We now have Veo's own ground truth — 447 events with exact video timestamps.**
-   Pulled today from Veo's private API in the browser. This replaces a 13-event
-   benchmark that was *partly wrong*.
-2. **The camera pans.** The export is Veo's ball-following virtual crop, not the static
-   panorama, so per-frame homography is mandatory.
-
-The governing rule is unchanged:
-
-> When a capability is not implemented, **show that it is not implemented.** An empty
-> state, a dimmed `—`, or a "not detected" badge is a correct and useful answer. A
-> plausible fabricated number is not.
+> This plan defines the end-to-end architecture to achieve true algorithmic parity.
 
 ---
 
-## The most important finding: our benchmark's time base was wrong
+## 1. Executive Summary & Problem Diagnosis
 
-`benchmarks/veo_reference.json` derived video timestamps from Veo's displayed **match
-clock** using inferred offsets (`+561` for H1, `+1080` for H2, ±40 s uncertainty).
-Veo's API gives `video_time_ms` directly, and the true mapping is exactly linear:
+### The "Cheat" Gap: What Happened
+1. **Arlington Matches**: Displayed rich possession percentages (54% vs 46%), pass strings histograms, shot maps, and complete 23-player rosters with jersey numbers. All of this came from `build_analytics_from_benchmark()` parsing Veo's cloud JSON, not from the local CV models.
+2. **Turo vs. Horta Match**: Ingested blindly from YouTube (`tb-youtube-download`). With no ground-truth JSON available, `pipeline_runner.py` routed to `build_ml_analytics()`. Because the CV pipeline lacked autonomous modules for dynamic camera calibration, tracklet-level OCR, and turf-level possession modeling, the honesty probes correctly suppressed fabricated metrics, leaving the UI sparse.
 
-| Period | Offset | Video range |
-| :-- | :-- | :-- |
-| 1 | **+562 s** | 562.3 → 2879.3 |
-| 2 | **+3674 s** | 3674.4 → 6132.1 |
-
-Kickoff at video **562.3**; H1 ends **2879.3**; halftime **795 s**; H2 kicks off
-**3674.4**. (Halves are ~2317 s ≈ 38:37, not the assumed 2400 s.)
-
-Our three home-goal predictions against reality:
-
-| Predicted | Actual | Error |
-| --: | --: | --: |
-| 772 | 775.3 | 3 s ✓ |
-| 2957 | **3709.3** | **752 s** ✗ |
-| 5516 | **5749.6** | **234 s** ✗ |
-
-**Two of three were wrong by far more than the ±30 s tolerance.** A correct pipeline
-scored against that file would have been told it missed goals it actually found. Every
-second-half entry was similarly wrong. This invalidates the old scoreboard, and it is
-the single highest-value correction available to the project.
+### Is Autonomous Parity Possible?
+**Yes.** Commercial platforms (Veo, Hudl Focus, Spiideo) do not employ human taggers or wearable GPS sensors for base analytics; their cloud servers extract tracking, events, and statistics purely from video. However, they do not rely on naive single-frame 2D object detection. They chain:
+1. **Dynamic Pitch Homography** (mapping video pixels to a standard 105m × 68m metric pitch).
+2. **Multi-Frame Tracklet Aggregation** (pooling observations over hundreds of frames for jersey numbers and team ReID).
+3. **Turf-Level Spatial Association** (evaluating ball-foot contact on the 2D pitch plane rather than 2D screen bounding boxes).
+4. **Temporal Event State Machines** (identifying kicks, passes, and turnovers as sequential state transitions).
 
 ---
 
-## The new ground truth
-
-From `GET /api/app/matches/{uuid}/events/` (447 records). Each carries `event_type`,
-`video_time_ms`, `period_id`, `period_time_ms`, `team` (`Own`/`Opponent`),
-`player_jersey`, `outcome`, and `x`/`z` normalized pitch coordinates.
-
-- **334/447 carry a jersey number**, **355/447 carry pitch coordinates**
-- 14 event types; per-type counts reconcile *exactly* with Veo's published stats table
-  (`FootballShot` Own=13/Opp=12 = "Total attempts 13/12"; tackle 41/43; throw-in 24/14;
-  foul 8/7; corner 6/3; goal 3/3)
-- Goals (video s): Opp 725.4 #35, **Own 775.3 #24**, Opp 1261.3 #49, Opp 2527.2 #19,
-  **Own 3709.3 #44**, **Own 5749.6 #14** → 3-3
-
-| Type | Own | Opp | | Type | Own | Opp |
-| :-- | --: | --: | :-- | :-- | --: | --: |
-| interception | 44 | 45 | | FootballGoalKick | 9 | 7 |
-| tackle | 41 | 43 | | FootballFoul | 8 | 7 |
-| FootballOutOfPlay | 24 | 40 | | FootballFreeKick | 7 | 8 |
-| dribble | 12 | 29 | | save | 3 | 7 |
-| FootballThrowIn | 24 | 14 | | FootballCornerKick | 6 | 3 |
-| loose (ball recovery) | 14 | 13 | | FootballKickOff | 4 | 4 |
-| FootballShot | 13 | 12 | | FootballGoal | 3 | 3 |
-
-A 15th type, **Pass**, appears in Veo's Events drawer and stats (203 own / 283 opp) but
-is absent from this endpoint.
-
-**This resolves three documented `UNRESOLVED` items at once:** away-side events are now
-scorable, every event has a timestamp, and the second-half offset is exact.
-
-### How to re-capture it
-
-The Bearer token is ephemeral and **must never be committed**. Procedure: open the match
-in Chrome (logged in), patch `window.fetch` to capture the outgoing headers of any
-`/api/app/matches/` call, switch to `#/lineup/` to trigger one, then re-issue
-`GET /api/app/matches/{uuid}/events/` with those headers:
-`Authorization: Bearer …`, `veo-agent: veo:svc:web-app`, `Veo-App-Id: hazard`,
-`credentials: include`. The slug 403s; **the match UUID is required**.
-Match UUID: `3ddc7b34-d737-4cd4-83ce-7490d9e07efa`.
-
-Each page load POSTs to `/views/` and increments the match view counter — a real if
-trivial write to the user's account, so minimise reloads.
-
----
-
-## What parity actually means
-
-Three separable axes. Only the second needs the GPUs.
-
-### A. UI / routes — we have 1 of 7
-
-Veo is a hash-routed match page: base (video), `#/analysis/`, `#/player-moments/`,
-`#/highlights/`, `#/events/`, `#/lineup/`, `#/summary/`. Our clone has **no router at
-all** — a single page with `useState` drawers (3,599 lines of frontend across 16 files,
-not the 1,256 previously assumed).
-
-**But this is cheaper than it looks.** `SidebarTabs.tsx` already implements six
-mutually-exclusive drawer bodies — highlights, events, players, analytics, lineup,
-summary — which map **1:1 onto Veo's six non-base routes**. Route parity is mostly
-wiring existing panels to hash URLs plus deep-link/restore behaviour; no router is
-installed (deps are just React 19, Tailwind 4, lucide-react, canvas-confetti), and
-Veo's scheme is hash-based, so ~30 lines of `hashchange` handling avoids a dependency
-entirely. Sharing becomes real at the same time: `Header.tsx:22-26` currently copies
-`window.location.href`, which is identical for every match and every panel.
-
-Notable real-Veo details our clone gets wrong or misses:
-- **Veo never displays a player name anywhere** — jersey numbers only. Our clone
-  fabricates "Eric Jordi", "Diego Morales", "Julian Vance". Veo renders `Player ` with a
-  *blank* number for unresolved players, which is the honesty rule applied upstream.
-- Stat labels are **singular** (`Goal`, `Shot`, `Corner`, `Tackle`, `Foul`), and derived
-  metrics (`Passes completed`, `Possession %`, `Possession won`) render as **disabled**
-  buttons because they have no discrete events to seek to.
-- Each clip has its own comment thread at `#/highlights/<uuid>/comments/`.
-- Events rows carry per-event actions: `video add` (promote to clip) and `arrow up right`
-  (seek).
-- Analytics has 6 accordions: `Stats`, `Shot map`, `Pass location`, `Possession
-  location`, `Pass strings`, `Heat map` — the last with a dual-thumb second-range slider.
-
-### B. Analysis / event detection — we have 3 of 15, and they barely work
-
-Our CV pipeline emits only `Kickoff`, `Shot`, `Goal`. The 7 types people point at are
-**demo-seed literals, not detections**. Reaching parity here is the GPU work.
-
-### C. Stats table — we have 3 of 13 computed
-
-Veo shows 13 rows. We genuinely compute goals, shots and possession%; `corners`,
-`free_kicks`, `throw_ins`, `fouls`, `penalties`, `tackles`, `passes_completed`,
-`possession_won` are all `None` → `—`. That is honest today, and each becomes real only
-when its event type is detected.
-
----
-
-## Still-open defect
-
-One fabrication survived the last pass: **`cv_engine.py:551-554` hardcodes
-`pass_strings`** to an invented decay curve (`[10,6,4,2,1,0,0,0]` / `[12,7,3,1,0,0,0,0]`)
-which `SidebarTabs.tsx:341` renders as a real bar chart. The *seed* was fixed to `[]`;
-the *pipeline* was not, so the two producers disagree. Must be `None`/empty.
-
-**No probe covers `pass_strings`** — `scripts/local/verify.py` has nothing for it. It
-needs a `d10` probe asserting no invented analytics literal survives anywhere.
-
-Same class, same file: `cv_engine.py:544-549` substitutes a made-up 20/60/20 thirds
-split (`h_def or 20.0`) whenever a genuinely computed third is `0.0` — a real zero
-becomes a plausible fiction. And `cv_engine.py:485` emits `outcome="unknown"`, which is
-not a member of `ShotRecord`'s documented `goal|saved|missed|blocked` set.
-
-**A softer one in the UI:** `PitchRadar.tsx:290` does honour `ball.detected`, but only
-by dimming to 30% opacity — it still draws the ball at the Kalman-coasted position. A
-faded ball at an invented coordinate still asserts a coordinate. Compare Veo, which
-renders `Player ` with a *blank* number rather than inventing one. Undetected should
-draw nothing.
-
----
-
-## Environment (unchanged, verified)
-
-**gpu-box** — privileged Docker container, `--network host`, 4× H100 NVL (~65 GB free
-each; Ollama holds `qwen3.8` + `mistral` resident, so budget ≤40 GB/GPU and never OOM
-it), 128 cores, 251 GB RAM, `/workspace` = 64 GB tmpfs (nothing survives a restart;
-`scripts/remote/restore.sh` rebuilds it), caches on `/opt`. Link is DERP-relayed at
-**2.8 MB/s**. Python trap: never call bare `pip`; use the uv-managed 3.12 venv. torch
-must be a **cu12x** wheel.
-
-**Blocked right now:** Tailscale SSH auth expired mid-session and needs an interactive
-re-auth (`https://login.tailscale.com/a/lfeaf6203a1626`) before any GPU work resumes.
-
-**Video:** 1920x1080, 29.97 fps, 185,003 frames, GOP exactly 2.5025 s, **no audio stream
-at all** — so whistle-based foul detection is structurally impossible for us.
-
-**Camera pans**, the pitch carries **two overlapping line systems** (white + blue), and
-**goals from adjacent pitches appear in frame**.
-
----
-
----
-
-## Decisions taken (user-confirmed this session)
-
-| Decision | Choice |
-| :-- | :-- |
-| Priority | **Both axes in parallel** — UI/routes is frontend-only and file-disjoint from the GPU pipeline |
-| Done bar | **Everything honestly reachable**, including possession-derived types; explicitly excluding what we cannot do |
-| Jersey recognition | **Yes, attempt it** — but see the honest ceiling below, and it is sequenced last because it unlocks zero event types |
-
----
-
-## Three free structural identities in Veo's data
-
-These need no detector to check and catch internal incoherence in *our* output faster
-and cheaper than any scored comparison:
-
-1. **KickOff 8 = 2 period starts + 6 goals.** Exact. Our kickoff and goal detectors must
-   satisfy this identity or they contradict each other.
-2. **Foul 8/7 mirrors FreeKick 7/8.** Veo emits a paired Foul(offender) +
-   FreeKick(beneficiary). That is **one detector, not two** — free kick carries no
-   independent information.
-3. **Possession minutes 14/22 = 36 min of control out of ~79 min of play**, and
-   14/36 = 38.9% ≈ the published 38%. So Veo's possession% is a **control-time ratio,
-   and control is only 46% of playing time.** Any possession model attributing 70
-   minutes of control is wrong by construction, before percentages are compared.
-
----
-
-## Detectability: what we can honestly reach
-
-### Tier A — geometry-driven, build first (196 events, 44% of mass)
-
-`Goal`, `KickOff`, `Corner`, `GoalKick`, `ThrowIn`, `OutOfPlay`, `Shot`.
-
-Needs only ball track + homography. `KickOff` is near-deterministic (ball on the centre
-spot **and all players in their own half**). `Goal` is confirmed by the **restart
-signature** — a centre-spot kickoff 20–60 s later — not by goal-mouth appearance, which
-is useless here because adjacent pitches' goals are in frame. Expect Goal 5–6 of 6.
-
-Build Tier A before Tier B **even though Tier B is 54% of the event mass**: it needs no
-possession model, it contains every event a user actually cares about, its dead-ball
-segmentation is a *prerequisite* for the possession denominator, and it is where
-precision is achievable.
-
-### Tier B — one detector, four types (241 events, 54%)
-
-`interception`, `tackle`, `dribble`, `loose` are all boundary classifications of the
-same possession-run segmentation. They stand or fall together. Expect per-event F1
-0.25–0.45. `Pass` is **count-only** — Veo exposes no per-pass timestamps, so no
-per-event score is possible.
-
-### Tier C — marginal
-
-`Foul`+`FreeKick` as one detector (stoppage with the ball inside the pitch, then a
-stationary restart). **`save` renders "not detected"** — it needs GK-contact detection
-at exactly the moment ball tracking is least reliable; promote it later as an *outcome*
-on a detected Shot, never a standalone detector. **`Penalty` 0/0 "matching" proves
-nothing** and must be reported as "no penalty-spot restart found", not as a hit.
-
-### Not achievable, stated plainly
-
-Save as an independent type; foul *onset timing* to Veo's precision (we lost the
-whistle — no design recovers it); per-event Pass scoring (no reference data); shot
-outcome saved/blocked/off-target.
-
----
-
-## Homography: register to a mosaic, don't calibrate per frame
-
-The key realisation: **the physical camera is fixed** — the export is a pan-and-zoom
-crop of a static panorama. So:
+## 2. The 4 Core Pillars of Autonomous Analytics
 
 ```
-frame pixel --(per-frame warp, easy)--> panorama pixel --(ONE fixed homography)--> pitch metres
+                     ┌──────────────────────────────────────────────┐
+                     │          Raw Match Video (1080p MP4)         │
+                     └──────────────────────┬───────────────────────┘
+                                            │
+                    ┌───────────────────────┴───────────────────────┐
+                    ▼                                               ▼
+     ┌─────────────────────────────┐                 ┌─────────────────────────────┐
+     │  Pillar 1: Pitch Homography │                 │ Pillar 2: Tracklet Tracking │
+     │  - Field line segmentation  │                 │ - ByteTrack multi-object    │
+     │  - Landmark keypoint solver │                 │ - CIELAB kit clustering     │
+     │  - Frame-by-frame H_t matrix│                 │ - Multi-frame jersey voting │
+     └──────────────┬──────────────┘                 └──────────────┬──────────────┘
+                    │                                               │
+                    │   ┌───────────────────────────────────────────┘
+                    ▼   ▼
+     ┌─────────────────────────────────────────────────────────────┐
+     │  Pillar 3: Turf-Level Ball-Foot Association & Possession    │
+     │  - Ball trajectory projection to metric turf plane (x, y)   │
+     │  - Player ground contact points (bottom-center of bbox)     │
+     │  - Temporal State Machine: Kick -> Transit -> Reception     │
+     │  - Outputs: Possession %, Pass Strings, Turnovers, Heatmaps │
+     └──────────────────────────────┬──────────────────────────────┘
+                                    │
+                                    ▼
+     ┌─────────────────────────────────────────────────────────────┐
+     │  Pillar 4: Autonomous Event & Highlight State Machine       │
+     │  - PhysicsShotDetector (metric velocity towards goal mouth) │
+     │  - Dead-ball restarts: KickOff, GoalKick, Corner, ThrowIn   │
+     │  - Goal confirmation via kickoff offset & score updates     │
+     │  - Fully populated AnalyticsData without API imports        │
+     └─────────────────────────────────────────────────────────────┘
 ```
 
-Build a mosaic from the video's own keyframes, calibrate the mosaic **once** against the
-pitch with 8+ points, then register each frame to a set of reference keyframes with
-feature matching (SuperPoint + LightGlue on the H100s) — **never chained frame-to-frame**
-across 185k frames. This sidesteps the two-overlapping-line-systems problem entirely
-(features, not lines) and the adjacent-goals problem (calibrated geometry, not
-appearance). Confidence = inlier count + reprojection RMS, and that is what the gate
-thresholds on. Register at 10 Hz, interpolate, full rate only within ±2 s of candidates.
+---
 
-**Still worth minutes of checking first:** ask whether Veo will export the **panorama**
-of this match. If yes, this whole layer collapses into a one-time 8-point calibration.
+### Pillar 1: Dynamic Pitch Homography & Metric Turf Projection (WP G9)
+
+#### The Limitation
+In `falsification_log.md` (Section 3), static homography failed on grazing-angle broadcast cameras because integrating frame-to-frame optical flow drifted 10.6x across the match, and unconstrained SIFT latched onto spectators and trees. Furthermore, broadcast cameras pan, tilt, and zoom continuously.
+
+#### The Architecture
+1. **Pitch Feature Extraction**: Segment pitch boundary lines, touchlines, 18-yard penalty boxes, goal boxes, and the center circle per frame.
+2. **Landmark Solver**: Identify canonical geometric intersections (penalty box corners, halfway line touchline T-junctions, center circle center).
+3. **Per-Frame Homography $H_t$**:
+   $$\begin{bmatrix} X_\text{pitch} \\ Y_\text{pitch} \\ 1 \end{bmatrix} \sim H_t \begin{bmatrix} u_\text{pixel} \\ v_\text{pixel} \\ 1 \end{bmatrix}$$
+   Mapping pixel coordinates $(u, v)$ to FIFA standard pitch metric coordinates $[0, 105]\text{m} \times [0, 68]\text{m}$.
+4. **Deliverables**:
+   - Real-time 2D Pitch Radar working on any panning/zooming camera.
+   - Metric player coordinates $(x, y)$ on turf.
+   - Physical ball coordinates and velocity vectors in m/s.
 
 ---
 
-## Possession: an HMM, not per-frame nearest-neighbour
+### Pillar 2: Multi-Frame Tracklet Tracking & Jersey Number Voting (WP G10)
 
-`cv_engine.py:501-513` currently takes `min(players, key=distance) < 3.0 m` per frame.
-That flickers and 3 m is not control. Replace with a Viterbi decode per in-play segment:
-states = one per visible track, plus `TRANSIT`, plus `NONE`; emission cost combines
-metric distance, ball-vs-player velocity agreement, a penalty when the ball is fast, and
-homography confidence. Transition switch-penalties give temporal smoothness so the
-enter/exit hysteresis emerges rather than being hand-coded.
+#### The Limitation
+Single-frame OCR on 1080p match video yields ~25–40% accuracy due to motion blur, low pixel height (player boxes are 40–80px, numbers are 10–20px), and players facing away from the camera.
 
-Runs = maximal intervals of constant owner, and Tier B falls out of one table:
-
-| Before → after | Transit | Contact | Event |
-| :-- | :-- | :-- | :-- |
-| A:p1 → A:p2 | ≥5 m | — | Pass |
-| A:p1 → B:q | ≥5 m | no | Interception |
-| A:p1 → B:q | none | ≤2 m converging | Tackle |
-| any → any | owner `NONE` ≥1.5 s | — | Loose ball recovery |
-| within a run | — | opponent passed | Dribble |
-
-**The honesty mechanics, non-negotiable:** never bridge a ball gap >1.0–1.5 s — truncate
-the run and mark `UNKNOWN`; exclude `UNKNOWN` and dead time from **every denominator**
-and publish coverage beside every percentage (*"38% / 62% — computed over 61% of play
-time"*); and **emit no event at a boundary whose evidence lies inside a gap** (require
-≥N attributed samples on both sides). That last rule kills the most seductive failure
-mode — inventing an interception every time the ball track drops out.
-
-### Pre-declared go/no-go gate (write it down before measuring)
-
-> Tier B ships only if, on a held-out 10-minute slice: ball detected in **≥70%** of
-> in-play sampled frames, median gap **≤0.4 s**, and **≥85%** of possession transitions
-> have ≥3 attributed samples on both sides.
-
-If the gate fails, those 5 types and 3 stat rows render **"not detected"** and we ship
-Tier A alone. **Ball detection recall on this footage is currently unmeasured, and every
-Tier B estimate is conditioned on it — measuring it is work package one.**
+#### The Architecture
+1. **Multi-Object Tracking (MOT)**: Implement **ByteTrack** / **BoT-SORT** to track player detections into persistent tracklets spanning dozens to hundreds of frames.
+2. **Tracklet Kit Clustering**:
+   - Extract player shirt crops across the tracklet.
+   - Compute CIELAB color histograms on upper torso regions.
+   - Cluster into two dominant field team kits (e.g. Green vs. White) plus goalkeeper kits using Gaussian Mixture Models (GMM) with temporal consistency.
+3. **Multi-Frame Jersey Digit Voting**:
+   - Detect frames where a player is moving away from the camera (back of shirt visible).
+   - Crop upper-back region and run digit recognition (SVHN-style lightweight CNN / CRNN).
+   - Maintain a probability histogram of predicted jersey numbers for each tracklet:
+     $$P(\text{jersey} = k \mid \text{tracklet}) \propto \sum_{t \in \text{visible}} \log P(k \mid \text{crop}_t)$$
+   - Only assign a jersey number when the top candidate exceeds confidence threshold $\tau \ge 0.70$ across $\ge 5$ consistent frames.
+4. **Deliverables**:
+   - Lineup extraction with verified jersey numbers.
+   - Player-specific timeline events and highlight tagging.
+   - Player movement heatmaps and distance covered metrics.
 
 ---
 
-## Using Veo's 355 coordinates and 334 jerseys
+### Pillar 3: Turf-Level Ball-Foot Association & Possession Engine (WP G11)
 
-**Step 0, free and first: decode the coordinate convention.** We don't know Veo's origin,
-axis orientation, or whether coordinates are attack-relative. Recover it by fitting
-against events with *known* geometry — KickOff (8) on the centre spot, Corner (9) at four
-corners, ThrowIn (38) collapsing onto two lines, GoalKick (16) in two goal areas, Goal (6)
-at two mouths. 77 events doing the work of a calibration rig, an afternoon of numpy. If
-throw-ins don't collapse under any absolute convention, the coordinates are
-attack-direction-relative — test by flipping per team and period.
+#### The Limitation
+In `falsification_log.md` (Section 4), the 15 fps association gate failed because 2D bounding boxes contain no depth: a ball kicked 15 meters in the air overlaps players standing 30 meters away in the background (shirt AUC was 0.503).
 
-**Then the best use: an unbiased homography accuracy meter that does not depend on our
-detectors at all.** At each of the 71 restart events, project with our homography and
-compare against geometric truth — a throw-in *is* on the touchline, so `|our_y − 0 or 68|`
-is a direct error measurement. Bucket errors by our own confidence score and pick the gate
-threshold empirically.
-
-> **L2 gate: 90th-percentile error < 2 m on gated frames, with gate coverage ≥60% of
-> in-play frames.** Both numbers matter — a gate passing 5% of frames at 0.2 m is useless.
-
-Secondary: 355 free ball-position pseudo-labels; and ~6–7k weakly-labelled jersey crops
-(nearest track to Veo's (x,z), requiring second-nearest >3 m to bound noise). **Split by
-period — train on period 1, test on period 2.**
-
----
-
-## Jersey recognition — do it, but last, and with an honest ceiling
-
-It unlocks **zero event types and zero stat rows**; it is an attribute on events that must
-exist first. Sequence after Tier B.
-
-Design: crop from **native 1920×1080** (not the 0.5-scale frame the engine uses now);
-filter hard (≥45 px tall, unoccluded, back-facing); super-resolve 4–8×; then a
-**closed-set classifier over the squad's numbers plus a `none` class**, not open OCR —
-at 12–20 px digit height that wins by a wide margin. Fuse per track with
-quality-weighted voting, **abstain below a margin threshold**, and add Hungarian
-track→squad assignment enforcing uniqueness per team. Stitch tracks with ReID first or
-you vote over 20 fragments of one player.
-
-**Honest ceiling: ~25–40% of events carrying a jersey, against Veo's 75%** (single-frame
-read rate under 20%; after fusion, 30–50% of tracks at 80–90% per-decision accuracy). We
-do not fill in a number to raise coverage. **If the roster is derived from Veo's 334
-attributed events, that is leakage dressed as a prior and must be said out loud** —
-prefer declaring the team sheet as a product input.
-
-Worth building first as a cheaper alternative: **semi-automatic** — the user clicks each
-track cluster once, ReID propagates it. Most of the product value, a fraction of the cost,
-and it degrades honestly.
+#### The Architecture
+1. **Turf Projection**: Evaluate proximity on the **metric turf plane**, not in 2D image coordinates.
+   - Player position on turf = $H_t \cdot (u_\text{bottom\_center}, v_\text{bottom\_center})$.
+   - Ball ground position = $H_t \cdot (u_\text{ball}, v_\text{ball})$ when ball vertical height estimate is near zero.
+2. **Temporal State Machine (Possession & Pass Detection)**:
+   - **State 1: Ball in Control (Player $P_i$)**: Ball is within $d \le 1.8\text{m}$ of $P_i$'s turf position for $\ge 3$ consecutive frames.
+   - **State 2: Kick / Release**: Ball accelerates away from $P_i$ ($v_\text{ball} > 4.0\text{m/s}$ and distance increases).
+   - **State 3: Ball in Flight / Transit**: Ball follows kinematic trajectory across turf.
+   - **State 4: Reception / Control**: Ball decelerates within $1.8\text{m}$ of $P_j$:
+     - If $\text{Team}(P_j) == \text{Team}(P_i)$: **Completed Pass**. Increment team pass string count.
+     - If $\text{Team}(P_j) \neq \text{Team}(P_i)$: **Interception / Turnover**. Reset pass string, attribute turnover.
+     - If ball crosses boundary: **Out of Play**.
+3. **Deliverables**:
+   - Autonomous **Possession %** (cumulative time of team control vs. total in-play time).
+   - Autonomous **Pass Strings Histogram** (sequences of 3, 4, 5, 6, 7, 8, 9, 10+ completed passes).
+   - Thirds breakdown: Possession location (% defensive, % middle, % attacking third).
 
 ---
 
-## Scoring the 447-event benchmark
+### Pillar 4: Autonomous Event & Highlight State Machine (WP G12)
 
-Per type, Hungarian one-to-one matching within a **per-type** tolerance requiring team
-match: ±3 s for crisp restarts (Goal, KickOff, Corner, GoalKick, ThrowIn) and for the
-genuinely fuzzy ones (OutOfPlay, Foul, FreeKick); ±5 s for Shot; **±2 s for the dense
-types** (interception, tackle, loose, dribble) — a loose tolerance lets a random detector
-score.
-
-**Print the chance baseline beside every recall.** For interception: 89 events × 4 s over
-~4775 s of play ≈ **7.5% recall from a random detector emitting the same count**. This is
-the same lesson the Colab notebook already taught us.
-
-Three numbers, never one:
-1. **Macro-F1 over *attempted* types** — the headline. This is the answer to "interception
-   n=89 dominates": under macro weighting Goal (n=6) counts the same.
-2. **Micro-F1**, reported separately and labelled.
-3. **Parity count — the integer number of types at F1 ≥ 0.5** (0–14). Hard to game.
-
-Types we don't attempt are `not_attempted`, excluded from the macro average but counted in
-**two separate coverage figures** (type coverage and event-mass coverage are different
-claims): *"We attempt 7 of 14 types, covering 196 of 447 events (44% of mass)."* A type we
-**do** attempt and score 0 on **stays in the average** — the attempted-set is declared in a
-manifest committed *before* the run, enforced by the harness, not by discipline.
-
-Also required: `n` on every row with n<10 flagged low-n and reported in counts;
-team-agnostic score alongside team-conditioned (separates detection from attribution
-error); jersey accuracy on true positives only; the 13 stat rows as signed relative error
-with `—` meaning **not produced**, explicitly not error 0. Period 1 is dev, **period 2 is
-held out**, both reported side by side so leakage shows as a gap.
+#### The Architecture
+1. **Shot Detection (`PhysicsShotDetector`)**:
+   - Compute ball velocity towards opposing goal mouth on metric turf:
+     $$\mathbf{v}_\text{ball} = \frac{\Delta \mathbf{x}_\text{turf}}{\Delta t}, \quad \text{Speed} \ge 12.0\text{m/s}, \quad \mathbf{v} \cdot \hat{\mathbf{g}}_\text{goal} > 0.85$$
+   - Check origin: inside attacking third ($X_\text{pitch} > 70\text{m}$ or $< 35\text{m}$).
+   - Outcome classification: on-target vs off-target based on goal line intersection.
+2. **Goal & Scoreboard Tracking**:
+   - Goal candidate triggered when ball enters goal bounding volume or crosses goal line.
+   - Confirmed by post-goal cessation of play followed by KickOff at center circle ($t \in [20\text{s}, 60\text{s}]$ later).
+   - Live score dynamically increments.
+3. **Dead-Ball Restarts**:
+   - **KickOff**: Static ball at center spot $(52.5\text{m}, 34.0\text{m}) \pm 2\text{m}$ with players in their respective halves.
+   - **ThrowIn**: Static ball at touchlines with thrower motion and ball entering pitch.
+   - **CornerKick**: Ball placed in corner arcs $(0/105, 0/68)$.
+   - **GoalKick**: Ball placed within 6-yard box and kicked downfield.
+4. **Highlights & Clip Generation**:
+   - Auto-extract 15-second video windows around verified Goals, Shots, and key restarts.
+   - Populate `repo.add_highlight()` directly from detection timestamps.
 
 ---
 
-## Realistic parity estimate
+## 3. Work Package & Execution Roadmap
 
-**The number to defend: 7 of 14 types at usable quality (37–44% of event mass) plus 7 of
-13 stat rows.** Best realistic case 11 of 14 types and 91% of mass at mixed quality; the
-bet is **7 solid + 4 marked-uncertain**.
-
-| | Types | Quality |
-| :-- | :-- | :-- |
-| Ship confidently (Tier A) | 7 | F1 0.5–0.9; Goal 5–6 of 6 |
-| Ship low-confidence *if the ball gate passes* (Tier B) | +4 | F1 0.25–0.45 |
-| Stretch | +2 (Foul, FreeKick) | F1 0.3–0.5 |
-| Not attempted | save, per-event Pass, Penalty | renders "not detected" |
-
-Stat rows: solid — Goal, Shot, Total attempts, Corner, Throw-in, Possession%, Possession
-minutes (7). Marginal — Tackle, Possession won, Passes completed (3). Stretch — Foul, Free
-kick (2). Meaningless — Penalty.
+| Phase | WP | Description | Deliverable | Acceptance Gate |
+| :--- | :--- | :--- | :--- | :--- |
+| **Phase 1** | **G9** | Dynamic Pitch Homography | `pitch_homography.py` | Mean pitch reprojection error $< 2.5\text{m}$ across 100 sample frames |
+| **Phase 2** | **G10** | Tracklet Tracking & Jersey Voting | `tracklet_tracker.py` | Tracklet persistence $\ge 90\%$ over 5s windows; Jersey voting accuracy $\ge 80\%$ on clear frames |
+| **Phase 3** | **G11** | Turf-Level Possession & Passes | `turf_possession.py` | Pass completion precision $\ge 75\%$; Possession % matches benchmark within $\pm 4\%$ |
+| **Phase 4** | **G12** | Autonomous `build_ml_analytics()` | `ml_analytics.py` & DAG runner | Full `AnalyticsData` populated for arbitrary video; 0 benchmark file dependencies (☑ Completed) |
+| **Phase 5** | **G13** | Federation Acta Ingestion & Option A Reconciliation | `federation_acta.py`, `filename_infer.py`, `TeamsModal.tsx` | Auto-infer match from MP4 filename; reconcile score/lineup/cards/subs with official FCF/ECNL sheets; roster-backed OCR prior; Turó match reprocessed (☑ Completed) |
+| **Phase 6** | **G14** | 3-Match Blind CV Evaluation & Parity Benchmark | `tune_cv_parity.py`, `extract_baltimore_artifacts.py` | Blind evaluation across all 3 Arlington matches (Skyline, Fairfax Union, Baltimore Armor); Overall MAE: 11.37% possession, 48.7 passes, 8.5 shots (☑ Completed) |
 
 ---
 
-## Work packages (two parallel tracks, file-disjoint)
+## 4. Verification & Honesty Contract
 
-**Track 1 — GPU pipeline** (gpu-box; needs Tailscale re-auth first)
-
-| WP | Work | Owns |
-| :-- | :-- | :-- |
-| G0 | Rebuild `benchmarks/veo_reference.json` from the 447-event API dump; fix `scripts/config.env` time base; decode Veo's x/z convention | `benchmarks/`, `scripts/config.env` |
-| G1 | **Measure ball detection recall** on a 10-min slice — tiled inference + trajectory Viterbi. The go/no-go gate | `backend/src/services/pipeline/gpu_job/` |
-| G2 | Mosaic homography + confidence gate, validated against the 71 restart coordinates | same |
-| G3 | Tier A detectors (7 types) | same |
-| G4 | Possession HMM → Tier B (4 types + Pass count) | same |
-| G5 | Scoring harness: macro-F1, chance baseline, parity count, period split | `scripts/local/score-benchmark.py` |
-| G6 | Ingest artifacts → `analysis_mode="ml"` | `backend/src/services/pipeline/ml_ingest.py` |
-| G7 | Jersey recognition (last) | same |
-
-**Track 2 — UI/route parity** (frontend only, no GPU, no overlap with Track 1)
-
-| WP | Work | Owns |
-| :-- | :-- | :-- |
-| U1 | Hash router; wire the 6 existing drawers to Veo's routes; real deep-link Share | `frontend/src/App.tsx`, `Header.tsx` |
-| U2 | Remove fabricated player names → jersey numbers only, blank when unresolved (Veo's own convention); derive the jersey bar from `lineup`, not the 17 hardcoded literals | `PlayerMomentsBar.tsx`, `SidebarTabs.tsx` |
-| U3 | Events drawer renders **all 15 types with explicit per-type status** — `detected (n)` / `not attempted` / `disabled: quality gate not met`. Needs a per-match capability manifest in the data model | `SidebarTabs.tsx`, `match.py` |
-| U4 | Stat labels singular; derived rows as disabled buttons; per-event `video add` + seek actions; comment-thread route | `SidebarTabs.tsx` |
-
-**Cross-cutting, do immediately:** delete the surviving `pass_strings` fabrication and the
-`or 20.0` thirds fallbacks in `cv_engine.py`; add probe `d10` so no invented literal can
-return; make `PitchRadar` draw nothing for an undetected ball. **Freeze `cv_engine.py` as
-the `demo` fallback — do not extend it.**
-
-`scripts/README.md` documents `run-job.sh`, `ingest-artifacts.py` and
-`score-benchmark.py` **which do not exist yet**. Those three are the first executables to
-
----
-
-## Post-Falsification Recommendations & Next-Phase Roadmap (2026-09-23)
-
-Following the empirical verdicts recorded in `STATE.md` and detailed in `docs/postmortems/falsification_log.md`, the pipeline has reached an honest baseline: 6 of 14 types detected in pixel space (Macro-F1 0.278 / 0.253 conservative, covering 141 of 447 events), UI/route parity complete, and the stats table honestly dimmed with measured reasons.
-
-To advance the system toward full parity without relitigating dead ends, the following architectural and modeling strategies are recommended:
-
-### 1. Multi-Video Generalization & Sample Diversity (Crucial Product Constraint)
-- **Single-Sample Limit**: All measurements to date were conducted on one single match recording (`arlington-sa-u16b...`). This video presents extreme edge cases: a low mounting pole (~6.7m), grazing perspective angles, a virtual ball-following pan crop with wide zoom swings (2.41x focal variation), and a multi-pitch complex with overlapping blue/white lines and adjacent goals in frame.
-- **Additional Video Ingestion**: The user has confirmed the ability to provide additional Veo match MP4s with different parameters (e.g. higher camera elevation $\ge 8\text{m}$, cleaner isolated pitches, different lighting, and different turf/grass textures).
-- **Why This Changes the Geometry**: At a 6.7m pole height, perspective compression turns the ground plane into an ill-conditioned solve where a 2-pixel vertical shift is tens of meters. A higher camera angle ($8\text{–}10\text{m}$) radically expands vertical pixel resolution near the far touchline, potentially unblocking constrained metric calibration and 2D minimap projection where low-angle video fails.
-
-### 2. Beyond Whole-Body 2D Containment: Foot-Level Contact Modeling
-- **Why Tier B Failed**: Whole-body 2D bounding boxes contain no depth. When a ball is kicked in the air, its 2D projection falls inside the bounding boxes of distant players, driving shirt-color AUC to 0.503 (chance).
-- **Foot-Region Spatial Masking**: Restrict ball-player proximity testing strictly to the bottom 15–20% of the player bounding box (the foot/ground contact zone).
-- **Trajectory & Velocity Alignment**: True possession requires spatial proximity *plus* co-linear velocity vectors: the ball and player must share speed and direction over $\ge 0.5\text{s}$. If the ball velocity exceeds sprinting speed (>8 m/s) or changes vector abruptly without player foot contact, it must be classified as airborne transit.
-
-### 3. Parametric Extrinsics Solver with Hard Physical Priors
-- **Why Homography Failed**: Unconstrained 8-D searches and academic broadcast TV models (PnLCalib) fail on amateur footage because SIFT features latch onto background clutter, inverting the ground plane to a 105m × 105m square.
-- **Physical Parameterization**: We have measured ground-truth priors: camera height $H = 6.71\text{m}$, centre circle radius $R = 9.15\text{m}$, and tilt $\approx 0.87^\circ$. Rather than solving an unconstrained homography, parameterize camera extrinsics strictly via camera height, pitch, roll, yaw, and focal length.
-- **Occupancy-Masked Line Selection**: Mask line-detection algorithms to the convex hull of detected player footprints to strictly ignore adjacent soccer pitches and diagonal auxiliary field markings.
-
-### 4. Architectural Modernization: Ending the Split Brain
-- **The Current Duality**: The codebase is split between `cv_engine.py` (a frozen 580-line heuristic engine reporting `mode: "demo"`) and `ml_ingest.py` (a batch ingestion script reading static JSON files).
-- **Modular Pipeline Runner**: Refactor `backend/src/services/pipeline/` into a unified DAG runner (`MatchPipeline`) that can ingest any uploaded video, run proven detectors, and dynamically generate the `EventCapability` manifest and `AnalyticsData` without hardcoded match ID checks.
-
-### 5. Hermetic Testing & Verification Decoupling
-- **Decouple Tests from `.local/artifacts/`**: Place minimal verified JSON fixtures (`pred_all.json`, `score_all.json`, `manifest_all.json`) in `backend/tests/fixtures/ml/` so tests and CI run hermetically on clean clones without needing gitignored local artifacts.
-- **Non-Interactive Test Suites**: Ensure test commands (such as Vitest) run non-interactively (`vitest run`) in automated and headless environments.
-
----
-
-## Verification
-
-- `bash scripts/local/verify.sh all` → `pass=9 fail=0 skip=0` (d10 added)
-- `backend/.venv/bin/python -m pytest backend/tests -q` → ≥35 passed, and the live DB /
-  media dir unchanged afterwards
-- `bash scripts/remote/doctor.sh` → one JSON line confirming 4 GPUs and the video sha
-- `python scripts/local/score-benchmark.py --job <id>` → per-type table with `n`, chance
-  baseline, macro-F1, micro-F1, parity count, and the period-1/period-2 split; **exits
-  non-zero if the attempted-set manifest is missing**
-- Structural identities on our own output: kickoffs = periods + goals; fouls mirror free
-  kicks; possession% equals the possession-minutes ratio
-- `npm run build` clean; `npm run lint` no new warnings
-
----
-
-## Handoff prompt for Antigravity
-
-Paste this into Antigravity (or run via `agy`, which headless **requires
-`--dangerously-skip-permissions`** or it silently auto-denies every tool and returns
-nothing):
-
-```
-Continue the ai-focus-play Veo-clone project in /home/ai/workspaces/users/jordi/ai-focus-play.
-
-Read these first, in order:
-  1. PLAN.md          <- the plan; start here
-  2. context.md      - verified environment, gpu-box, traps
-  3. OPUS2.md        - what was already fixed and how it was verified
-  4. scripts/README.md - the script contract (<=3 lines out, exit codes are the API)
-
-The governing rule, which overrides convenience everywhere:
-  When a capability is not implemented, SHOW that it is not implemented. An empty
-  state, a dimmed em-dash, or a "not detected" badge is a correct answer. A plausible
-  fabricated number is not. This applies to your own progress reports too.
-
-Start with work package G0, because everything downstream is scored against it:
-  - benchmarks/veo_reference.json is WRONG. Its second-half timestamps are off by up to
-    752 seconds because they were derived from Veo's displayed match clock with guessed
-    offsets. Replace it wholesale with Veo's own 447-event API dump, keyed on
-    video_time_ms, with (period_id, period_time_ms) as canonical. The plan's
-    "How to re-capture it" section has the exact browser procedure and headers.
-    Never commit the Bearer token.
-  - Fix the time base in scripts/config.env: period 1 offset 562, period 2 offset 3674.
-    Halves are 2317.0 s and 2457.7 s, NOT 2400.
-
-Then G1: measure ball-detection recall on a 10-minute slice and publish the number in
-coverage.json whatever it says. The pre-declared go/no-go gate in the plan decides
-whether Tier B is attempted at all. Do not build event detectors before that number
-exists.
-
-Constraints you must respect:
-  - gpu-box needs Tailscale re-auth before any remote work; run scripts/remote/doctor.sh
-    first and stop if it cannot connect.
-  - On gpu-box NEVER call bare `pip` (it is bound to 3.11 while python3 is 3.10). Use the
-    uv-managed 3.12 venv at /workspace/aifp/.venv. torch must be a cu12x wheel.
-  - /workspace is a 64 GB tmpfs: nothing survives a container restart.
-    scripts/remote/restore.sh rebuilds it in one command.
-  - Do NOT extend backend/src/services/pipeline/cv_engine.py. It is frozen as the demo
-    fallback. The real producer is the gpu-box artifact path plus a local ingest.
-  - Frontend work (Track 2 in the plan) is file-disjoint from the GPU work and can
-    proceed in parallel.
-
-Report honestly: status complete | partial | blocked, with the real pasted output of any
-acceptance command you ran. A false "complete" poisons everything downstream.
-```
+1. **No Hardcoded Constants**: No match identifiers, static rosters, or predefined scorelines in analysis scripts.
+2. **Deterministic Evaluation**: Re-running the pipeline on `turo_peira_vs_horta_20260920.mp4` produces identical metric outputs.
+3. **Adversarial Integrity**: Tests assert that `build_ml_analytics()` produces valid non-zero stats without loading any file from `benchmarks/raw/veo_*.json`.
+4. **Continuous Test Suite**: All 100+ pytest tests and vitest tests pass non-interactively.

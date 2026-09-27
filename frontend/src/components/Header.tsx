@@ -127,14 +127,14 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="h-14 bg-[#000000] border-b border-[#141414] px-4 flex items-center justify-between select-none z-30 relative">
-      {/* Left: Hamburger Icon + Stylized veo Logo + Match Title + Mode Badge */}
+      {/* Left: Hamburger Icon + Stylized sea Logo + Match Title + Mode Badge */}
       <div className="flex items-center space-x-4">
         {/* Hamburger 3-line button */}
         <button
           onClick={onOpenBurgerMenu}
           className="p-2 -ml-2 rounded-lg text-white hover:bg-[#1a1a1a] transition focus:outline-none"
-          title="Open Veo Menu"
-          aria-label="Open Veo Menu"
+          title="Open Sea Menu"
+          aria-label="Open Sea Menu"
         >
           <div className="space-y-1 w-4">
             <div className="h-[2px] bg-white rounded-full" />
@@ -143,13 +143,13 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </button>
 
-        {/* Lowercase italic bold veo wordmark */}
+        {/* Lowercase italic bold sea wordmark */}
         <div 
           onClick={onOpenBurgerMenu}
           className="cursor-pointer flex items-center select-none"
         >
           <span className="font-black italic text-2xl tracking-tighter text-white font-sans">
-            veo
+            sea
           </span>
         </div>
 

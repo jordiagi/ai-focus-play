@@ -245,13 +245,13 @@ export const TelestratorCanvas: React.FC<TelestratorProps> = ({
     ctx.font = 'bold 12px sans-serif';
     const mins = Math.floor(currentTime / 60);
     const secs = Math.floor(currentTime % 60);
-    ctx.fillText(`VEO COACH • ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`, 20, exportCanvas.height - 18);
+    ctx.fillText(`SEA COACH • ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`, 20, exportCanvas.height - 18);
 
     try {
       const dataUrl = exportCanvas.toDataURL('image/png');
       const a = document.createElement('a');
       a.href = dataUrl;
-      a.download = `veo-telestration-${Math.round(currentTime)}s.png`;
+      a.download = `sea-telestration-${Math.round(currentTime)}s.png`;
       a.click();
     } catch (err) {
       console.warn('Snapshot download failed:', err);

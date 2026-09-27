@@ -25,6 +25,7 @@ class SocialRecapGenerator:
         match: Match,
         analytics: Optional[Any] = None,
         benchmark: Optional[Dict[str, Any]] = None,
+        acta: Optional[Any] = None,
     ) -> Dict[str, Any]:
         home = match.home_team or "Home Team"
         away = match.away_team or "Away Team"
@@ -108,30 +109,63 @@ class SocialRecapGenerator:
             result_verb = "Tough battle"
             emoji_lead = "👊⚽"
 
+        # Extract goalscorers and incidents from acta or events if provided
+        home_scorers = []
+        away_scorers = []
+        cards_summary = []
+        subs_summary = []
+
+        if not acta and benchmark and "acta" in benchmark:
+            acta = benchmark["acta"]
+        if acta:
+            for g in getattr(acta, "goals", []):
+                s_name = getattr(g, "scorer", "")
+                min_str = f"{getattr(g, 'minute', '')}'"
+                if getattr(g, "team", "") == "home":
+                    home_scorers.append(f"{s_name} ({min_str})")
+                else:
+                    away_scorers.append(f"{s_name} ({min_str})")
+            for c in getattr(acta, "cards", []):
+                c_player = getattr(c, "player", "")
+                c_card = getattr(c, "card", "card")
+                c_min = f"{getattr(c, 'minute', '')}'"
+                cards_summary.append(f"{c_player} [{c_card.upper()} {c_min}]")
+            for s in getattr(acta, "substitutions", []):
+                p_in = getattr(s, "player_in", "")
+                p_out = getattr(s, "player_out", "")
+                s_min = f"{getattr(s, 'minute', '')}'"
+                subs_summary.append(f"IN {p_in} / OUT {p_out} ({s_min})")
+
+        # Dynamic league tag
+        is_catalan = any(k in home.lower() or k in away.lower() for k in ("horta", "turo", "fcf", "catalan"))
+        league_tags = "#FCF #LligaElit #FutbolCat" if is_catalan else "#ECNLSoccer #ECNLBoys"
+
         home_tag = _clean_tag(home)
         away_tag = _clean_tag(away)
 
         # ----------------- 1. SHORT (X / Twitter, max 280 chars) -----------------
-        # Ensure it fits within 280 characters comfortably
+        scorers_line = ""
+        if home_scorers:
+            scorers_line = f"⚽ {', '.join(home_scorers)}"
+
         short_lines = [
             f"FT: {home} {score_h} - {score_a} {away} {emoji_lead}",
             f"{result_verb} on {date_str}!",
-            f"📊 {possession_h}% possession | {attempts_h} attempts",
-            f"🎯 {score_h} goals scored",
-            f"#{home_tag} #ECNLSoccer #Matchday"
+            scorers_line if scorers_line else f"📊 {possession_h}% poss | {attempts_h} attempts",
+            f"#{home_tag} #{away_tag} {league_tags}"
         ]
-        short_text = "\n".join(short_lines)
+        short_text = "\n".join([l for l in short_lines if l.strip()])
         if len(short_text) > 275:
             # Compact fallback
             short_text = (
                 f"FT: {home} {score_h}-{score_a} {away} {emoji_lead}\n"
                 f"{possession_h}% poss | {attempts_h} att | {score_h}G\n"
-                f"#{home_tag} #ECNLSoccer"
+                f"#{home_tag} {league_tags.split()[0]}"
             )
 
         # ----------------- 2. MEDIUM (Instagram / Facebook caption) -----------------
         tactical_sentence = (
-            f"Build-up through the central zone was pivotal ({mid_prog}% central progression) "
+            f"Build-up through the central third was pivotal ({mid_prog}% central progression) "
             f"with {passes_h} completed passes controlling the tempo."
             if mid_prog and passes_h > 0
             else f"With {possession_h}% possession and {attempts_h} total attempts, {home} dictated the game's momentum."
@@ -144,26 +178,53 @@ class SocialRecapGenerator:
             else f"A determined shift all 90 minutes."
         )
 
+        scorers_block = ""
+        if home_scorers or away_scorers:
+            scorers_block = "\n⚽ Goalscorers:\n"
+            if home_scorers:
+                scorers_block += f"• {home}: {', '.join(home_scorers)}\n"
+            if away_scorers:
+                scorers_block += f"• {away}: {', '.join(away_scorers)}\n"
+
+        incidents_block = ""
+        if cards_summary:
+            incidents_block = f"\n🟨 Disciplinary:\n• Cards: {', '.join(cards_summary)}\n"
+
         medium_text = (
             f"{result_verb.upper()}! {emoji_lead}\n\n"
             f"{home} produced an emphatic performance on {date_str}, finishing {score_h} - {score_a} against {away}.\n\n"
-            f"{tactical_sentence} {defensive_sentence}\n\n"
+            f"{tactical_sentence} {defensive_sentence}\n"
+            f"{scorers_block}"
+            f"{incidents_block}\n"
             f"📈 Key Match Stats:\n"
             f"• Score: {score_h} - {score_a}\n"
             f"• Possession: {possession_h}% vs {possession_a}%\n"
             f"• Total Attempts: {attempts_h} vs {attempts_a}\n"
             + (f"• Completed Passes: {passes_h} vs {passes_a}\n" if passes_h > 0 else "")
             + (f"• Tackles Won: {tackles_h} vs {tackles_a}\n" if tackles_h > 0 else "")
-            + f"\n#{home_tag} #{away_tag} #ECNLBoys #SoccerAnalytics #MatchRecap #GameDay"
+            + f"\n#{home_tag} #{away_tag} {league_tags} #SoccerAnalytics #MatchRecap #GameDay"
         )
 
         # ----------------- 3. LONG (Match Report / Newsletter / Press Release) -----------------
+        acta_table = ""
+        if home_scorers or cards_summary or subs_summary:
+            acta_table = f"""
+### Official Match Sheet & Incident Timeline
+| Type | Detail |
+| :--- | :--- |
+| **Goals ({home})** | {', '.join(home_scorers) if home_scorers else 'None'} |
+| **Goals ({away})** | {', '.join(away_scorers) if away_scorers else 'None'} |
+| **Cards** | {', '.join(cards_summary) if cards_summary else 'None'} |
+| **Substitutions** | {'; '.join(subs_summary) if subs_summary else 'None'} |
+"""
+
+        campaign_name = "Lliga Elit" if is_catalan else "ECNL"
         long_text = f"""# MATCH REPORT: {home} vs. {away}
 **Date:** {date_str} | **Final Result:** {home} {score_h} - {score_a} {away}
 
 ### Executive Summary
 {home} delivered a comprehensive tactical display on {date_str}, capturing a {score_h}-{score_a} result against {away}. From the opening kickoff, {home} established authority on the pitch, combining controlled ball retention with incisive attacking transitions.
-
+{acta_table}
 ### Tactical Phase Breakdown
 - **Attacking Organization & Progression:**
   {home} registered {possession_h}% possession and generated {attempts_h} total attempts on goal. {f"Progression through the central third ({mid_prog}%) proved decisive in unlocking the opposition defensive block." if mid_prog else "Controlled tempo and coordinated combination play opened consistent passing lanes."}
@@ -181,7 +242,7 @@ class SocialRecapGenerator:
 | **Tackles** | **{tackles_h if tackles_h > 0 else "—"}** | **{tackles_a if tackles_a > 0 else "—"}** |
 
 ### Coaching Takeaway & Outlook
-"This fixture demonstrated the tactical discipline and collective effort we strive for across the ECNL campaign. Maintaining tempo with the ball while staying resolute in transition gives us the foundation to compete at the highest level."
+"This fixture demonstrated the tactical discipline and collective effort we strive for across the {campaign_name} campaign. Maintaining tempo with the ball while staying resolute in transition gives us the foundation to compete at the highest level."
 """
 
         return {

@@ -187,3 +187,46 @@ def test_detections_endpoint(client):
     # Non-existent match returns 404
     res_404 = client.get("/api/matches/non-existent-match-xyz/detections")
     assert res_404.status_code == 404
+
+def test_teams_endpoints_and_filtering(client):
+    # 1. List teams: should contain Arlington SA U16B by default
+    res = client.get("/api/teams")
+    assert res.status_code == 200
+    teams = res.json()
+    assert len(teams) >= 1
+    default_team = next((t for t in teams if "Arlington" in t["name"]), None)
+    assert default_team is not None
+    assert default_team["matches_count"] >= 1
+
+    # 2. Filter matches by team
+    res_matches = client.get(f"/api/matches?team_id={default_team['id']}")
+    assert res_matches.status_code == 200
+    matches = res_matches.json()
+    assert len(matches) >= 1
+    assert all(m["team_id"] == default_team["id"] for m in matches)
+
+    # 3. Create a new team
+    create_res = client.post("/api/teams", json={"name": "McLean Youth Soccer", "club_name": "McLean SC"})
+    assert create_res.status_code == 200
+    new_team = create_res.json()
+    assert new_team["name"] == "McLean Youth Soccer"
+    assert new_team["matches_count"] == 0
+
+    # Verify newly created team is listed
+    res2 = client.get("/api/teams")
+    teams2 = res2.json()
+    assert any(t["id"] == new_team["id"] for t in teams2)
+
+    # Filter matches for the new team (should be empty initially)
+    res_empty = client.get(f"/api/matches?team_id={new_team['id']}")
+    assert res_empty.status_code == 200
+    assert len(res_empty.json()) == 0
+
+    # 4. Delete the team
+    del_res = client.delete(f"/api/teams/{new_team['id']}")
+    assert del_res.status_code == 200
+
+    # Verify team is no longer in list
+    res3 = client.get("/api/teams")
+    assert not any(t["id"] == new_team["id"] for t in res3.json())
+

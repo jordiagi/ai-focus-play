@@ -88,7 +88,7 @@ if [ -n "$VIDEO_PATH" ]; then
     log "local video provided: $VIDEO_PATH"
     # Set LOCAL_VIDEO and run push-video
     LOCAL_VIDEO="$VIDEO_PATH"
-    bash "$SCRIPTS_DIR/remote/push-video.sh"
+    bash "$SCRIPTS_DIR/remote/push-video.sh" "$VIDEO_PATH"
   else
     # Assume it's a remote path
     REMOTE_TARGET="$VIDEO_PATH"

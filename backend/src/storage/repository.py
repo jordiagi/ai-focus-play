@@ -8,12 +8,12 @@ from sqlalchemy.orm import Session
 from backend.src.config import READ_ONLY, MEDIA_DIR
 from backend.src.storage.database import (
     engine, SessionLocal, init_db,
-    MatchDB, HighlightDB, EventDB, DrawingDB, LineupPlayerDB, RadarFrameDB, AnalyticsDB, ClubDB, JobDB
+    MatchDB, HighlightDB, EventDB, DrawingDB, LineupPlayerDB, RadarFrameDB, AnalyticsDB, ClubDB, TeamDB, JobDB
 )
 from backend.src.domain.models.match import (
     Match, Highlight, Event, Drawing, RadarFrame, RadarPlayer, RadarBall,
     ShotRecord, TeamStats, AnalyticsData, PlayerRoster, EventCapability,
-    default_event_capabilities
+    default_event_capabilities, Team
 )
 
 logger = logging.getLogger("repository")
@@ -51,9 +51,12 @@ class MatchRepository:
         return SessionLocal()
 
     # Matches
-    def list_matches(self) -> List[Match]:
+    def list_matches(self, team_id: Optional[str] = None) -> List[Match]:
         with self.get_db() as db:
-            db_matches = db.query(MatchDB).order_by(MatchDB.created_at.desc()).all()
+            query = db.query(MatchDB)
+            if team_id:
+                query = query.filter(MatchDB.team_id == team_id)
+            db_matches = query.order_by(MatchDB.created_at.desc()).all()
             return [self._match_db_to_domain(db, m) for m in db_matches]
 
     def get_match(self, match_id: str) -> Optional[Match]:
@@ -70,6 +73,7 @@ class MatchRepository:
                 existing.title = match.title
                 existing.home_team = match.home_team
                 existing.away_team = match.away_team
+                existing.team_id = match.team_id
                 existing.home_score = match.home_score
                 existing.away_score = match.away_score
                 existing.date = match.date
@@ -93,6 +97,7 @@ class MatchRepository:
                     title=match.title,
                     home_team=match.home_team,
                     away_team=match.away_team,
+                    team_id=match.team_id,
                     home_score=match.home_score,
                     away_score=match.away_score,
                     date=match.date,
@@ -115,9 +120,9 @@ class MatchRepository:
                 db.add(db_m)
             if match.lineup:
                 db.query(LineupPlayerDB).filter(LineupPlayerDB.match_id == match.id).delete()
-                for p in match.lineup:
+                for idx, p in enumerate(match.lineup):
                     db.add(LineupPlayerDB(
-                        id=f"{match.id}_{p.jersey}",
+                        id=f"{match.id}_{p.jersey}_{idx}",
                         match_id=match.id,
                         jersey=p.jersey,
                         name=p.name,
@@ -232,6 +237,32 @@ class MatchRepository:
                 db.delete(h)
                 db.commit()
 
+    def set_highlights(self, match_id: str, highlights: List[Highlight], *, internal: bool = False):
+        if READ_ONLY and not internal:
+            raise PermissionError("Read-only mode: Setting highlights is disabled.")
+        with self.get_db() as db:
+            db.query(HighlightDB).filter(HighlightDB.match_id == match_id).delete()
+            for h in highlights:
+                db.add(HighlightDB(
+                    id=h.id,
+                    match_id=match_id,
+                    title=h.title,
+                    event_type=h.event_type,
+                    start_time=h.start_time,
+                    end_time=h.end_time,
+                    period=h.period,
+                    team=h.team,
+                    player_jersey=h.player_jersey,
+                    player_name=h.player_name,
+                    thumbnail_url=h.thumbnail_url,
+                    clip_url=h.clip_url,
+                    is_ai_detected=h.is_ai_detected,
+                    tags=json.dumps(h.tags),
+                    comments_count=h.comments_count,
+                    created_at=h.created_at
+                ))
+            db.commit()
+
     # Events
     def get_events(self, match_id: str) -> List[Event]:
         with self.get_db() as db:
@@ -294,9 +325,9 @@ class MatchRepository:
     def set_lineup(self, match_id: str, lineup: List[PlayerRoster]):
         with self.get_db() as db:
             db.query(LineupPlayerDB).filter(LineupPlayerDB.match_id == match_id).delete()
-            for p in lineup:
+            for idx, p in enumerate(lineup):
                 db.add(LineupPlayerDB(
-                    id=f"{match_id}_{p.jersey}",
+                    id=f"{match_id}_{p.jersey}_{idx}",
                     match_id=match_id,
                     jersey=p.jersey,
                     name=p.name,
@@ -568,6 +599,118 @@ class MatchRepository:
                 "error": j.error
             }
 
+    # Teams
+    def list_teams(self) -> List[Team]:
+        with self.get_db() as db:
+            db_teams = db.query(TeamDB).order_by(TeamDB.created_at.asc()).all()
+            result = []
+            for t in db_teams:
+                count = db.query(MatchDB).filter(MatchDB.team_id == t.id).count()
+                result.append(Team(
+                    id=t.id,
+                    name=t.name,
+                    club_name=t.club_name,
+                    federation_url=getattr(t, "federation_url", None),
+                    matches_count=count,
+                    created_at=t.created_at
+                ))
+            return result
+
+    def get_team(self, team_id: str) -> Optional[Team]:
+        with self.get_db() as db:
+            t = db.query(TeamDB).filter(TeamDB.id == team_id).first()
+            if not t:
+                return None
+            count = db.query(MatchDB).filter(MatchDB.team_id == t.id).count()
+            return Team(
+                id=t.id,
+                name=t.name,
+                club_name=t.club_name,
+                federation_url=getattr(t, "federation_url", None),
+                matches_count=count,
+                created_at=t.created_at
+            )
+
+    def create_team(
+        self,
+        name: str,
+        club_name: Optional[str] = "Arlington Soccer",
+        federation_url: Optional[str] = None
+    ) -> Team:
+        import uuid
+        with self.get_db() as db:
+            cleaned_name = name.strip()
+            existing = db.query(TeamDB).filter(TeamDB.name == cleaned_name).first()
+            if existing:
+                if federation_url and not existing.federation_url:
+                    existing.federation_url = federation_url.strip()
+                    db.commit()
+                count = db.query(MatchDB).filter(MatchDB.team_id == existing.id).count()
+                return Team(
+                    id=existing.id,
+                    name=existing.name,
+                    club_name=existing.club_name,
+                    federation_url=getattr(existing, "federation_url", None),
+                    matches_count=count,
+                    created_at=existing.created_at
+                )
+            team_id = f"team-{uuid.uuid4().hex[:8]}"
+            db_team = TeamDB(
+                id=team_id,
+                name=cleaned_name,
+                club_name=(club_name or "Arlington Soccer").strip(),
+                federation_url=federation_url.strip() if federation_url else None,
+                created_at=time.time()
+            )
+            db.add(db_team)
+            db.commit()
+            return Team(
+                id=db_team.id,
+                name=db_team.name,
+                club_name=db_team.club_name,
+                federation_url=getattr(db_team, "federation_url", None),
+                matches_count=0,
+                created_at=db_team.created_at
+            )
+
+    def update_team(
+        self,
+        team_id: str,
+        name: Optional[str] = None,
+        club_name: Optional[str] = None,
+        federation_url: Optional[str] = None
+    ) -> Optional[Team]:
+        with self.get_db() as db:
+            t = db.query(TeamDB).filter(TeamDB.id == team_id).first()
+            if not t:
+                return None
+            if name is not None:
+                t.name = name.strip()
+            if club_name is not None:
+                t.club_name = club_name.strip()
+            if federation_url is not None:
+                t.federation_url = federation_url.strip() if federation_url.strip() else None
+            db.commit()
+            count = db.query(MatchDB).filter(MatchDB.team_id == t.id).count()
+            return Team(
+                id=t.id,
+                name=t.name,
+                club_name=t.club_name,
+                federation_url=getattr(t, "federation_url", None),
+                matches_count=count,
+                created_at=t.created_at
+            )
+
+    def delete_team(self, team_id: str) -> bool:
+        with self.get_db() as db:
+            t = db.query(TeamDB).filter(TeamDB.id == team_id).first()
+            if not t:
+                return False
+            db.query(MatchDB).filter(MatchDB.team_id == team_id).update({"team_id": "arlington-sa-u16b"})
+            db.delete(t)
+            db.commit()
+            return True
+
     def _match_db_to_domain(self, db: Session, m: MatchDB) -> Match:
         # An absent/unreadable surface falls back to the heuristic defaults rather than
         # to an empty dict: an empty surface would read as "nothing is even attempted",
@@ -598,6 +741,7 @@ class MatchRepository:
             title=m.title,
             home_team=m.home_team,
             away_team=m.away_team,
+            team_id=getattr(m, 'team_id', None),
             home_score=m.home_score,
             away_score=m.away_score,
             date=m.date,
@@ -640,6 +784,8 @@ class MatchRepository:
         with self.get_db() as db:
             demo_m = db.query(MatchDB).filter(MatchDB.id == default_id).first()
             if demo_m:
+                if not demo_m.team_id:
+                    demo_m.team_id = "arlington-sa-u16b"
                 if demo_m.analysis_mode != "demo":
                     demo_m.analysis_mode = "demo"
                 # Strip invented names from existing demo match rows in case DB was pre-seeded
@@ -670,6 +816,7 @@ class MatchRepository:
                 title="Arlington SA U16B ECNL (26-27) vs. Skyline U16B ECNL",
                 home_team="Arlington SA U16B ECNL",
                 away_team="Skyline U16B ECNL",
+                team_id="arlington-sa-u16b",
                 home_score=3,
                 away_score=3,
                 date="Sep 13, 2026",

@@ -1,0 +1,74 @@
+{
+  "federation": "FCF",
+  "competition": "Lliga Elit - Grup 1",
+  "matchday": 1,
+  "season": "2026/2027",
+  "date": "2026-09-20",
+  "match_code": "26leg1j01",
+  "source_url": "https://www.fcf.cat/club/2425/turo-peira-ccd",
+  "home_team": {
+    "name": "UA Horta",
+    "club_name": "Unió Atlètica d'Horta",
+    "score": 2,
+    "coach": "Juan Camilo Vázquez",
+    "lineup": [
+      {"jersey": "1", "name": "León", "position": "GK", "is_starter": true},
+      {"jersey": "2", "name": "Guillem Josa", "position": "DEF", "is_starter": true},
+      {"jersey": "3", "name": "Arnau Pou", "position": "DEF", "is_starter": true},
+      {"jersey": "4", "name": "Éric Bezis", "position": "DEF", "is_starter": true},
+      {"jersey": "5", "name": "David Nogales", "position": "MID", "is_starter": true},
+      {"jersey": "6", "name": "Íker Oltra", "position": "MID", "is_starter": true},
+      {"jersey": "7", "name": "Jordi Montesinos", "position": "FWD", "is_starter": true},
+      {"jersey": "8", "name": "Pedrola", "position": "MID", "is_starter": true},
+      {"jersey": "9", "name": "Álex Montalbán", "position": "FWD", "is_starter": true},
+      {"jersey": "10", "name": "Rubén", "position": "MID", "is_starter": true},
+      {"jersey": "11", "name": "Pedrol", "position": "FWD", "is_starter": true},
+      {"jersey": "12", "name": "Pol Ibáñez", "position": "MID", "is_starter": false},
+      {"jersey": "14", "name": "Borrego", "position": "FWD", "is_starter": false},
+      {"jersey": "15", "name": "Pau Bertran", "position": "DEF", "is_starter": false},
+      {"jersey": "16", "name": "Maha Samajari", "position": "MID", "is_starter": false},
+      {"jersey": "17", "name": "Marc García", "position": "DEF", "is_starter": false},
+      {"jersey": "18", "name": "Lamine", "position": "FWD", "is_starter": false}
+    ]
+  },
+  "away_team": {
+    "name": "CCD Turó de la Peira",
+    "club_name": "CCD Turó de la Peira",
+    "score": 0,
+    "coach": "Manu Gracia",
+    "lineup": [
+      {"jersey": "1", "name": "Íker", "position": "GK", "is_starter": true},
+      {"jersey": "2", "name": "Marc Muñoz", "position": "DEF", "is_starter": true},
+      {"jersey": "3", "name": "Roger Arnau", "position": "DEF", "is_starter": true},
+      {"jersey": "4", "name": "Gerard Nieto", "position": "DEF", "is_starter": true},
+      {"jersey": "5", "name": "Dowi", "position": "DEF", "is_starter": true},
+      {"jersey": "6", "name": "Josué", "position": "MID", "is_starter": true},
+      {"jersey": "7", "name": "Anthony Ventura", "position": "FWD", "is_starter": true},
+      {"jersey": "8", "name": "Juan Valverde", "position": "MID", "is_starter": true},
+      {"jersey": "9", "name": "Hugo Saban", "position": "FWD", "is_starter": true},
+      {"jersey": "10", "name": "Biel", "position": "MID", "is_starter": true},
+      {"jersey": "11", "name": "Damián Obispo", "position": "FWD", "is_starter": true},
+      {"jersey": "14", "name": "Marc Rojas", "position": "MID", "is_starter": false},
+      {"jersey": "15", "name": "Yago", "position": "DEF", "is_starter": false},
+      {"jersey": "16", "name": "Max Espígol", "position": "MID", "is_starter": false}
+    ]
+  },
+  "goals": [
+    {"minute": 18, "team": "home", "scorer": "Álex Montalbán", "jersey": "9", "detail": "Rebound in penalty box"},
+    {"minute": 62, "team": "home", "scorer": "Jordi Montesinos", "jersey": "7", "detail": "Direct lateral free kick"}
+  ],
+  "cards": [
+    {"minute": 34, "team": "away", "player": "Gerard Nieto", "jersey": "4", "card": "yellow"},
+    {"minute": 58, "team": "home", "player": "David Nogales", "jersey": "5", "card": "yellow"},
+    {"minute": 71, "team": "away", "player": "Max Espígol", "jersey": "16", "card": "yellow"}
+  ],
+  "substitutions": [
+    {"minute": 60, "team": "home", "player_in": "Pol Ibáñez", "jersey_in": "12", "player_out": "Pedrola", "jersey_out": "8"},
+    {"minute": 65, "team": "away", "player_in": "Max Espígol", "jersey_in": "16", "player_out": "Josué", "jersey_out": "6"},
+    {"minute": 72, "team": "away", "player_in": "Marc Rojas", "jersey_in": "14", "player_out": "Biel", "jersey_out": "10"},
+    {"minute": 78, "team": "home", "player_in": "Pau Bertran", "jersey_in": "15", "player_out": "Guillem Josa", "jersey_out": "2"}
+  ],
+  "incidents": [
+    {"minute": 68, "team": "away", "type": "penalty_missed", "player": "Hugo Saban", "jersey": "9"}
+  ]
+}

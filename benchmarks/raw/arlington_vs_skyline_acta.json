@@ -1,0 +1,38 @@
+{
+  "federation": "ECNL",
+  "competition": "ECNL Boys - Mid-Atlantic Conference",
+  "season": "2026/2027",
+  "date": "2026-09-12",
+  "source_url": "https://theecnl.com/sports/mbkb",
+  "home_team": {
+    "name": "Arlington SA U16B",
+    "club_name": "Arlington Soccer Association",
+    "score": 3,
+    "lineup": [
+      {"jersey": "1", "name": "Ethan Cole", "position": "GK", "is_starter": true},
+      {"jersey": "4", "name": "Lucas Vance", "position": "DEF", "is_starter": true},
+      {"jersey": "7", "name": "Anthony Ventura", "position": "FWD", "is_starter": true, "is_player_of_match": true},
+      {"jersey": "10", "name": "Michael Morales", "position": "MID", "is_starter": true, "is_captain": true},
+      {"jersey": "11", "name": "David Silva", "position": "FWD", "is_starter": true},
+      {"jersey": "18", "name": "Diego Ramos", "position": "MID", "is_starter": true}
+    ]
+  },
+  "away_team": {
+    "name": "Skyline City FC",
+    "club_name": "Skyline City FC",
+    "score": 3,
+    "lineup": [
+      {"jersey": "1", "name": "Mateo Rossi", "position": "GK", "is_starter": true},
+      {"jersey": "9", "name": "Marcus Chen", "position": "FWD", "is_starter": true},
+      {"jersey": "10", "name": "Lucas Silva", "position": "MID", "is_starter": true}
+    ]
+  },
+  "goals": [
+    {"minute": 14, "team": "home", "scorer": "Anthony Ventura", "jersey": "7"},
+    {"minute": 32, "team": "away", "scorer": "Marcus Chen", "jersey": "9"},
+    {"minute": 45, "team": "home", "scorer": "Michael Morales", "jersey": "10"},
+    {"minute": 58, "team": "away", "scorer": "Lucas Silva", "jersey": "10"},
+    {"minute": 74, "team": "home", "scorer": "Anthony Ventura", "jersey": "7"},
+    {"minute": 88, "team": "away", "scorer": "Marcus Chen", "jersey": "9"}
+  ]
+}

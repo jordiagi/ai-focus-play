@@ -140,15 +140,16 @@ STATS_UNAVAILABLE: Dict[str, str] = {
 
 
 def build_ml_analytics(pred: Dict[str, Any], manifest: Dict[str, Any],
-                        score: Dict[str, Any]) -> AnalyticsData:
+                       score: Dict[str, Any],
+                       turf_analytics: Optional[Dict[str, Any]] = None) -> AnalyticsData:
     """Build an ML-provenance `AnalyticsData` from the mosaic prediction set.
 
     `manifest` and `score` are accepted (and part of the public signature the
     acceptance harness calls) for parity with `ml_ingest.build()` and so a caller
-    already has them on hand -- the two counted rows here come from `pred` alone,
-    since `FootballGoal` and `FootballThrowIn` are the only types that both fill a
-    `TeamStats` field and clear their own control (see the module docstring). Every
-    other row is filled with its measured reason from `STATS_UNAVAILABLE`.
+    already has them on hand. When `turf_analytics` is provided (from the Phase 2
+    turf possession & pass detection engine), real measured possession percentages,
+    possession minutes, pass strings, and thirds breakdowns are populated directly
+    from computer vision tracking.
     """
     counts: Dict[str, Dict[str, int]] = {"home": {}, "away": {}}
     for p in pred.get("events", []):
@@ -164,10 +165,14 @@ def build_ml_analytics(pred: Dict[str, Any], manifest: Dict[str, Any],
 
     def _team_stats(side: str) -> TeamStats:
         c = counts[side]
-        # `goals` and `throw_ins` are carried so the count is not lost, but BOTH are
-        # listed in `unavailable` and therefore render as an em-dash. See
-        # _SCOREBOARD_SHAPED below for why a detection count must not be served into
-        # a match-statistics row.
+        poss_pct = 50.0
+        poss_min = 0.0
+        passes = None
+        if turf_analytics:
+            poss_pct = float(turf_analytics.get("possession_percent", {}).get(side, 50.0))
+            poss_min = float(turf_analytics.get("possession_minutes", {}).get(side, 0.0))
+            passes = turf_analytics.get("passes_completed", {}).get(side)
+
         return TeamStats(
             goals=c.get("goals", 0),
             shots=0,
@@ -178,20 +183,34 @@ def build_ml_analytics(pred: Dict[str, Any], manifest: Dict[str, Any],
             fouls=None,
             penalties=None,
             tackles=None,
-            passes_completed=None,
-            possession_percent=50.0,
-            possession_minutes=0.0,
+            passes_completed=passes,
+            possession_percent=poss_pct,
+            possession_minutes=poss_min,
             possession_won=None,
         )
+
+    unavail = {**STATS_UNAVAILABLE, **_SCOREBOARD_SHAPED}
+    pass_locs = {"home": {}, "away": {}}
+    poss_locs = {"home": {}, "away": {}}
+    pass_strs = {"home": [], "away": []}
+
+    if turf_analytics:
+        # Measured by TurfPossessionEngine: remove from unavailable
+        unavail.pop("possession_percent", None)
+        unavail.pop("possession_minutes", None)
+        unavail.pop("passes_completed", None)
+        pass_locs = turf_analytics.get("pass_locations", pass_locs)
+        poss_locs = turf_analytics.get("possession_locations", poss_locs)
+        pass_strs = turf_analytics.get("pass_strings", pass_strs)
 
     return AnalyticsData(
         home_stats=_team_stats("home"),
         away_stats=_team_stats("away"),
         shot_map=[],
-        pass_locations={"home": {}, "away": {}},
-        possession_locations={"home": {}, "away": {}},
-        pass_strings={"home": [], "away": []},
+        pass_locations=pass_locs,
+        possession_locations=poss_locs,
+        pass_strings=pass_strs,
         heatmaps={"home": [], "away": []},
         provenance="ml",
-        unavailable={**STATS_UNAVAILABLE, **_SCOREBOARD_SHAPED},
+        unavailable=unavail,
     )

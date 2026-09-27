@@ -349,9 +349,16 @@ def d6_zip_streaming():
             # junk matches because the test suite is not isolated from it (defect 9).
             mid = None
             for m in matches:
-                c, hb = s.req("GET", f"/api/matches/{m['id']}/highlights")
-                if c == 200 and json.loads(hb):
-                    mid = m["id"]; break
+                if m["id"] == "demo-arlington-skyline":
+                    mid = m["id"]
+                    break
+            if mid is None:
+                for m in matches:
+                    c, hb = s.req("GET", f"/api/matches/{m['id']}/highlights")
+                    if c == 200:
+                        hls = json.loads(hb)
+                        if any(h.get("clip_url") for h in hls):
+                            mid = m["id"]; break
             if mid is None:
                 return "SKIP", "no match with highlights to export"
             code, body = s.req("GET", f"/api/matches/{mid}/highlights/export")

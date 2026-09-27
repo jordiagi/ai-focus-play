@@ -1,6 +1,7 @@
 import json
 import logging
 import sqlite3
+import time
 from typing import List, Dict, Any, Optional
 from sqlalchemy import (
     create_engine, Column, String, Integer, Float, Boolean, Text, ForeignKey, Index, event, text, inspect
@@ -34,6 +35,7 @@ class MatchDB(Base):
     title = Column(String, nullable=False)
     home_team = Column(String, nullable=False)
     away_team = Column(String, nullable=False)
+    team_id = Column(String, nullable=True, index=True)
     home_score = Column(Integer, default=0)
     away_score = Column(Integer, default=0)
     date = Column(String, nullable=False)
@@ -168,6 +170,15 @@ class ClubDB(Base):
     teams_count = Column(Integer, default=140)
     crest_url = Column(String, nullable=True)
 
+class TeamDB(Base):
+    __tablename__ = "teams"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=False, unique=True)
+    club_name = Column(String, default="Arlington Soccer")
+    federation_url = Column(String, nullable=True)
+    created_at = Column(Float, nullable=False)
+
 class JobDB(Base):
     __tablename__ = "jobs"
 
@@ -214,7 +225,6 @@ def _reconcile_indexes():
 
 def init_db():
     Base.metadata.create_all(bind=engine)
-    _reconcile_indexes()
     # Check for missing columns on existing tables (lightweight migration)
     try:
         with engine.connect() as conn:
@@ -229,6 +239,9 @@ def init_db():
             if "event_capabilities" not in columns:
                 conn.execute(text("ALTER TABLE matches ADD COLUMN event_capabilities TEXT"))
                 conn.commit()
+            if "team_id" not in columns:
+                conn.execute(text("ALTER TABLE matches ADD COLUMN team_id VARCHAR"))
+                conn.commit()
             
             # Check events table for confidence column
             res_ev = conn.execute(text("PRAGMA table_info(events)"))
@@ -236,7 +249,34 @@ def init_db():
             if "confidence" not in ev_columns:
                 conn.execute(text("ALTER TABLE events ADD COLUMN confidence FLOAT DEFAULT 0.8"))
                 conn.commit()
+
+            # Check teams table for federation_url column
+            res_tm = conn.execute(text("PRAGMA table_info(teams)"))
+            tm_columns = [row[1] for row in res_tm.fetchall()]
+            if "federation_url" not in tm_columns:
+                conn.execute(text("ALTER TABLE teams ADD COLUMN federation_url VARCHAR"))
+                conn.commit()
+
+            # Seed default team if teams table is empty
+            res_teams = conn.execute(text("SELECT count(*) FROM teams"))
+            if res_teams.scalar() == 0:
+                conn.execute(
+                    text("INSERT INTO teams (id, name, club_name, federation_url, created_at) VALUES ('arlington-sa-u16b', 'Arlington SA U16B', 'Arlington Soccer', 'https://theecnl.com/sports/mbkb', :now)"),
+                    {"now": time.time()}
+                )
+                conn.commit()
+
+            # Ensure Arlington SA U16B has federation_url set
+            conn.execute(text("UPDATE teams SET federation_url = 'https://theecnl.com/sports/mbkb' WHERE id = 'arlington-sa-u16b' AND (federation_url IS NULL OR federation_url = '')"))
+            # Ensure Turo has federation_url set
+            conn.execute(text("UPDATE teams SET federation_url = 'https://www.fcf.cat/club/2425/turo-peira-ccd' WHERE (id = 'team-b0b92e48' OR name LIKE '%Turo%') AND (federation_url IS NULL OR federation_url = '')"))
+            conn.commit()
+
+            # Backfill existing matches with default team id if empty
+            conn.execute(text("UPDATE matches SET team_id = 'arlington-sa-u16b' WHERE team_id IS NULL OR team_id = ''"))
+            conn.commit()
     except Exception as e:
         logger.warning(f"Database migration check notice: {e}")
 
+    _reconcile_indexes()
     logger.info(f"Initialized SQLite database at {DB_PATH}")

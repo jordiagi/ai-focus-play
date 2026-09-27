@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Video, Users, Camera, User, AtSign, BarChart2, Settings, 
   HelpCircle, ChevronDown, X, Check
 } from 'lucide-react';
-import { Match } from '../types';
+import { Match, Team } from '../types';
+import { TeamsModal } from './TeamsModal';
 
 interface BurgerMenuProps {
   isOpen: boolean;
@@ -13,6 +14,13 @@ interface BurgerMenuProps {
   onSelectMatch: (match: Match) => void;
   onOpenAnalytics: () => void;
   onOpenPlayerMoments: () => void;
+  teams?: Team[];
+  selectedTeam?: Team | null;
+  onSelectTeam?: (team: Team) => void;
+  onCreateTeam?: (name: string, clubName?: string, federationUrl?: string) => Promise<Team | void>;
+  onUpdateTeam?: (teamId: string, data: { name?: string; club_name?: string; federation_url?: string }) => Promise<Team | void>;
+  onDeleteTeam?: (teamId: string) => Promise<void>;
+  onOpenUpload?: (preselectedTeam?: Team) => void;
 }
 
 export const BurgerMenu: React.FC<BurgerMenuProps> = ({
@@ -23,13 +31,39 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
   onSelectMatch,
   onOpenAnalytics,
   onOpenPlayerMoments,
+  teams = [],
+  selectedTeam = null,
+  onSelectTeam,
+  onCreateTeam,
+  onUpdateTeam,
+  onDeleteTeam,
+  onOpenUpload,
 }) => {
-  const [showClubModal, setShowClubModal] = useState(false);
+  const [showTeamsModal, setShowTeamsModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showVeoCamsModal, setShowVeoCamsModal] = useState(false);
+  const [showSeaCamsModal, setShowSeaCamsModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showMentionsModal, setShowMentionsModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+
+  // Derive crest abbreviation for active team
+  const crestInitials = useMemo(() => {
+    const name = selectedTeam?.name || 'Arlington Soccer';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 3) return (parts[0][0] + parts[1][0] + parts[2][0]).toUpperCase();
+    if (parts.length === 2) return (parts[0][0] + parts[1].slice(0, 2)).toUpperCase();
+    return name.slice(0, 3).toUpperCase();
+  }, [selectedTeam]);
+
+  // Compute matches count for selected team
+  const selectedTeamMatchCount = useMemo(() => {
+    if (!selectedTeam) return matches.length;
+    return matches.filter(m => {
+      if (m.team_id) return m.team_id === selectedTeam.id;
+      return m.home_team.toLowerCase().includes(selectedTeam.name.toLowerCase()) ||
+             selectedTeam.name.toLowerCase().includes(m.home_team.toLowerCase());
+    }).length;
+  }, [matches, selectedTeam]);
 
   if (!isOpen) return null;
 
@@ -57,34 +91,39 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
             </div>
           </button>
 
-          {/* Stylized Veo Logo */}
+          {/* Stylized Sea Logo */}
           <div className="flex items-center space-x-1 cursor-pointer" onClick={onClose}>
             <span className="font-extrabold italic text-2xl tracking-tighter text-white font-sans">
-              veo
+              sea
             </span>
           </div>
         </div>
 
         {/* Drawer Body */}
         <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
-          {/* Club Switcher Card */}
+          {/* Club / Team Switcher Card */}
           <div
-            onClick={() => setShowClubModal(true)}
+            onClick={() => setShowTeamsModal(true)}
             className="flex items-center justify-between p-2.5 rounded-xl hover:bg-[#141414] cursor-pointer transition border border-transparent hover:border-[#222]"
+            title="Manage and switch teams"
           >
-            <div className="flex items-center space-x-3">
-              {/* Arlington Soccer Crest */}
+            <div className="flex items-center space-x-3 min-w-0 flex-1">
+              {/* Crest Badge */}
               <div className="w-10 h-10 rounded-lg bg-white p-0.5 flex items-center justify-center overflow-hidden shrink-0 shadow">
                 <div className="w-full h-full rounded-md bg-[#002d62] flex items-center justify-center font-black text-[9px] text-white border border-[#c41230]">
-                  ARL
+                  {crestInitials}
                 </div>
               </div>
-              <div>
-                <div className="text-sm font-bold text-white tracking-tight">Arlington Soccer</div>
-                <div className="text-xs text-[#8e8e8e]">140 Teams</div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold text-white tracking-tight truncate">
+                  {selectedTeam?.name || 'Arlington Soccer'}
+                </div>
+                <div className="text-xs text-[#8e8e8e]">
+                  {selectedTeamMatchCount} {selectedTeamMatchCount === 1 ? 'Game' : 'Games'} • {teams.length} {teams.length === 1 ? 'Team' : 'Teams'}
+                </div>
               </div>
             </div>
-            <ChevronDown className="w-4 h-4 text-[#8e8e8e]" />
+            <ChevronDown className="w-4 h-4 text-[#8e8e8e] shrink-0" />
           </div>
 
           <div className="h-[1px] bg-[#1a1a1a]" />
@@ -93,9 +132,9 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
           <nav className="space-y-1">
             <button
               onClick={() => {
-                setShowClubModal(true);
+                setShowTeamsModal(true);
               }}
-              className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-[#141414] hover:text-white transition font-normal"
+              className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-[#141414] hover:text-white transition font-normal cursor-pointer"
             >
               <Video className="w-4 h-4 text-gray-400" />
               <span>Library</span>
@@ -103,20 +142,20 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
 
             <button
               onClick={() => {
-                setShowClubModal(true);
+                setShowTeamsModal(true);
               }}
-              className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-[#141414] hover:text-white transition font-normal"
+              className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-[#141414] hover:text-white transition font-normal cursor-pointer"
             >
               <Users className="w-4 h-4 text-gray-400" />
               <span>Teams</span>
             </button>
 
             <button
-              onClick={() => setShowVeoCamsModal(true)}
-              className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-[#141414] hover:text-white transition font-normal"
+              onClick={() => setShowSeaCamsModal(true)}
+              className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-[#141414] hover:text-white transition font-normal cursor-pointer"
             >
               <Camera className="w-4 h-4 text-gray-400" />
-              <span>Veo Cams</span>
+              <span>Sea Cams</span>
             </button>
           </nav>
 
@@ -129,7 +168,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
                 onOpenPlayerMoments();
                 onClose();
               }}
-              className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-[#141414] hover:text-white transition font-normal"
+              className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-[#141414] hover:text-white transition font-normal cursor-pointer"
             >
               <Video className="w-4 h-4 text-gray-400" />
               <span>Player Moments</span>
@@ -137,7 +176,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
 
             <button
               onClick={() => setShowProfileModal(true)}
-              className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-[#141414] hover:text-white transition font-normal"
+              className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-[#141414] hover:text-white transition font-normal cursor-pointer"
             >
               <User className="w-4 h-4 text-gray-400" />
               <span>Player Profile</span>
@@ -154,10 +193,10 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
 
           <div className="h-[1px] bg-[#1a1a1a]" />
 
-          {/* More From Veo Section */}
+          {/* More From Sea Section */}
           <div>
             <div className="px-3 pt-2 pb-1 text-[11px] font-semibold tracking-wider text-[#6e6e6e] uppercase">
-              More From Veo
+              More From Sea
             </div>
 
             <nav className="space-y-1">
@@ -200,58 +239,49 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
         </div>
       </aside>
 
-      {/* Modal: Club & Teams Switcher */}
-      {showClubModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
-          <div className="bg-[#12141a] border border-[#262c3b] w-full max-w-md rounded-2xl p-5 shadow-2xl text-white">
-            <div className="flex items-center justify-between mb-4 border-b border-[#222] pb-3">
-              <h3 className="text-base font-bold">Arlington Soccer (140 Teams)</h3>
-              <button onClick={() => setShowClubModal(false)} className="text-gray-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="space-y-2 max-h-72 overflow-y-auto">
-              {matches.map(m => (
-                <div
-                  key={m.id}
-                  onClick={() => {
-                    onSelectMatch(m);
-                    setShowClubModal(false);
-                    onClose();
-                  }}
-                  className={`p-3 rounded-xl cursor-pointer flex items-center justify-between transition ${
-                    m.id === currentMatch?.id ? 'bg-[#202634] border border-[#00E676]/40' : 'bg-[#181c25] hover:bg-[#1e2330]'
-                  }`}
-                >
-                  <div>
-                    <div className="text-xs font-bold text-white">{m.title}</div>
-                    <div className="text-[11px] text-gray-400">{m.date} • {m.home_score} - {m.away_score}</div>
-                  </div>
-                  {m.id === currentMatch?.id && <Check className="w-4 h-4 text-[#00E676]" />}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal: Teams & Match Folders */}
+      <TeamsModal
+        isOpen={showTeamsModal}
+        onClose={() => setShowTeamsModal(false)}
+        teams={teams}
+        selectedTeam={selectedTeam}
+        matches={matches}
+        currentMatch={currentMatch}
+        onSelectTeam={(team) => {
+          onSelectTeam?.(team);
+        }}
+        onSelectMatch={(match) => {
+          onSelectMatch(match);
+          setShowTeamsModal(false);
+          onClose();
+        }}
+        onCreateTeam={onCreateTeam || (async () => {})}
+        onUpdateTeam={onUpdateTeam}
+        onDeleteTeam={onDeleteTeam || (async () => {})}
+        onOpenUpload={(team) => {
+          setShowTeamsModal(false);
+          onClose();
+          onOpenUpload?.(team);
+        }}
+      />
 
-      {/* Modal: Veo Cams Hardware */}
-      {showVeoCamsModal && (
+      {/* Modal: Sea Cams Hardware */}
+      {showSeaCamsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
           <div className="bg-[#12141a] border border-[#262c3b] w-full max-w-md rounded-2xl p-5 shadow-2xl text-white">
             <div className="flex items-center justify-between mb-4 border-b border-[#222] pb-3">
               <div className="flex items-center space-x-2">
                 <Camera className="w-5 h-5 text-[#00E676]" />
-                <h3 className="text-base font-bold">Registered Veo Cameras</h3>
+                <h3 className="text-base font-bold">Registered Sea Cameras</h3>
               </div>
-              <button onClick={() => setShowVeoCamsModal(false)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setShowSeaCamsModal(false)} className="text-gray-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="bg-[#181c25] border border-[#2d3342] rounded-xl p-4 flex items-center justify-between">
               <div>
-                <div className="text-xs font-bold text-white">Veo Cam 3 (5G Dual-Lens)</div>
-                <div className="text-[11px] text-gray-400">Serial: VC3-98412-ARL • Firmware: 3.4.1</div>
+                <div className="text-xs font-bold text-white">Sea Cam 3 (5G Dual-Lens)</div>
+                <div className="text-[11px] text-gray-400">Serial: SC3-98412-ARL • Firmware: 3.4.1</div>
                 <div className="text-[10px] text-[#00E676] font-medium mt-1">● Ready for match upload</div>
               </div>
               <span className="text-xs bg-[#242b3b] text-gray-200 px-2.5 py-1 rounded">Synced</span>
@@ -260,7 +290,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
         </div>
       )}
 
-      {/* Modal: Account Settings (as inspected in live Veo) */}
+      {/* Modal: Account Settings */}
       {showSettingsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
           <div className="bg-[#12141a] border border-[#262c3b] w-full max-w-md rounded-2xl p-5 shadow-2xl text-white">
@@ -309,7 +339,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
               <div>
                 <div className="text-sm font-bold text-white">Eric Yeh-Fuentes (#10)</div>
                 <div className="text-xs text-gray-400">Arlington SA U16B ECNL • Attacking Midfielder</div>
-                <div className="text-[10px] text-[#00E676] mt-0.5">Veo Player Profile Active</div>
+                <div className="text-[10px] text-[#00E676] mt-0.5">Sea Player Profile Active</div>
               </div>
             </div>
           </div>
@@ -338,7 +368,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
           <div className="bg-[#12141a] border border-[#262c3b] w-full max-w-md rounded-2xl p-5 shadow-2xl text-white">
             <div className="flex items-center justify-between mb-4 border-b border-[#222] pb-3">
-              <h3 className="text-base font-bold">Veo Player Shortcuts</h3>
+              <h3 className="text-base font-bold">Sea Player Shortcuts</h3>
               <button onClick={() => setShowHelpModal(false)} className="text-gray-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
@@ -362,7 +392,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
               </div>
               <div className="flex justify-between py-1 pt-2 text-[11px] text-gray-500">
                 <span>Support ID: A0EXC</span>
-                <span>Veo Cam 3 Connected</span>
+                <span>Sea Cam 3 Connected</span>
               </div>
             </div>
           </div>

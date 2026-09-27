@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Match, Highlight, Event, Drawing, RadarFrame, AnalyticsData, DetectionFrame } from './types';
+import { Match, Highlight, Event, Drawing, RadarFrame, AnalyticsData, DetectionFrame, Team } from './types';
 import { api, ApiError } from './services/api';
 import { Header } from './components/Header';
 import { BurgerMenu } from './components/BurgerMenu';
@@ -32,6 +32,8 @@ export const App: React.FC = () => {
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [currentMatch, setCurrentMatch] = useState<Match | null>(null);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [drawings, setDrawings] = useState<Drawing[]>([]);
@@ -73,6 +75,7 @@ export const App: React.FC = () => {
 
     setCurrentMatch(match);
     setSelectedJersey(null);
+    setCurrentTime(0);
 
     // Sync match param into browser query string without reloading
     try {
@@ -108,6 +111,62 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  const loadTeams = useCallback(async () => {
+    try {
+      const data = await api.listTeams();
+      setTeams(data);
+      if (data.length > 0) {
+        setSelectedTeam(prev => prev ?? data[0]);
+      }
+    } catch (err) {
+      console.warn('Failed to load teams:', err);
+    }
+  }, []);
+
+  const handleCreateTeam = async (name: string, clubName?: string, federationUrl?: string) => {
+    try {
+      const created = await api.createTeam(name, clubName, federationUrl);
+      setTeams(prev => [...prev, created]);
+      setSelectedTeam(created);
+      return created;
+    } catch (err: any) {
+      console.error('Failed to create team:', err);
+      throw err;
+    }
+  };
+
+  const handleUpdateTeam = async (teamId: string, data: { name?: string; club_name?: string; federation_url?: string }) => {
+    try {
+      const updated = await api.updateTeam(teamId, data);
+      setTeams(prev => prev.map(t => t.id === teamId ? updated : t));
+      if (selectedTeam?.id === teamId) {
+        setSelectedTeam(updated);
+      }
+      return updated;
+    } catch (err: any) {
+      console.error('Failed to update team:', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteTeam = async (teamId: string) => {
+    try {
+      await api.deleteTeam(teamId);
+      setTeams(prev => {
+        const remaining = prev.filter(t => t.id !== teamId);
+        if (selectedTeam?.id === teamId) {
+          setSelectedTeam(remaining[0] || null);
+        }
+        return remaining;
+      });
+      const updatedMatches = await api.listMatches();
+      setMatches(updatedMatches);
+    } catch (err: any) {
+      console.error('Failed to delete team:', err);
+      throw err;
+    }
+  };
+
   const loadMatches = useCallback(async () => {
     try {
       setLoading(true);
@@ -127,10 +186,11 @@ export const App: React.FC = () => {
     }
   }, [selectMatch]);
 
-  // Load initial matches from SQLite
+  // Load initial matches and teams from SQLite
   useEffect(() => {
     loadMatches();
-  }, [loadMatches]);
+    loadTeams();
+  }, [loadMatches, loadTeams]);
 
   useEffect(() => {
     const syncDrawerWithHash = () => setActiveDrawer(getDrawerFromHash());
@@ -217,7 +277,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#000000] text-white">
-      {/* 1. Exact Veo Header with Match Switcher */}
+      {/* 1. Exact Sea Header with Match Switcher */}
       <Header
         currentMatch={currentMatch}
         matches={matches}
@@ -242,7 +302,7 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* 2. Slide-Over Burger Menu */}
+      {/* 2. Slide-Over Burger Menu with Teams Integration */}
       <BurgerMenu
         isOpen={isBurgerOpen}
         onClose={() => setIsBurgerOpen(false)}
@@ -251,16 +311,29 @@ export const App: React.FC = () => {
         onSelectMatch={selectMatch}
         onOpenAnalytics={() => navigateToDrawer('analytics')}
         onOpenPlayerMoments={() => navigateToDrawer('players')}
+        teams={teams}
+        selectedTeam={selectedTeam}
+        onSelectTeam={setSelectedTeam}
+        onCreateTeam={handleCreateTeam}
+        onUpdateTeam={handleUpdateTeam}
+        onDeleteTeam={handleDeleteTeam}
+        onOpenUpload={(targetTeam) => {
+          if (targetTeam) setSelectedTeam(targetTeam);
+          setIsUploadOpen(true);
+        }}
       />
 
       {/* 3. Upload Modal */}
       <UploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
+        teams={teams}
+        selectedTeam={selectedTeam}
         onMatchUploaded={(newMatch) => {
           setIsUploadOpen(false);
           setMatches(prev => [newMatch, ...prev]);
           selectMatch(newMatch);
+          loadTeams();
         }}
       />
 
@@ -281,7 +354,7 @@ export const App: React.FC = () => {
       {loading ? (
         <div className="flex-1 flex items-center justify-center space-x-2 text-gray-400">
           <Loader2 className="w-5 h-5 animate-spin text-[#00E676]" />
-          <span className="text-sm font-medium">Loading Veo Video Analysis...</span>
+          <span className="text-sm font-medium">Loading Sea Video Analysis...</span>
         </div>
       ) : currentMatch ? (
         <div className="flex-1 flex overflow-hidden">

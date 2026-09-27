@@ -31,6 +31,7 @@ class ShotCandidate:
     confidence: float
     pitch_x: Optional[float] = None
     pitch_y: Optional[float] = None
+    team: Optional[str] = None  # 'home' or 'away'
 
 
 class PhysicsShotDetector:
@@ -39,6 +40,7 @@ class PhysicsShotDetector:
     def __init__(
         self,
         min_speed_mps: float = 8.0,
+        max_speed_mps: float = 38.0,
         max_goal_dist_m: float = 32.0,
         min_cone_cos: float = 0.85,
         nms_window_s: float = 8.0,
@@ -46,6 +48,7 @@ class PhysicsShotDetector:
         pitch_width_m: float = 68.0,
     ):
         self.min_speed_mps = float(min_speed_mps)
+        self.max_speed_mps = float(max_speed_mps)
         self.max_goal_dist_m = float(max_goal_dist_m)
         self.min_cone_cos = float(min_cone_cos)
         self.nms_window_s = float(nms_window_s)
@@ -58,6 +61,7 @@ class PhysicsShotDetector:
         track_points: List[Tuple[float, float, float]],
         p1_bounds: Tuple[float, float] = (562.3, 2879.3),
         p2_bounds: Tuple[float, float] = (3674.4, 6132.1),
+        own_side_p1: str = "left",
     ) -> List[ShotCandidate]:
         """Detect shots from a sequence of sorted (t_sec, x_m, y_m) points."""
         if len(track_points) < 2:
@@ -78,7 +82,7 @@ class PhysicsShotDetector:
             vx = (x1 - x0) / dt
             vy = (y1 - y0) / dt
             speed = math.sqrt(vx * vx + vy * vy)
-            if speed < self.min_speed_mps:
+            if speed < self.min_speed_mps or speed > self.max_speed_mps:
                 continue
 
             # Determine match period
@@ -106,6 +110,20 @@ class PhysicsShotDetector:
                 if cos_ang >= self.min_cone_cos:
                     # Confidence heuristic: product of speed and directional alignment
                     conf = min(1.0, (speed / 15.0) * cos_ang)
+                    # Period-aware team attribution respecting starting side:
+                    # When own_side_p1 == 'left':
+                    #   Period 1: Home attacks right, Away attacks left
+                    #   Period 2: Home attacks left, Away attacks right
+                    # When own_side_p1 == 'right':
+                    #   Period 1: Home attacks left, Away attacks right
+                    #   Period 2: Home attacks right, Away attacks left
+                    home_goal_p1 = "right" if own_side_p1 == "left" else "left"
+                    home_goal_p2 = "left" if own_side_p1 == "left" else "right"
+                    if period == 1:
+                        cand_team = "home" if label == home_goal_p1 else "away"
+                    else:
+                        cand_team = "home" if label == home_goal_p2 else "away"
+
                     raw_candidates.append(
                         ShotCandidate(
                             timestamp=round(t0, 2),
@@ -117,6 +135,7 @@ class PhysicsShotDetector:
                             confidence=round(conf, 4),
                             pitch_x=round(x0, 2),
                             pitch_y=round(y0, 2),
+                            team=cand_team,
                         )
                     )
 
@@ -136,6 +155,7 @@ class PhysicsShotDetector:
         radar: Any,
         p1_bounds: Tuple[float, float] = (562.3, 2879.3),
         p2_bounds: Tuple[float, float] = (3674.4, 6132.1),
+        own_side_p1: str = "left",
     ) -> List[ShotCandidate]:
         """Extract metric ball coordinates from radar model and detect shot candidates."""
         if not hasattr(radar, "ball_track") or not radar.ball_track or not hasattr(radar, "camera_model") or not radar.camera_model:
@@ -148,7 +168,12 @@ class PhysicsShotDetector:
             if rpt and -5.0 <= rpt[0] <= 110.0 and -5.0 <= rpt[1] <= 73.0:
                 metric_pts.append((t, rpt[0], rpt[1]))
 
-        return self.detect_from_metric_track(metric_pts, p1_bounds=p1_bounds, p2_bounds=p2_bounds)
+        return self.detect_from_metric_track(
+            metric_pts,
+            p1_bounds=p1_bounds,
+            p2_bounds=p2_bounds,
+            own_side_p1=own_side_p1,
+        )
 
     def to_event(self, candidate: ShotCandidate, match_id: str) -> Event:
         """Convert a detected ShotCandidate into an application Event model."""
@@ -157,7 +182,7 @@ class PhysicsShotDetector:
             timestamp=candidate.timestamp,
             period=candidate.period,
             event_type="Shot",
-            team="unknown",
+            team=candidate.team or "unknown",
             player_jersey=None,
             player_name=None,
             description=(

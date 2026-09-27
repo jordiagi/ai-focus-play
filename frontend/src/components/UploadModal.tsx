@@ -1,28 +1,43 @@
-import React, { useState, useRef } from 'react';
-import { UploadCloud, X, Film, AlertCircle, Loader2 } from 'lucide-react';
-import { Match } from '../types';
+import React, { useState, useRef, useEffect } from 'react';
+import { UploadCloud, X, Film, AlertCircle, Loader2, Folder } from 'lucide-react';
+import { Match, Team } from '../types';
 import { api } from '../services/api';
 
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   onMatchUploaded: (match: Match) => void;
+  teams?: Team[];
+  selectedTeam?: Team | null;
 }
 
 export const UploadModal: React.FC<UploadModalProps> = ({
   isOpen,
   onClose,
   onMatchUploaded,
+  teams = [],
+  selectedTeam = null,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [homeTeam, setHomeTeam] = useState('Arlington SA U16B');
+  const [targetTeamId, setTargetTeamId] = useState<string>(selectedTeam?.id || teams[0]?.id || 'arlington-sa-u16b');
+  const [homeTeam, setHomeTeam] = useState(selectedTeam?.name || 'Arlington SA U16B');
   const [awayTeam, setAwayTeam] = useState('Opponent FC');
   const [date, setDate] = useState('Sep 17, 2026');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [executionTarget, setExecutionTarget] = useState<'local' | 'gpu_box'>('local');
+
+  useEffect(() => {
+    if (selectedTeam) {
+      setTargetTeamId(selectedTeam.id);
+      setHomeTeam(selectedTeam.name);
+    } else if (teams.length > 0 && !targetTeamId) {
+      setTargetTeamId(teams[0].id);
+      setHomeTeam(teams[0].name);
+    }
+  }, [selectedTeam, isOpen]);
 
   if (!isOpen) return null;
 
@@ -56,6 +71,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     formData.append('date', date);
     formData.append('title', `${homeTeam} vs. ${awayTeam}`);
     formData.append('execution_target', executionTarget);
+    if (targetTeamId) {
+      formData.append('team_id', targetTeamId);
+    }
 
     try {
       const match = await api.uploadMatch(formData);
@@ -129,6 +147,36 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           </div>
 
           {/* Form Fields */}
+          {teams && teams.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-300 mb-1 flex items-center justify-between">
+                <span className="flex items-center space-x-1.5">
+                  <Folder className="w-3.5 h-3.5 text-[#00E676]" />
+                  <span>Destination Team Folder</span>
+                </span>
+                <span className="text-[10px] text-[#00E676]">Uploaded game will go here</span>
+              </label>
+              <select
+                value={targetTeamId}
+                onChange={e => {
+                  const newId = e.target.value;
+                  setTargetTeamId(newId);
+                  const matched = teams.find(t => t.id === newId);
+                  if (matched) {
+                    setHomeTeam(matched.name);
+                  }
+                }}
+                className="w-full bg-[#111317] border border-[#2d3342] rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00E676] cursor-pointer"
+              >
+                {teams.map(t => (
+                  <option key={t.id} value={t.id}>
+                    📁 {t.name} {t.id === selectedTeam?.id ? '(Selected Team)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-300 mb-1">Home Team</label>
@@ -214,7 +262,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 <p className="mt-1 text-gray-300">
                   Remote dispatch to <code className="text-amber-200">root@gpu-box</code> requires web auth approval:{' '}
                   <a
-                    href="https://login.tailscale.com/a/lb70eee53af031"
+                    href="https://login.tailscale.com/a/l16d36d6b3a944a"
                     target="_blank"
                     rel="noreferrer"
                     className="underline text-amber-300 hover:text-white"

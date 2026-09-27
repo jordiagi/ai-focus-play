@@ -40,7 +40,7 @@ export const HelpShortcutsModal: React.FC<HelpShortcutsModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-white">Keyboard Shortcuts & Help</h3>
-              <p className="text-[11px] text-gray-400">Veo Player Hotkeys & Controls</p>
+              <p className="text-[11px] text-gray-400">Sea Player Hotkeys & Controls</p>
             </div>
           </div>
           <button 
@@ -142,7 +142,7 @@ export const HelpShortcutsModal: React.FC<HelpShortcutsModalProps> = ({
             <HelpCircle className="w-3.5 h-3.5 text-[#00E676]" />
             <span>Press <kbd className="font-mono bg-[#1a1e28] px-1 rounded text-white font-bold">?</kbd> anywhere to open this guide</span>
           </div>
-          <span className="font-mono text-gray-500">Veo Cam 3 • v4.3.0</span>
+          <span className="font-mono text-gray-500">Sea Cam 3 • v4.3.0</span>
         </div>
       </div>
     </div>

@@ -79,7 +79,28 @@ class CalibratedPitchRadar:
 
         ball_track = []
         if ball_track_path and Path(ball_track_path).exists():
-            ball_track = json.loads(Path(ball_track_path).read_text())
+            bt_raw = json.loads(Path(ball_track_path).read_text())
+            if isinstance(bt_raw, list):
+                ball_track = bt_raw
+            elif isinstance(bt_raw, dict):
+                # Handle ball_candidates.json structure
+                for d in bt_raw.get("detections", []):
+                    t_val = float(d.get("t", 0.0))
+                    c_list = d.get("c", [])
+                    if c_list:
+                        best = max(c_list, key=lambda x: x[3] if len(x) > 3 else 0.5)
+                        ball_track.append({"t": t_val, "u": best[0], "v": best[1], "conf": best[3] if len(best) > 3 else 0.5})
+
+        if not ball_track and ball_track_path:
+            candidates_path = Path(ball_track_path).parent / "ball_candidates.json"
+            if candidates_path.exists():
+                bt_raw = json.loads(candidates_path.read_text())
+                for d in bt_raw.get("detections", []):
+                    t_val = float(d.get("t", 0.0))
+                    c_list = d.get("c", [])
+                    if c_list:
+                        best = max(c_list, key=lambda x: x[3] if len(x) > 3 else 0.5)
+                        ball_track.append({"t": t_val, "u": best[0], "v": best[1], "conf": best[3] if len(best) > 3 else 0.5})
 
         return cls(
             camera_model=model,

@@ -5,6 +5,9 @@
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
 require_remote
+if [ -n "${1:-}" ]; then
+  LOCAL_VIDEO="$1"
+fi
 [ -f "$LOCAL_VIDEO" ] || die "local video not found: $LOCAL_VIDEO"
 
 LOCAL_BYTES=$(stat -c%s "$LOCAL_VIDEO")

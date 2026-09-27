@@ -171,11 +171,20 @@ def default_event_capabilities() -> Dict[str, EventCapability]:
         for label in labels
     }
 
+class Team(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    club_name: Optional[str] = "Arlington Soccer"
+    federation_url: Optional[str] = None
+    matches_count: int = 0
+    created_at: float = Field(default_factory=time.time)
+
 class Match(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     title: str
     home_team: str
     away_team: str
+    team_id: Optional[str] = None
     home_score: int = 0
     away_score: int = 0
     date: str

@@ -169,11 +169,21 @@ export type EventTypeLabel =
   | 'Loose ball recovery'
   | 'Pass';
 
+export interface Team {
+  id: string;
+  name: string;
+  club_name?: string;
+  federation_url?: string;
+  matches_count?: number;
+  created_at?: number;
+}
+
 export interface Match {
   id: string;
   title: string;
   home_team: string;
   away_team: string;
+  team_id?: string;
   home_score: number;
   away_score: number;
   date: string;

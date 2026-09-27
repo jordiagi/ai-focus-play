@@ -69,8 +69,8 @@ export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
   // Modes: 'follow' (Broadcast Follow-Cam) vs 'interactive' (User Pan/Zoom)
   const [viewMode, setViewMode] = useState<'follow' | 'interactive'>('follow');
   const [isTelestratorOpen, setIsTelestratorOpen] = useState(false);
-  const [isRadarVisible, setIsRadarVisible] = useState(true);
-  const [isTrackingVisible, setIsTrackingVisible] = useState(true);
+  const [isRadarVisible, setIsRadarVisible] = useState(false);
+  const [isTrackingVisible, setIsTrackingVisible] = useState(false);
 
   // Highlight Reel Queue state (P0-4)
   const [reelQueue, setReelQueue] = useState<Highlight[] | null>(null);
@@ -106,6 +106,16 @@ export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
     setReelQueue(null);
     setReelIndex(0);
   }, []);
+
+  // Reset playback and update duration when match switches
+  useEffect(() => {
+    setCurrentTime(0);
+    setIsPlaying(false);
+    setIsMatchEnded(false);
+    if (match.duration_seconds) {
+      setDuration(match.duration_seconds);
+    }
+  }, [match.id, match.video_url, match.duration_seconds]);
 
 
   // Derive dynamic 3-letter team abbreviations matching Veo broadcast style
@@ -551,6 +561,7 @@ export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
 
         {/* HTML5 Video Element - NO loop attribute (P0-7) */}
         <video
+          key={match.video_url || match.id}
           ref={videoRef}
           src={match.video_url}
           onTimeUpdate={handleTimeUpdate}
@@ -558,6 +569,9 @@ export const VideoPlayer = forwardRef<PlayerHandle, VideoPlayerProps>(({
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
           onEnded={handleEnded}
+          onError={(e) => {
+            console.warn('Video element playback error for URL:', match.video_url, e);
+          }}
           playsInline
           className={`w-full h-full object-contain pointer-events-none ${isPanning ? '' : 'transition-transform duration-75 ease-out'}`}
           style={{

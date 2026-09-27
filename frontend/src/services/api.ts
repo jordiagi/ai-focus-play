@@ -1,4 +1,4 @@
-import { Match, Highlight, Event, Drawing, RadarFrame, AnalyticsData, Capabilities, DetectionsResponse } from '../types';
+import { Match, Highlight, Event, Drawing, RadarFrame, AnalyticsData, Capabilities, DetectionsResponse, Team } from '../types';
 
 const API_BASE = '/api';
 
@@ -35,8 +35,8 @@ export const api = {
     return handleResponse<Capabilities>(res, url);
   },
 
-  async listMatches(signal?: AbortSignal): Promise<Match[]> {
-    const url = `${API_BASE}/matches`;
+  async listMatches(teamId?: string, signal?: AbortSignal): Promise<Match[]> {
+    const url = teamId ? `${API_BASE}/matches?team_id=${encodeURIComponent(teamId)}` : `${API_BASE}/matches`;
     const res = await fetch(url, { signal });
     return handleResponse<Match[]>(res, url);
   },
@@ -195,5 +195,37 @@ export const api = {
       : `${API_BASE}/matches/${matchId}/detections`;
     const res = await fetch(url, { signal });
     return handleResponse<DetectionsResponse>(res, url);
-  }
+  },
+
+  async listTeams(signal?: AbortSignal): Promise<Team[]> {
+    const url = `${API_BASE}/teams`;
+    const res = await fetch(url, { signal });
+    return handleResponse<Team[]>(res, url);
+  },
+
+  async createTeam(name: string, clubName?: string, federationUrl?: string): Promise<Team> {
+    const url = `${API_BASE}/teams`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, club_name: clubName, federation_url: federationUrl }),
+    });
+    return handleResponse<Team>(res, url);
+  },
+
+  async updateTeam(teamId: string, data: { name?: string; club_name?: string; federation_url?: string }): Promise<Team> {
+    const url = `${API_BASE}/teams/${teamId}`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return handleResponse<Team>(res, url);
+  },
+
+  async deleteTeam(teamId: string): Promise<void> {
+    const url = `${API_BASE}/teams/${teamId}`;
+    const res = await fetch(url, { method: 'DELETE' });
+    if (!res.ok) throw new ApiError(`Failed to delete team ${teamId}`, res.status, url);
+  },
 };

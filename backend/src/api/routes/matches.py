@@ -18,6 +18,8 @@ from backend.src.domain.models.match import (
 from backend.src.storage.repository import match_repo
 from backend.src.services.pipeline.video_processor import VideoProcessor
 from backend.src.services.pipeline.cv_engine import cv_engine
+from backend.src.services.pipeline.filename_infer import filename_parser
+from backend.src.services.pipeline.federation_acta import acta_service
 
 logger = logging.getLogger("api_matches")
 router = APIRouter(prefix="/api/matches", tags=["matches"])
@@ -130,8 +132,8 @@ def process_uploaded_video_task(match_id: str, video_path: Path, job_id: Optiona
             match_repo.update_job(job_id, status="failed", error=str(e), step="Failed")
 
 @router.get("", response_model=List[Match])
-def list_matches():
-    return match_repo.list_matches()
+def list_matches(team_id: Optional[str] = Query(None)):
+    return match_repo.list_matches(team_id=team_id)
 
 @router.get("/{match_id}", response_model=Match)
 def get_match(match_id: str):
@@ -152,13 +154,35 @@ async def upload_match(
     home_team: str = Form("Home Team"),
     away_team: str = Form("Away Team"),
     date: str = Form("Today"),
-    title: Optional[str] = Form(None)
+    title: Optional[str] = Form(None),
+    team_id: Optional[str] = Form(None),
 ):
+    filename = file.filename or "match.mp4"
+
+    # Infer teams, date, and team_id from filename if defaults were submitted
+    if (home_team == "Home Team" or not home_team) or (away_team == "Away Team" or not away_team):
+        parsed = filename_parser.parse_filename(filename)
+        if home_team == "Home Team" or not home_team:
+            home_team = parsed.home_team
+        if away_team == "Away Team" or not away_team:
+            away_team = parsed.away_team
+        if not title:
+            title = parsed.title
+        if date in ("Today", ""):
+            date = parsed.date
+        if not team_id:
+            team_id = parsed.team_id
+
     if not title:
         title = f"{home_team} vs. {away_team}"
 
+    # Associate with selected team or fallback to default
+    if not team_id:
+        teams = match_repo.list_teams()
+        matching_team = next((t for t in teams if t.name.lower() == home_team.lower()), None)
+        team_id = matching_team.id if matching_team else (teams[0].id if teams else "arlington-sa-u16b")
+
     # Validate video extension (P2-3)
-    filename = file.filename or "match.mp4"
     ext = Path(filename).suffix.lower()
     if ext not in ALLOWED_VIDEO_EXTENSIONS:
         raise HTTPException(
@@ -202,6 +226,7 @@ async def upload_match(
         title=title,
         home_team=home_team,
         away_team=away_team,
+        team_id=team_id,
         date=date,
         duration_seconds=duration,
         video_url=f"/media/{dest_path.name}",
@@ -213,7 +238,21 @@ async def upload_match(
         analysis_confidence="low",
         views_count=1
     )
+
+    # Option A: Check for official federation match sheet (Acta) and reconcile
+    sheet = acta_service.resolve_acta_for_match(home_team, away_team, date=date)
+    reconciled_events = []
+    reconciled_highlights = []
+    if sheet:
+        logger.info(f"Reconciling uploaded match {match_id} with official {sheet.federation} acta ({sheet.home_name} vs {sheet.away_name})")
+        match, reconciled_events, reconciled_highlights = acta_service.reconcile_match(match, sheet)
+
     match_repo.save_match(match)
+
+    for ev in reconciled_events:
+        match_repo.create_event(ev)
+    for hl in reconciled_highlights:
+        match_repo.create_highlight(hl)
 
     # Create job entry (P2-4)
     job_id = match_repo.create_job(match_id=match_id, kind="cv_analysis")
@@ -274,8 +313,12 @@ def get_detections(
         raise HTTPException(status_code=404, detail="Match not found")
 
     artifacts_dir = REPO_ROOT / "backend" / ".local" / "artifacts"
-    match_file = artifacts_dir / match_id / "players_ko.json"
-    mosaic_file = artifacts_dir / "mosaic" / "players_ko.json"
+    match_file = artifacts_dir / match_id / "players_colour.json"
+    if not match_file.exists():
+        match_file = artifacts_dir / match_id / "players_ko.json"
+    mosaic_file = artifacts_dir / "mosaic" / "players_colour.json"
+    if not mosaic_file.exists():
+        mosaic_file = artifacts_dir / "mosaic" / "players_ko.json"
     target_file = match_file if match_file.exists() else (mosaic_file if mosaic_file.exists() else None)
 
     if not target_file or not target_file.exists():
@@ -325,6 +368,8 @@ def get_benchmark_comparison(match_id: str):
             "comparison": comparison,
             "live_ground_truth": gt_raw
         }
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Benchmark error: {str(e)}")
 
@@ -421,7 +466,8 @@ def export_highlights_zip(match_id: str):
                 clip_file = None
                 if h.clip_url and h.clip_url.startswith("/media/"):
                     candidate = MEDIA_DIR / h.clip_url.replace("/media/", "")
-                    if candidate.exists():
+                    full_video_name = Path(match.video_url).name if match.video_url else ""
+                    if candidate.exists() and candidate.name != full_video_name:
                         clip_file = candidate
 
                 if clip_file is not None:

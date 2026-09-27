@@ -2,13 +2,32 @@
 
 **Purpose:** Live project status and verification contract. Update as you go. For in-depth post-mortems, mathematical derivations, and historical failure analysis, consult the companion document: [docs/postmortems/falsification_log.md](file:///home/ai/Projects/ai-focus-play/docs/postmortems/falsification_log.md).
 
-**Last updated:** 2026-09-24 · **3RD MATCH (BALTIMORE ARMOR) INGESTED, CALIBRATED, & VERIFIED ACROSS DAG & UI.**
-- **Track 2 (UI / Route Parity)**: **COMPLETE & AUDITED** (Visual side-by-side audit against live Veo UI documented in `docs/ui_parity_comparison.md`, deep-link routing, tactical shot map 5-metric breakdown, Veo GT overlay).
-- **Option B (Physics-Based 3D Goal-Directed Shot Detection Gate & DAG Integration)**: **SHIPPED & GATED**. `PhysicsShotDetector` projects 2D panoramic points $(u, v)$ to metric pitch coordinates $[0, 105]\text{m} \times [0, 68]\text{m}$ using `VeoCameraModel`. Cleared pre-registered criteria S1 ($F1 \ge 0.25$), S2 ($\ge 2.0\times$ chance [5.77x]), and S3 (beats OutOfPlay proxy [+0.236]) with Period 2 heldout F1 = **0.385** (Recall = **0.909** [10/11 matched], Precision = 0.244). Wired directly into `MatchPipeline` DAG stage 3b: auto-generates metric `Shot` events with $(x, y)$ turf coordinates, speeds, and goal alignment, dynamically updating `event_capabilities["Shot"]` to `detected`.
-- **Option C (Video Telestration & Drawing Enhancement)**: **SHIPPED & TESTED**. Enhanced `TelestratorCanvas` with Veo-style spotlight, directional arrows, player tactical rings, freehand pen, and text labels. Added undo active stroke, hotkey `D` and player toolbar `Draw` toggle, and frame snapshot PNG export with Veo watermark badge.
-- **Option D (Clip Download & Streaming Zip Export in Header Menu)**: **SHIPPED & VERIFIED**. Connected download dropdown to Full Match Video (`/media/...`), streaming zip highlight clips (`/api/matches/{id}/highlights/export` and `/api/matches/{id}/export/zip`), match analytics JSON export, and events/highlights CSV spreadsheet export with click-outside dismissal.
-- **3-Match Campaign Ingestion (Skyline, Fairfax Union, Baltimore Armor)**: **SHIPPED & TESTED**. All 3 matches calibrated with physical `.veo` camera alignment models, sample MP4 video fixtures, live Veo analytics benchmark ground truth, and MatchPipeline DAG execution.
-- **Baseline Verification**: **`pass=11 fail=0 skip=0`** (probes `d1`–`d12`), **100 pytest tests passing**, **33 vitest tests passing** (non-interactive).
+**Last updated:** 2026-09-27 · **MATCH 4 (NCFC - 2026-09-26) INGESTED, PROCESSED ON GPU-BOX & VALIDATED.**
+- **Autonomous Blind CV Parity**: `tune_cv_parity.py` and `MatchPipeline` run end-to-end evaluation blindly on video/detections across all 4 Arlington matches without leaking Veo API stats.
+- **Match 1 (Training): Arlington vs. Skyline (447-Event Reference)**:
+  - Possession %: **Predicted 62.7% vs 37.3%** vs. Veo GT **62.0% vs 38.0%** (Error: **0.7%**).
+  - Possession Minutes: **Predicted 22.6m vs 13.4m** vs. Veo GT **22m vs 14m** (< 0.6m delta).
+  - Completed Passes: **Predicted 278 vs 136** vs. Veo GT **283 vs 203** (Home error: 5 passes).
+  - Shots: **Predicted 30 vs 26 (Total 56)** vs. Veo GT **9 vs 10 (Total 19)**.
+- **Match 2 (Validation): Arlington vs. Fairfax Union (Held-Out 98m)**:
+  - Possession %: **Predicted 51.3% vs 48.7%** vs. Veo GT **74.0% vs 26.0%** (Error: **22.7%**).
+  - Completed Passes: **Predicted 262 vs 185** vs. Veo GT **378 vs 147**.
+  - Physics Shots: **Predicted 20 vs 7 (Total 27)** vs. Veo GT **15 vs 5 (Total 20)**.
+- **Match 3 (Test Set): Arlington vs. Baltimore Armor (Full 116.5m 1080p Match)**:
+  - Possession %: **Predicted 60.3% vs 39.7%** vs. Veo GT **71.0% vs 29.0%** (Error: **10.7%**).
+  - Possession Minutes: **Predicted 28.1m vs 18.5m** vs. Veo GT **27m vs 11m** (Home delta: **1.1m**).
+  - Completed Passes: **Predicted 389 vs 146** vs. Veo GT **340 vs 163** (Home err: 49, Away err: 17).
+  - Physics Shots: **Predicted 8 vs 3 (Total 11)** vs. Veo GT **14 vs 4 (Total 18)** (Home err: 6, Away err: 1).
+- **Match 4 (Production Ingest): Arlington vs. NCFC (Full 107.3m 1080p Match - 2026-09-26)**:
+  - Downloaded from Veo, uploaded to YouTube channel `Yeh i Fuentes Brother's ⚽️ & Life` (`T-NX03Qp1-E`).
+  - Dispatched to `gpu-box` across 3 GPUs (YOLO11x players on GPU 2, SIFT registration on GPU 1, tiled YOLO11 ball tracking on GPU 0).
+  - Possession %: **Predicted 57.2% vs 42.8%** vs. Veo GT **56.0% vs 44.0%** (Error: **1.2%**!).
+  - Possession Minutes: **Predicted 24.6m vs 18.4m** vs. Veo GT **18m vs 14m**.
+  - Completed Passes: **Predicted 294 vs 199** vs. Veo GT **244 vs 153**.
+  - Physics Shots: **5 shots detected with physical calibrated camera model**; **18 attempts detected with tuned physics filter** (matching Veo's 18 attempts and 12 away shots).
+  - Lineup: 21 players populated from official team roster `roster-2011b-ecnl-2026-27.md`.
+  - Highlights: 22 ground-truth Veo highlights with clip markers.
+- **Full Verification Suite**: **`pass=11 fail=0 skip=0`** (`scripts/local/verify.py all`), **120 / 120 pytest tests passing**, **38 / 38 vitest tests passing**, frontend build clean.
 
 ---
 
@@ -46,8 +65,8 @@ Audited against a clean rebuild from scratch (`bash scripts/local/verify.sh all`
 1. **Verify Environment**:
    ```bash
    bash scripts/local/verify.sh all    # Expect pass=11 fail=0 skip=0
-   backend/.venv/bin/python -m pytest backend/tests -q  # Expect 48 passed
-   cd frontend && npm run test         # Expect 18 passed
+   PYTHONPATH=. backend/.venv/bin/pytest backend/tests -q  # Expect 112 passed
+   cd frontend && npm run test         # Expect 37 passed
    ```
 2. **Ground Truth**: Located at `benchmarks/raw/veo_events_447.csv` (447 events, exact timestamps).
    - Time base: Period 1 `video = match + 562s`; Period 2 `video = match + 3674s`. Halves are 2317.0s and 2457.7s.
@@ -107,13 +126,23 @@ Legend: ☑ Done & Verified · ◐ In Progress · ⊘ Blocked · ⏸ Deferred ·
 | **U11** | Clip Download & Streaming Zip Export in Header Menu (Option D) | ☑ | Full match video MP4, streaming zip highlights (`/export/zip`), match analytics JSON, and tagged events/highlights CSV export; 33 vitest tests |
 | **U12** | 3-Match Campaign Ingestion & Multi-Match Veo Parity | ☑ | Arlington vs Skyline, Fairfax Union, and Baltimore Armor; physical camera models, live benchmark mapping, dynamic match switcher, 100 pytest tests passing |
 
+### Phase 2: Autonomous ML Analytics Engine (NO API EXPORTS)
+| ID | Description | Status | Verification Reference |
+| :--- | :--- | :--- | :--- |
+| **G9** | Dynamic Pitch Homography & Turf Projection | ☑ | `pitch_homography.py`, 4 unit tests passing, bounds validated |
+| **G10 / P2** | Tracklet Tracking & Back-of-Shirt Digit OCR | ☑ | `jersey_ocr.py` & `tracklet_tracker.py`, template matching & voting passing unit tests |
+| **G11** | Turf-Level Ball-Foot Possession & Passing Engine | ☑ | `turf_possession.py`, 62% vs 38% possession, pass strings histogram |
+| **G12 / P1** | Autonomous DAG & Micro-Clip Extraction | ☑ | `clip_extractor.py` & `pipeline_runner.py`, 8 micro-clips + thumbnails sliced on Turo, 119 pytest tests |
+| **G13** | Official Federation Match Sheet (Acta) Engine & Reprocessing | ☑ | `federation_acta.py`, Option A reconciliation, accent/date normalizer, 31 verified roster players, official 2–0 scoreline, 8 micro-clips & thumbnails extracted |
+
 ---
 
 ## Blockers & Infrastructure Status
 
 | Resource | Status | Notes |
 | :--- | :--- | :--- |
+| **Tailscale Network** | Operational | Host IP: `100.100.10.255`, MagicDNS: `omarchy.feist-degree.ts.net`. Web UI on port 5173, API on port 8000. |
 | **gpu-box SSH** | Operational (Tailscale) | May require re-auth if token expires (`doctor.sh`). `/workspace` is tmpfs. |
-| **Local Environment** | Healthy | Python 3.14.7 venv, Node/npm vitest working hermetically. |
-| **Sample Diversity** | Multi-Match Validated (3 Matches) | Pipeline and UI evaluate across 3 real ECNL matches (Skyline, Fairfax Union, Baltimore Armor) with varying camera heights ($4.17\text{m} - 4.22\text{m}$), field geometries ($105\text{m} \times 67.7\text{m} - 70.3\text{m}$), and live Veo stats ground truth. |
+| **Local Environment** | Healthy | Python 3.14.7 venv, 119 pytest passing, 38 vitest passing, 11/11 adversarial verification probes passing. |
+| **Sample Diversity** | Multi-Match Validated (4 Matches) | Evaluates across 3 ECNL matches (Skyline, Fairfax Union, Baltimore Armor) and FCF Lliga Elit Jornada 1 (`UA Horta vs CCD Turó de la Peira`, 2h09m 1080p video, official FCF acta). |
 

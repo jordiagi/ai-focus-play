@@ -10,16 +10,31 @@ REPO = Path(__file__).resolve().parents[4]
 LIVE_VEO_STATS_PATH = REPO / "benchmarks" / "raw" / "veo_stats_live.json"
 FAIRFAX_STATS_PATH = REPO / "benchmarks" / "raw" / "fairfax_union_stats.json"
 BALTIMORE_STATS_PATH = REPO / "benchmarks" / "raw" / "baltimore_armor_stats.json"
+NCFC_STATS_PATH = REPO / "benchmarks" / "raw" / "ncfc_stats.json"
 
 
 def load_live_veo_benchmark(match_identifier: Optional[str] = None) -> Dict[str, Any]:
     """Load the ground-truth benchmark extracted from app.veo.co."""
-    if match_identifier and "baltimore" in match_identifier.lower():
-        if BALTIMORE_STATS_PATH.exists():
-            return json.loads(BALTIMORE_STATS_PATH.read_text())
-    if match_identifier and "fairfax" in match_identifier.lower():
-        if FAIRFAX_STATS_PATH.exists():
-            return json.loads(FAIRFAX_STATS_PATH.read_text())
+    if match_identifier:
+        m_lower = match_identifier.lower()
+        if "ncfc" in m_lower:
+            if NCFC_STATS_PATH.exists():
+                return json.loads(NCFC_STATS_PATH.read_text())
+            raise FileNotFoundError(f"Missing NCFC Veo stats at {NCFC_STATS_PATH}")
+        if "baltimore" in m_lower:
+            if BALTIMORE_STATS_PATH.exists():
+                return json.loads(BALTIMORE_STATS_PATH.read_text())
+            raise FileNotFoundError(f"Missing Baltimore Veo stats at {BALTIMORE_STATS_PATH}")
+        if "fairfax" in m_lower:
+            if FAIRFAX_STATS_PATH.exists():
+                return json.loads(FAIRFAX_STATS_PATH.read_text())
+            raise FileNotFoundError(f"Missing Fairfax Veo stats at {FAIRFAX_STATS_PATH}")
+        if "skyline" in m_lower or "demo-arlington" in m_lower or "arlington" in m_lower:
+            if LIVE_VEO_STATS_PATH.exists():
+                return json.loads(LIVE_VEO_STATS_PATH.read_text())
+            raise FileNotFoundError(f"Missing live Veo stats at {LIVE_VEO_STATS_PATH}")
+        raise FileNotFoundError(f"No external Veo benchmark for match {match_identifier!r}")
+
     if not LIVE_VEO_STATS_PATH.exists():
         raise FileNotFoundError(f"Missing live Veo stats at {LIVE_VEO_STATS_PATH}")
     return json.loads(LIVE_VEO_STATS_PATH.read_text())
