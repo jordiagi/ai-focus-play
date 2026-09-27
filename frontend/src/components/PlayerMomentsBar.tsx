@@ -1,11 +1,13 @@
 import React from 'react';
-import { Info } from 'lucide-react';
+import { Info, Download } from 'lucide-react';
 import { PlayerRoster } from '../types';
+import { api } from '../services/api';
 
 interface PlayerMomentsBarProps {
   lineup: PlayerRoster[];
   selectedJersey: string | null;
   onSelectJersey: (jersey: string | null) => void;
+  matchId?: string;
 }
 
 const isUnknownJersey = (jersey?: string | null): boolean => {
@@ -18,6 +20,7 @@ export const PlayerMomentsBar: React.FC<PlayerMomentsBarProps> = ({
   lineup,
   selectedJersey,
   onSelectJersey,
+  matchId,
 }) => {
   return (
     <div className="flex flex-col items-center justify-center py-2 bg-[#000000] select-none">
@@ -81,6 +84,19 @@ export const PlayerMomentsBar: React.FC<PlayerMomentsBarProps> = ({
               </button>
             );
           })}
+
+          {matchId && selectedJersey && (
+            <a
+              href={api.getPlayerReelUrl(matchId, selectedJersey)}
+              download
+              className="ml-1.5 px-2.5 py-1 rounded-full bg-[#00E676] hover:bg-[#00c864] text-black font-extrabold text-[10px] tracking-wide transition flex items-center space-x-1 shrink-0 shadow animate-in fade-in"
+              title={`Download MP4 reel for #${selectedJersey}`}
+              aria-label={`Download MP4 reel for jersey ${selectedJersey}`}
+            >
+              <Download className="w-3 h-3" />
+              <span>REEL</span>
+            </a>
+          )}
         </div>
       )}
     </div>

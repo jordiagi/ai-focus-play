@@ -5,10 +5,11 @@ import zipfile
 import asyncio
 import logging
 from pathlib import Path
+import re
 from typing import List, Optional, Dict, Any
 import anyio
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 
 from backend.src.config import MAX_UPLOAD_BYTES, READ_ONLY, MEDIA_DIR, REPO_ROOT
@@ -519,6 +520,100 @@ def get_player_moments(match_id: str, jersey: Optional[str] = Query(None)):
         "highlights": highlights,
         "events": events
     }
+
+@router.get("/{match_id}/players/{jersey}/reel")
+def export_player_reel(match_id: str, jersey: str):
+    """Generates and streams an MP4 compilation reel of all moments for a specific jersey number."""
+    match = match_repo.get_match(match_id)
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    clean_jersey = jersey.strip().strip("'\"")
+    if not clean_jersey:
+        raise HTTPException(status_code=400, detail="Invalid jersey number")
+
+    all_highlights = match_repo.get_highlights(match_id)
+    all_events = match_repo.get_events(match_id)
+
+    # Filter highlights and events matching clean_jersey
+    highlights = [
+        h for h in all_highlights 
+        if h.player_jersey and h.player_jersey.strip().strip("'\"") == clean_jersey
+    ]
+    events = [
+        e for e in all_events 
+        if e.player_jersey and e.player_jersey.strip().strip("'\"") == clean_jersey
+    ]
+
+    if not highlights and not events:
+        raise HTTPException(status_code=404, detail=f"No plays or moments found for Jersey #{clean_jersey}")
+
+    reel_filename = f"reel_{match_id}_jersey_{clean_jersey}.mp4"
+    reel_path = MEDIA_DIR / reel_filename
+
+    # If cached reel already exists and is non-empty, serve it directly
+    if not reel_path.exists() or reel_path.stat().st_size == 0:
+        clips: List[tuple[float, Path, bool]] = []  # (timestamp, path, is_temporary)
+
+        full_video_path = None
+        if match.video_url:
+            if match.video_url.startswith("/media/"):
+                candidate_full = MEDIA_DIR / match.video_url.replace("/media/", "")
+            else:
+                candidate_full = MEDIA_DIR / Path(match.video_url).name
+            if candidate_full.exists() and candidate_full.stat().st_size > 0:
+                full_video_path = candidate_full
+
+        # Add highlights
+        for h in highlights:
+            clip_file = None
+            if h.clip_url and h.clip_url.startswith("/media/"):
+                candidate = MEDIA_DIR / h.clip_url.replace("/media/", "")
+                if candidate.exists() and candidate.stat().st_size > 0:
+                    clip_file = candidate
+
+            if clip_file is not None:
+                clips.append((h.start_time, clip_file, False))
+            elif full_video_path is not None:
+                temp_clip = MEDIA_DIR / f"tmp_reel_{match_id}_h_{h.id}.mp4"
+                if VideoProcessor.cut_clip(full_video_path, temp_clip, h.start_time, h.end_time):
+                    clips.append((h.start_time, temp_clip, True))
+
+        # Add uncovered events (events without an overlapping highlight)
+        for e in events:
+            is_covered = any(abs(h.start_time - e.timestamp) <= 2.5 for h in highlights)
+            if not is_covered and full_video_path is not None:
+                e_start = max(0.0, e.timestamp - 4.0)
+                e_end = e.timestamp + 4.0
+                temp_clip = MEDIA_DIR / f"tmp_reel_{match_id}_e_{e.id}.mp4"
+                if VideoProcessor.cut_clip(full_video_path, temp_clip, e_start, e_end):
+                    clips.append((e.timestamp, temp_clip, True))
+
+        if not clips:
+            raise HTTPException(status_code=404, detail="No video media available for these moments")
+
+        clips.sort(key=lambda x: x[0])
+        clip_paths = [c[1] for c in clips]
+
+        try:
+            success = VideoProcessor.concat_clips(clip_paths, reel_path)
+            if not success or not reel_path.exists() or reel_path.stat().st_size == 0:
+                raise HTTPException(status_code=500, detail="Failed to compile player reel MP4")
+        finally:
+            # Clean up temporary cut clips
+            for _, path, is_temp in clips:
+                if is_temp:
+                    path.unlink(missing_ok=True)
+
+    team_name = match.home_team or "Match"
+    clean_team = re.sub(r"[^a-zA-Z0-9_\-]", "_", team_name)
+    download_filename = f"{clean_team}_Jersey_{clean_jersey}_Reel.mp4"
+
+    return FileResponse(
+        path=reel_path,
+        media_type="video/mp4",
+        filename=download_filename,
+    )
 
 @router.get("/{match_id}/drawings", response_model=List[Drawing])
 def get_drawings(

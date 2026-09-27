@@ -1,4 +1,4 @@
-import { Match, Highlight, Event, Drawing, RadarFrame, AnalyticsData, Capabilities, DetectionsResponse, Team } from '../types';
+import { Match, Highlight, Event, Drawing, RadarFrame, AnalyticsData, Capabilities, DetectionsResponse, Team, CloudflareSyncSummary, CloudflareSyncStatus } from '../types';
 
 const API_BASE = '/api';
 
@@ -165,6 +165,10 @@ export const api = {
     return `${API_BASE}/matches/${matchId}/highlights/export`;
   },
 
+  getPlayerReelUrl(matchId: string, jersey: string): string {
+    return `${API_BASE}/matches/${matchId}/players/${jersey}/reel`;
+  },
+
   async getBenchmark(matchId: string, signal?: AbortSignal): Promise<any> {
     const url = `${API_BASE}/matches/${matchId}/benchmark`;
     const res = await fetch(url, { signal });
@@ -227,5 +231,27 @@ export const api = {
     const url = `${API_BASE}/teams/${teamId}`;
     const res = await fetch(url, { method: 'DELETE' });
     if (!res.ok) throw new ApiError(`Failed to delete team ${teamId}`, res.status, url);
+  },
+
+  async getCloudflareSyncSummary(matchId: string, signal?: AbortSignal): Promise<CloudflareSyncSummary> {
+    const url = `${API_BASE}/matches/${matchId}/sync/summary`;
+    const res = await fetch(url, { signal });
+    return handleResponse<CloudflareSyncSummary>(res, url);
+  },
+
+  async getCloudflareSyncStatus(matchId: string, signal?: AbortSignal): Promise<CloudflareSyncStatus> {
+    const url = `${API_BASE}/matches/${matchId}/sync/status`;
+    const res = await fetch(url, { signal });
+    return handleResponse<CloudflareSyncStatus>(res, url);
+  },
+
+  async triggerCloudflareSync(matchId: string, metadataOnly: boolean = false): Promise<{ status: string; message: string }> {
+    const url = `${API_BASE}/matches/${matchId}/sync`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ metadata_only: metadataOnly }),
+    });
+    return handleResponse<{ status: string; message: string }>(res, url);
   },
 };

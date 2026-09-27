@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Video, Users, Camera, User, AtSign, BarChart2, Settings, 
-  HelpCircle, ChevronDown, X, Check
+  HelpCircle, ChevronDown, X, Check, Cloud
 } from 'lucide-react';
 import { Match, Team } from '../types';
 import { TeamsModal } from './TeamsModal';
@@ -21,6 +21,7 @@ interface BurgerMenuProps {
   onUpdateTeam?: (teamId: string, data: { name?: string; club_name?: string; federation_url?: string }) => Promise<Team | void>;
   onDeleteTeam?: (teamId: string) => Promise<void>;
   onOpenUpload?: (preselectedTeam?: Team) => void;
+  onOpenCloudSync?: () => void;
 }
 
 export const BurgerMenu: React.FC<BurgerMenuProps> = ({
@@ -38,6 +39,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
   onUpdateTeam,
   onDeleteTeam,
   onOpenUpload,
+  onOpenCloudSync,
 }) => {
   const [showTeamsModal, setShowTeamsModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -210,6 +212,19 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
                 <BarChart2 className="w-4 h-4 text-gray-400" />
                 <span>Analytics Studio</span>
               </button>
+
+              {onOpenCloudSync && (
+                <button
+                  onClick={() => {
+                    onClose();
+                    onOpenCloudSync();
+                  }}
+                  className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-[#F38020] hover:bg-[#141414] hover:text-[#ff8f33] transition font-normal"
+                >
+                  <Cloud className="w-4 h-4 text-[#F38020]" />
+                  <span>Cloudflare Sync</span>
+                </button>
+              )}
 
               <button
                 onClick={() => setShowSettingsModal(true)}

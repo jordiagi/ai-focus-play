@@ -222,3 +222,66 @@ export interface DetectionsResponse {
   detections: DetectionFrame[];
 }
 
+export interface CloudflareSyncStatus {
+  match_id: string;
+  status: 'idle' | 'syncing' | 'completed' | 'needs_credentials' | 'failed';
+  progress_percent: number;
+  current_file?: string;
+  completed_files: number;
+  total_files: number;
+  uploaded_bytes: number;
+  total_bytes: number;
+  public_url: string;
+  error?: string | null;
+  updated_at: number;
+  last_synced_at?: number | null;
+}
+
+export interface CloudflareSyncSummary {
+  match_id: string;
+  title: string;
+  date: string;
+  duration_seconds: number;
+  is_configured: boolean;
+  bucket_name: string;
+  public_base_url: string;
+  public_url: string;
+  video: {
+    url: string;
+    filename: string;
+    size_bytes: number;
+    formatted_size: string;
+    exists: boolean;
+  };
+  clips: {
+    count: number;
+    total_size_bytes: number;
+    formatted_size: string;
+    items: Array<{
+      id: string;
+      title: string;
+      filename: string;
+      size_bytes: number;
+      formatted_size: string;
+      exists: boolean;
+      is_standalone_clip: boolean;
+    }>;
+  };
+  thumbnail: {
+    url: string;
+    filename: string;
+    size_bytes: number;
+    exists: boolean;
+  };
+  metadata: {
+    events_count: number;
+    highlights_count: number;
+    radar_frames_count: number;
+    has_analytics: boolean;
+    drawings_count: number;
+  };
+  total_media_size_bytes: number;
+  formatted_total_media_size: string;
+  status: CloudflareSyncStatus;
+}
+

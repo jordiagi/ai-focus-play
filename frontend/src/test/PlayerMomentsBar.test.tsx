@@ -20,3 +20,15 @@ it('shows a measured jersey number without adding a player name', () => {
   }]} selectedJersey={null} onSelectJersey={vi.fn()} />);
   expect(screen.getByRole('button', { name: 'Player 8' }).textContent).toBe('8');
 });
+
+it('renders reel download link when a jersey is selected and matchId is provided', () => {
+  render(<PlayerMomentsBar
+    matchId="demo-match"
+    lineup={[{ jersey: '8', name: 'John Doe', position: 'MID', is_starter: true, minutes_played: 90 }]}
+    selectedJersey="8"
+    onSelectJersey={vi.fn()}
+  />);
+  const link = screen.getByRole('link', { name: /download mp4 reel for jersey 8/i });
+  expect(link).toBeTruthy();
+  expect(link.getAttribute('href')).toContain('/matches/demo-match/players/8/reel');
+});

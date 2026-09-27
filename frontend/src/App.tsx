@@ -10,6 +10,7 @@ import { SidebarDrawer } from './components/Sidebar/SidebarTabs';
 import { UploadModal } from './components/UploadModal';
 import { SocialShareModal } from './components/SocialShareModal';
 import { HelpShortcutsModal } from './components/HelpShortcutsModal';
+import { CloudSyncModal } from './components/CloudSyncModal';
 import { Loader2, AlertTriangle, X } from 'lucide-react';
 
 const DRAWER_ROUTES: Record<Exclude<ActiveDrawerType, null>, string> = {
@@ -46,6 +47,7 @@ export const App: React.FC = () => {
   const [isBurgerOpen, setIsBurgerOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isSocialShareOpen, setIsSocialShareOpen] = useState(false);
+  const [isCloudSyncOpen, setIsCloudSyncOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [activeDrawer, setActiveDrawer] = useState<ActiveDrawerType>(getDrawerFromHash);
   const [loading, setLoading] = useState(true);
@@ -285,8 +287,10 @@ export const App: React.FC = () => {
         onOpenBurgerMenu={() => setIsBurgerOpen(true)}
         onOpenUpload={() => setIsUploadOpen(true)}
         onOpenSocialShare={() => setIsSocialShareOpen(true)}
+        onOpenCloudSync={() => setIsCloudSyncOpen(true)}
         onDeleteMatch={handleDeleteMatch}
         canUpload={true}
+        selectedJersey={selectedJersey}
       />
 
       {/* Error Toast if present */}
@@ -317,6 +321,7 @@ export const App: React.FC = () => {
         onCreateTeam={handleCreateTeam}
         onUpdateTeam={handleUpdateTeam}
         onDeleteTeam={handleDeleteTeam}
+        onOpenCloudSync={() => setIsCloudSyncOpen(true)}
         onOpenUpload={(targetTeam) => {
           if (targetTeam) setSelectedTeam(targetTeam);
           setIsUploadOpen(true);
@@ -348,6 +353,13 @@ export const App: React.FC = () => {
       <HelpShortcutsModal
         isOpen={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}
+      />
+
+      {/* 3d. Cloudflare Sync & Host Modal */}
+      <CloudSyncModal
+        isOpen={isCloudSyncOpen}
+        onClose={() => setIsCloudSyncOpen(false)}
+        match={currentMatch}
       />
 
       {/* 4. Main Workspace Split Layout */}
@@ -399,6 +411,7 @@ export const App: React.FC = () => {
 
             {/* Exact Player Moments Pill Bar below Video */}
             <PlayerMomentsBar
+              matchId={currentMatch.id}
               lineup={currentMatch.lineup}
               selectedJersey={selectedJersey}
               onSelectJersey={handleSelectJersey}

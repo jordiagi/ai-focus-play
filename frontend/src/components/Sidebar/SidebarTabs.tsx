@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Video, List, Shirt, BarChart2, LayoutGrid, FileText,
-  Play, ArrowLeftRight, ArrowUpRight, ArrowLeft, ChevronDown, X, Info
+  Play, ArrowLeftRight, ArrowUpRight, ArrowLeft, ChevronDown, X, Info, Download
 } from 'lucide-react';
 import { Match, Highlight, Event, AnalyticsData, EventTypeLabel } from '../../types';
 import { api } from '../../services/api';
@@ -1158,21 +1158,40 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                   return (
                     <>
                       {/* Player Banner */}
-                      <div className="bg-[#14261c] border border-[#00E676]/40 rounded-xl p-3 flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 rounded-full bg-[#00E676] text-black font-extrabold text-sm flex items-center justify-center shadow-lg">
-                            {selectedJersey}
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-white">{displayName}</div>
-                            <div className="text-[10px] text-gray-300">
-                              {player?.position || 'Player'} • {player?.minutes_played != null ? `${player.minutes_played} mins played` : '— mins played'}
+                      <div className="bg-[#14261c] border border-[#00E676]/40 rounded-xl p-3 flex flex-col space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 rounded-full bg-[#00E676] text-black font-extrabold text-sm flex items-center justify-center shadow-lg">
+                              {selectedJersey}
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-white">{displayName}</div>
+                              <div className="text-[10px] text-gray-300">
+                                {player?.position || 'Player'} • {player?.minutes_played != null ? `${player.minutes_played} mins played` : '— mins played'}
+                              </div>
                             </div>
                           </div>
+                          <span className="text-xs font-bold text-[#00E676] bg-[#00E676]/10 px-2 py-1 rounded-md border border-[#00E676]/20">
+                            {moments.length} moments
+                          </span>
                         </div>
-                        <span className="text-xs font-bold text-[#00E676] bg-[#00E676]/10 px-2 py-1 rounded-md border border-[#00E676]/20">
-                          {moments.length} moments
-                        </span>
+
+                        {moments.length > 0 && (
+                          <div className="pt-2 border-t border-[#00E676]/20 flex items-center justify-between">
+                            <span className="text-[11px] text-gray-300 font-medium">
+                              Export Compilation
+                            </span>
+                            <a
+                              href={api.getPlayerReelUrl(match.id, selectedJersey)}
+                              download
+                              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-[#00E676] hover:bg-[#00c864] text-black font-bold text-xs transition shadow cursor-pointer"
+                              title={`Download MP4 reel of all plays for #${selectedJersey}`}
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Download #{selectedJersey} Reel (MP4)</span>
+                            </a>
+                          </div>
+                        )}
                       </div>
 
                       {/* Moments Timeline List */}

@@ -145,3 +145,58 @@ class VideoProcessor:
             logger.info("Demo soccer video generated successfully.")
         except Exception as e:
             logger.error(f"Failed to generate demo soccer video: {e}")
+
+    @staticmethod
+    def concat_clips(clip_paths: list[Path], output_path: Path) -> bool:
+        """Concatenates multiple MP4 clips using ffmpeg concat demuxer with re-encode fallback."""
+        if not clip_paths:
+            return False
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        if len(clip_paths) == 1:
+            try:
+                import shutil
+                shutil.copyfile(clip_paths[0], output_path)
+                return True
+            except Exception as e:
+                logger.error(f"Single clip copy failed: {e}")
+                return False
+
+        list_file = output_path.with_suffix(".txt")
+        try:
+            with open(list_file, "w", encoding="utf-8") as f:
+                for p in clip_paths:
+                    f.write(f"file '{p.resolve()}'\n")
+
+            cmd = [
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", str(list_file),
+                "-c", "copy",
+                "-movflags", "+faststart",
+                str(output_path)
+            ]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            return True
+        except Exception:
+            # Fallback re-encode if stream copy fails (e.g. slight codec/timecode mismatch)
+            cmd_reencode = [
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", str(list_file),
+                "-c:v", "libx264",
+                "-preset", "ultrafast",
+                "-c:a", "aac",
+                "-movflags", "+faststart",
+                str(output_path)
+            ]
+            try:
+                subprocess.run(cmd_reencode, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                return True
+            except Exception as err:
+                logger.error(f"Concat failed: {err}")
+                return False
+        finally:
+            list_file.unlink(missing_ok=True)

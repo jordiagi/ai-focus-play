@@ -394,3 +394,42 @@ it('filters highlights list when a player jersey is selected', () => {
   fireEvent.click(clearBtn);
   expect(onSelectJersey).toHaveBeenCalledWith(null);
 });
+
+it('renders player reel download button in players drawer when jersey is selected and moments exist', () => {
+  const testHighlights: Highlight[] = [
+    {
+      id: 'hl-1',
+      match_id: 'literal-match',
+      title: 'Goal - #8',
+      event_type: 'goal',
+      start_time: 12.0,
+      end_time: 20.0,
+      period: 1,
+      team: 'home',
+      player_jersey: '8',
+      is_ai_detected: true,
+      tags: ['Goal'],
+      comments_count: 0,
+      created_at: 0,
+    },
+  ];
+
+  render(
+    <SidebarDrawer
+      activeTab="players"
+      onClose={vi.fn()}
+      match={match}
+      highlights={testHighlights}
+      events={[]}
+      analytics={analytics}
+      onSeek={vi.fn()}
+      onPlayAllHighlights={vi.fn()}
+      selectedJersey="8"
+      onSelectJersey={vi.fn()}
+    />
+  );
+
+  const downloadBtn = screen.getByRole('link', { name: /download #8 reel \(mp4\)/i });
+  expect(downloadBtn).toBeTruthy();
+  expect(downloadBtn.getAttribute('href')).toContain('/matches/literal-match/players/8/reel');
+});

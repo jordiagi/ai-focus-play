@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Match } from '../types';
-import { Upload, Download, Check, Video, FileArchive, ChevronDown, FileText, FileSpreadsheet, Share2, Trash2 } from 'lucide-react';
+import { Upload, Download, Check, Video, FileArchive, ChevronDown, FileText, FileSpreadsheet, Share2, Trash2, Cloud, Shirt } from 'lucide-react';
 import { api } from '../services/api';
 
 interface HeaderProps {
@@ -10,8 +10,10 @@ interface HeaderProps {
   onOpenBurgerMenu: () => void;
   onOpenUpload: () => void;
   onOpenSocialShare?: () => void;
+  onOpenCloudSync?: () => void;
   onDeleteMatch?: (matchId: string) => void;
   canUpload?: boolean;
+  selectedJersey?: string | null;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -21,8 +23,10 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenBurgerMenu,
   onOpenUpload,
   onOpenSocialShare,
+  onOpenCloudSync,
   onDeleteMatch,
   canUpload = true,
+  selectedJersey,
 }) => {
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [showMatchPicker, setShowMatchPicker] = useState(false);
@@ -306,6 +310,19 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
+        {/* Cloudflare Sync Button */}
+        {onOpenCloudSync && (
+          <button
+            onClick={onOpenCloudSync}
+            className="flex items-center space-x-1.5 text-[#e1e1e1] hover:text-[#F38020] text-xs font-medium transition cursor-pointer"
+            aria-label="Cloudflare match sync"
+            title="Host and sync match to Cloudflare"
+          >
+            <Cloud className="w-4 h-4 text-[#F38020]" />
+            <span>Cloud Sync</span>
+          </button>
+        )}
+
         {/* Download Dropdown */}
         <div className="relative" ref={downloadMenuRef}>
           <button
@@ -343,6 +360,20 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="text-[10px] text-gray-400">Download all clips package</div>
                 </div>
               </a>
+              {selectedJersey && (
+                <a
+                  href={api.getPlayerReelUrl(currentMatch.id, selectedJersey)}
+                  download
+                  onClick={() => setShowDownloadMenu(false)}
+                  className="flex items-center space-x-2.5 px-3 py-2 text-xs text-gray-200 hover:bg-[#1a1e28] transition border-t border-[#222]"
+                >
+                  <Shirt className="w-4 h-4 text-[#FFD700]" />
+                  <div>
+                    <div className="font-semibold text-white">Jersey #{selectedJersey} Reel (MP4)</div>
+                    <div className="text-[10px] text-gray-400">Download player compilation</div>
+                  </div>
+                </a>
+              )}
               <button
                 onClick={handleDownloadAnalyticsJson}
                 disabled={isExporting}
@@ -365,6 +396,21 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="text-[10px] text-gray-400">Spreadsheet table of all tagged plays</div>
                 </div>
               </button>
+              {onOpenCloudSync && (
+                <button
+                  onClick={() => {
+                    setShowDownloadMenu(false);
+                    onOpenCloudSync();
+                  }}
+                  className="w-full text-left flex items-center space-x-2.5 px-3 py-2 text-xs text-gray-200 hover:bg-[#1a1e28] transition border-t border-[#222] cursor-pointer"
+                >
+                  <Cloud className="w-4 h-4 text-[#F38020]" />
+                  <div>
+                    <div className="font-semibold text-white">Sync to Cloudflare</div>
+                    <div className="text-[10px] text-gray-400">Pages + R2 zero-egress public viewer</div>
+                  </div>
+                </button>
+              )}
             </div>
           )}
         </div>

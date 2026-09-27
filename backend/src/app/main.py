@@ -12,6 +12,7 @@ from backend.src.api.guards import ReadOnlyAPIMiddleware
 from backend.src.api.routes.matches import router as matches_router
 from backend.src.api.routes.comments import router as comments_router
 from backend.src.api.routes.teams import router as teams_router
+from backend.src.api.routes.sync import router as sync_router
 from backend.src.services.pipeline.video_processor import VideoProcessor
 
 logging.basicConfig(
@@ -166,6 +167,7 @@ app.mount("/media", StaticFiles(directory=str(MEDIA_DIR), follow_symlink=True), 
 app.include_router(matches_router)
 app.include_router(teams_router)
 app.include_router(comments_router)
+app.include_router(sync_router)
 
 @app.get("/api/capabilities")
 def get_capabilities():
