@@ -4,8 +4,7 @@ Session constraint: local CPU/GPU only; no remote GPU. See `docs/video-only-sess
 
 ## Active
 
-- [T-010] Improve small-ball detection on the three-source CPU pilot. Compare higher inference resolution, tiled proposals and a soccer-specific model; evaluate independently labeled sample before choosing. Current whole-frame YOLO11n candidate presence is 10.5% Veo and 1% Marc, not accuracy.
-- [T-009] Publish reviewed feature branch to GitHub. SSH works; GitHub CLI lacks API authentication, so issue/PR creation may remain pending.
+- [T-010] Improve small-ball detection on the three-source CPU pilot. Resolution experiment completed:640→1280 increases candidate-bearing frames21→138 Veo and2→25 Marc, while BCC stays0; throughput ~4.6 fps. Next compare tiled proposals/soccer-specific model and independently audit precision/recall. Counts are not accuracy.
 
 ## Queued
 
@@ -14,6 +13,7 @@ Session constraint: local CPU/GPU only; no remote GPU. See `docs/video-only-sess
 - [T-007] Obtain additional Veo event exports; define split and locked audit samples for Marc/BCC.
 - [T-008] Train/evaluate temporal shots and passing, then test cautious unlabeled adaptation.
 - [T-011] Wire video-only mode to API/UI only after score/metric provenance is represented; current mode is experimental CLI with isolated DB.
+- [T-012] Create PR from published `feat/video-only-local-pilot-review` after GitHub API authentication; exact command/body in `docs/video-only-pr.md`.
 
 ## Completed
 
@@ -22,3 +22,4 @@ Session constraint: local CPU/GPU only; no remote GPU. See `docs/video-only-sess
 - [T-002] Separate inventory registry: four Veo, two Marc, seven BCC source pointers; local audit generated.
 - [T-003] Dense hashed local Veo/Marc clips prepared; independent ffprobe confirms 200 frames, 10 fps, 20s. BCC archive segment recovered; resolution comparison documented in session log.
 - [T-004] Separate Python 3.12 CPU inference environment, CPU-only PyTorch, YOLO11n checkpoint, locked runtime dependencies, and real local object detection pilots. No remote compute used.
+- [T-009] Reviewed session-only branch published to GitHub via SSH; preserves prior unpublished local commits. PR draft saved; API authentication unavailable.

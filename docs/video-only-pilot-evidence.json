@@ -38,7 +38,21 @@
         "predict_decode_wall_s": 19.155353754991665,
         "frames_per_second": 10.440945260427899
       },
-      "accuracy_measured": false
+      "accuracy_measured": false,
+      "resolution_experiment": {
+        "imgsz": 1280,
+        "counts": {
+          "frames": 200,
+          "person_detections": 3901,
+          "ball_candidates": 28,
+          "frames_with_ball_candidate": 25
+        },
+        "performance": {
+          "predict_decode_wall_s": 43.150043456989806,
+          "frames_per_second": 4.634989538292164
+        },
+        "accuracy_measured": false
+      }
     },
     "skyline-900": {
       "source_sha256": "ef7552326b0ab24e30377f3b272559ece5bb8133c91fceb34418f9839bd843c1",
@@ -76,7 +90,21 @@
         "predict_decode_wall_s": 21.012789956992492,
         "frames_per_second": 9.518012620377684
       },
-      "accuracy_measured": false
+      "accuracy_measured": false,
+      "resolution_experiment": {
+        "imgsz": 1280,
+        "counts": {
+          "frames": 200,
+          "person_detections": 5214,
+          "ball_candidates": 175,
+          "frames_with_ball_candidate": 138
+        },
+        "performance": {
+          "predict_decode_wall_s": 43.218014709011186,
+          "frames_per_second": 4.627699845691869
+        },
+        "accuracy_measured": false
+      }
     },
     "bcc-northwest-hd-segment": {
       "source_sha256": "aa3dedb234c74b7898065794fb3348e79a795bf71772d7d7e9556ee2450e916f",
@@ -114,7 +142,21 @@
         "predict_decode_wall_s": 28.233003010973334,
         "frames_per_second": 7.0839081454518285
       },
-      "accuracy_measured": false
+      "accuracy_measured": false,
+      "resolution_experiment": {
+        "imgsz": 1280,
+        "counts": {
+          "frames": 200,
+          "person_detections": 7356,
+          "ball_candidates": 0,
+          "frames_with_ball_candidate": 0
+        },
+        "performance": {
+          "predict_decode_wall_s": 43.01259613502771,
+          "frames_per_second": 4.649800708893462
+        },
+        "accuracy_measured": false
+      }
     }
   }
 }

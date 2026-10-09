@@ -1,6 +1,9 @@
 """Video-only ingestion cannot consult evaluation labels or fixed pitch priors."""
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -188,6 +191,44 @@ def test_experimental_cli_requires_explicit_database(monkeypatch):
     with pytest.raises(SystemExit) as error:
         main()
     assert error.value.code == 2
+
+
+@pytest.mark.parametrize("arguments,returncode", [
+    (["-c", "import sys; import backend.src.services.pipeline.pipeline_runner; "
+      "assert 'backend.src.storage.repository' not in sys.modules"], 0),
+    (["-m", "backend.src.services.pipeline.pipeline_runner", "--help"], 0),
+    (["-m", "backend.src.services.pipeline.pipeline_runner", "--match-id", "fresh-pilot",
+      "--mode", "video_only"], 2),
+])
+def test_import_help_and_rejected_cli_never_create_database(tmp_path, arguments, returncode):
+    environment = os.environ.copy()
+    environment.pop("AIFP_DB_PATH", None)
+    environment.update(AIFP_DATA_DIR=str(tmp_path / "data"),
+                       AIFP_MEDIA_DIR=str(tmp_path / "media"),
+                       AIFP_CLOUD_EXPORT_DIR=str(tmp_path / "cloud"))
+    completed = subprocess.run([sys.executable, *arguments], env=environment,
+                               cwd=Path(__file__).resolve().parents[3],
+                               capture_output=True, text=True, timeout=30)
+    assert completed.returncode == returncode, completed.stderr
+    assert not (tmp_path / "data" / "veo.db").exists()
+    assert not list(tmp_path.rglob("*.db"))
+
+
+@pytest.mark.parametrize("mode", ["video_only", "ml", "demo"])
+def test_supplied_repository_never_calls_default_factory(monkeypatch, mode):
+    import backend.src.services.pipeline.pipeline_runner as runner
+
+    class SuppliedRepository:
+        def __bool__(self):
+            return False
+
+    def forbidden():
+        pytest.fail("Supplied repositories must avoid default repository initialization")
+
+    supplied = SuppliedRepository()
+    monkeypatch.setattr(runner, "_default_repository", forbidden)
+    pipeline = runner.MatchPipeline("fresh-pilot", mode=mode, repo=supplied)
+    assert pipeline.repo is supplied
 
 
 def test_video_only_rejects_external_calibration(video_match, tmp_path):

@@ -19,7 +19,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("MatchPipeline")
 
@@ -43,7 +43,15 @@ from backend.src.services.pipeline.ml_ingest import TYPE_TO_LABEL, UNAVAILABLE, 
 from backend.src.services.pipeline.physics_shot_detector import PhysicsShotDetector
 from backend.src.services.pipeline.radar_calibrator import CalibratedPitchRadar
 from backend.src.services.pipeline.veo_calibrator import VeoCameraModel
-from backend.src.storage.repository import MatchRepository
+if TYPE_CHECKING:
+    from backend.src.storage.repository import MatchRepository
+
+
+def _default_repository() -> MatchRepository:
+    # Repository import initializes its global instance and may recover jobs.
+    # Keep imports/help/CLI validation free of database side effects.
+    from backend.src.storage.repository import MatchRepository
+    return MatchRepository()
 
 
 class MatchPipeline:
@@ -66,7 +74,7 @@ class MatchPipeline:
                 raise ValueError("video_only does not accept external .veo calibration")
             self.artifacts_dir = Path(artifacts_dir) if artifacts_dir is not None else None
             self.calib_file = None
-            self.repo = repo or MatchRepository()
+            self.repo = repo if repo is not None else _default_repository()
             return
         self.artifacts_dir = artifacts_dir or (REPO / "backend/.local/artifacts/mosaic")
         if calib_file is not None:
@@ -81,7 +89,7 @@ class MatchPipeline:
             self.calib_file = REPO / "benchmarks/raw/ncfc_camera_alignment.veo"
         else:
             self.calib_file = None
-        self.repo = repo or MatchRepository()
+        self.repo = repo if repo is not None else _default_repository()
 
     def run(self) -> Dict[str, Any]:
         """Execute the DAG pipeline according to mode."""

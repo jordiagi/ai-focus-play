@@ -20,10 +20,10 @@ Read root `AGENTS.md`, `docs/video-only-plan.md`, and `TASKS.md`. This session i
 All paths below are relative to `backend/.local/artifacts/video-only-pilot/`:
 
 - `input-audit.json`: regenerated inventory with metadata/cadence and guidance availability.
-- `skyline-900/`, `marc-horta-900/`: source-video 900–920s clips, 1280×720, 10fps, 200 frames; `pilot_manifest.json` and independent `clip-validation.json`.
+- `skyline-900/`, `marc-horta-900/`: source-video 900–920s clips, 1280×720, 10 fps, 200 frames; `pilot_manifest.json` and independent `clip-validation.json`.
 - `skyline-900-detections/`, `marc-horta-900-detections/`: people/ball candidates and runtime/hash manifests.
 - `bcc-source/bcc-northwest-900-hd-v2.mp4`: recovered 1080p archive segment; entire original recording was not downloaded.
-- `bcc-northwest-hd-segment/` and `bcc-northwest-hd-segment-detections/`: comparable 10fps pilot and detections, with local clock 0–20s (archive 900–920s).
+- `bcc-northwest-hd-segment/` and `bcc-northwest-hd-segment-detections/`: comparable 10 fps pilot and detections, with local clock 0–20s (archive 900–920s).
 - Earlier 360p BCC directories are retained for provenance, not selected as the comparable pilot.
 
 Portable summaries (no video or event labels): `docs/video-only-pilot-evidence.json`. Historical baseline output `/tmp/ai-focus-play-review-parity.json` is regenerable with the legacy scorer; its predictions are not genuinely unguided raw-video inference.
@@ -38,10 +38,12 @@ Portable summaries (no video or event labels): `docs/video-only-pilot-evidence.j
 
 - Four-match historical baseline rerun: possession MAE 8.82pt; LOMO 10.03pt; pass-share 7.38pt; shots 4.38. Derived pass totals excluded from accuracy claims.
 - Independent final focused integration suite: **82 passed**.
-- Full backend suite: `timeout 120 backend/.venv/bin/python -m pytest backend/tests -q -o faulthandler_timeout=45` → **192 passed**, two dependency deprecation warnings, 23.05s.
+- Full backend suite: `timeout 120 backend/.venv/bin/python -m pytest backend/tests -q -o faulthandler_timeout=45` → **192 passed** initially; after six import-safety regression tests, final full rerun **198 passed**, two dependency deprecation warnings, 22.85s.
 - The original sandbox run stalled at Starlette TestClient's AnyIO portal startup. A timeout/fault-handler reproduction confirmed the wait; unrestricted local rerun passed. The stalled run was interrupted. This was not an application test failure.
-- Independent ffprobe checks on Veo/Marc: 20s, 10fps, 200 frames each. Object candidates: Skyline 3230 people, ball on21/200frames, 21.01s CPU prediction/decode (9.52fps); Marc 2799 people, ball on2/200frames, 19.16s (10.44fps). Counts are **not precision/recall**; no verified event accuracy improvement is claimed.
-- HD BCC pilot also has 200 frames, 1280×720 at 10fps: 3085 person candidates, **0 ball candidates**, 28.23s CPU decode/prediction (7.08fps). Visually inspected first frame shows active play. This makes small-ball visibility a concrete development concern across recording types.
+- Independent ffprobe checks on Veo/Marc: 20s, 10 fps, 200 frames each. Object candidates: Skyline 3230 people, ball on21/200 frames, 21.01s CPU prediction/decode (9.52fps); Marc 2799 people, ball on2/200 frames, 19.16s (10.44fps). Counts are **not precision/recall**; no verified event accuracy improvement is claimed.
+- HD BCC pilot also has 200 frames, 1280×720 at 10 fps: 3085 person candidates, **0 ball candidates**, 28.23s CPU decode/prediction (7.08fps). Visually inspected first frame shows active play. This makes small-ball visibility a concrete development concern across recording types.
+- **Resolution experiment:** same frozen clips/checkpoint/confidence, inference size 1280 instead of 640: candidate-bearing ball frames **138/200 Veo**, **25/200 Marc**, **0/200 BCC**. Runtime 43.22/43.15/43.01 seconds respectively (~4.6fps). Larger person/ball candidate counts can include false positives; precision/recall are still unknown. Artifacts are the corresponding `*-detections-1280/` directories. Do not choose a production threshold based on candidate counts alone.
+- Final boundary review found module-level repository import could initialize/recover the production DB before the CLI guard. Replaced it with a lazy default-repository factory; subprocess tests cover import, help, and rejected CLI paths without database creation. Supplied repositories are preserved in all modes.
 - Clean remote-base archive review: focused boundary/audit/preparation+legacy tests **41 passed, 1 skipped**; detector tests **15 passed**. Full clean-archive suite: **160 passed, 1 skipped, 7 failed**; the same seven missing-media/detection failures reproduce with unmodified origin code. No private media is being published to satisfy them.
 - `git diff --check` passes. Media, weights, runtime and detailed candidate artifacts are excluded from Git.
 
@@ -71,6 +73,8 @@ The isolated event-ingestion CLI additionally needs a freshly seeded pilot match
 - Remote `git@github.com:jordiagi/ai-focus-play.git`; SSH read access verified. `gh` has no API authentication, so issue/PR creation requires login later.
 - Local implementation branch: `feat/video-only-local-pilot`, based on local main. Local main has four pre-existing unpublished commits, including a match-sheet export. These are outside this publication scope.
 - Publish a separate review branch based on `origin/main` containing only this session's source/tests/docs changes, without videos, event labels, private source URLs, or previous unpublished match imports. See final publication entry below for actual branch/checks.
+- **Published:** `feat/video-only-local-pilot-review` pushed successfully via SSH, initial commit `4d7e9d3`, directly on remote main. Review worktree: `/tmp/aifp-github-review`. Constructor cherry-pick conflict resolved by retaining origin's historical ML artifact resolution and inserting only the new video-only branch. Its focused integration suite independently passed **56 tests, 1 skipped**. Current workspace remains on the local implementation branch with the four prior commits intact.
+- No PR was created because `gh auth status` reports no authenticated hosts. Review draft and exact creation command: `docs/video-only-pr.md`. Branch link: https://github.com/jordiagi/ai-focus-play/tree/feat/video-only-local-pilot-review
 
 ## Next work
 
