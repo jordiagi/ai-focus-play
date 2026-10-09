@@ -15,6 +15,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -33,6 +35,8 @@ from backend.src.domain.models.match import (
     RadarBall,
     RadarFrame,
     RadarPlayer,
+    TeamStats,
+    default_event_capabilities,
 )
 from backend.src.services.pipeline.ml_analytics import build_ml_analytics
 from backend.src.services.pipeline.ml_ingest import TYPE_TO_LABEL, UNAVAILABLE, build as build_ml_events
@@ -55,6 +59,15 @@ class MatchPipeline:
     ):
         self.match_id = match_id
         self.mode = mode
+        if mode == "video_only":
+            # Inference inputs must be explicit. In particular, never silently
+            # borrow the shared mosaic/Skyline artifacts or Veo camera metadata.
+            if calib_file is not None:
+                raise ValueError("video_only does not accept external .veo calibration")
+            self.artifacts_dir = Path(artifacts_dir) if artifacts_dir is not None else None
+            self.calib_file = None
+            self.repo = repo or MatchRepository()
+            return
         self.artifacts_dir = artifacts_dir or (REPO / "backend/.local/artifacts/mosaic")
         if calib_file is not None:
             self.calib_file = calib_file
@@ -73,7 +86,7 @@ class MatchPipeline:
     def run(self) -> Dict[str, Any]:
         """Execute the DAG pipeline according to mode."""
         match = self.repo.get_match(self.match_id)
-        if match is None:
+        if match is None and self.mode != "video_only":
             if "ncfc" in self.match_id.lower():
                 from backend.src.services.pipeline.ncfc_seeder import seed_ncfc_match
                 from backend.src.config import MEDIA_DIR
@@ -90,10 +103,114 @@ class MatchPipeline:
 
         if self.mode == "demo":
             return self._run_demo_pipeline(match)
+        elif self.mode == "video_only":
+            return self._run_video_only_pipeline(match)
         elif self.mode == "ml":
             return self._run_ml_pipeline(match)
         else:
             raise ValueError(f"Unknown analysis mode: {self.mode!r}")
+
+    def _run_video_only_pipeline(self, match: Match) -> Dict[str, Any]:
+        """Persist explicit video predictions without reference-guided enrichment.
+
+        This boundary is an artifact-ingestion baseline, not a new video detector.
+        The caller is responsible for producing video-derived artifacts; evaluation
+        labels and metrics belong in a separate process. Metric geometry is withheld
+        until a video-derived calibration path is implemented and validated.
+        """
+        if match.analysis_mode in {"ml", "demo"} or match.home_score != 0 or match.away_score != 0:
+            raise ValueError(
+                "video_only refuses enriched or scored match records; use a fresh pilot match ID"
+            )
+        pred, manifest = {"events": []}, {"attempted": []}
+        inputs = []
+        video_sha256 = None
+        if self.artifacts_dir is not None:
+            pred_path = self.artifacts_dir / "pred_all.json"
+            manifest_path = self.artifacts_dir / "manifest_all.json"
+            if not self.artifacts_dir.is_dir() or not pred_path.is_file() or not manifest_path.is_file():
+                raise ValueError(
+                    "Explicit video_only artifact directory must contain both pred_all.json and manifest_all.json"
+                )
+            if pred_path.is_file() and manifest_path.is_file():
+                pred = json.loads(pred_path.read_text())
+                manifest = json.loads(manifest_path.read_text())
+                provenance = manifest.get("input_provenance", {})
+                if not isinstance(provenance, dict):
+                    provenance = {}
+                video_sha256 = provenance.get("video_sha256")
+                if (provenance.get("mode") != "video_only"
+                        or provenance.get("evaluation_labels_used") is not False
+                        or not isinstance(video_sha256, str)
+                        or re.fullmatch(r"[0-9a-fA-F]{64}", video_sha256) is None):
+                    raise ValueError(
+                        "video_only artifacts require manifest input_provenance with "
+                        "mode='video_only', evaluation_labels_used=false, and a 64-hex video_sha256"
+                    )
+                inputs = [str(pred_path), str(manifest_path)]
+
+        caps = {label: EventCapability(status="not_attempted")
+                for label in default_event_capabilities()}
+        for event_type in manifest.get("attempted", []):
+            label = TYPE_TO_LABEL.get(event_type)
+            if label:
+                caps[label] = EventCapability(status="detected", count=0)
+        events = []
+        for prediction in pred.get("events", []):
+            label = TYPE_TO_LABEL.get(prediction.get("event_type"))
+            if label is None:
+                continue
+            events.append(Event(
+                match_id=self.match_id,
+                timestamp=float(prediction["video_s"]),
+                period=int(prediction.get("period", 1)),
+                event_type=label,
+                team="unknown",
+                pitch_x=None,
+                pitch_y=None,
+                confidence=float(prediction.get("confidence", 0.5)),
+                description=f"{label}: video-derived prediction; team unverified",
+            ))
+            cap = caps.setdefault(label, EventCapability(status="detected", count=0))
+            cap.status = "detected"
+            cap.count = (cap.count or 0) + 1
+
+        reason = "Unavailable: video-only measurement has not been validated for this match"
+        analytics = AnalyticsData(
+            home_stats=TeamStats(), away_stats=TeamStats(),
+            provenance="video_only",
+            unavailable={field: reason for field in TeamStats.model_fields},
+        )
+        # Do not leave previously enriched outputs beside these predictions.
+        self.repo.save_radar_frames(self.match_id, [])
+        # Existing lineup is user content; do not consume or rewrite it here.
+        manual_highlights = [highlight for highlight in self.repo.get_highlights(self.match_id)
+                             if not highlight.is_ai_detected]
+        self.repo.set_highlights(self.match_id, manual_highlights, internal=True)
+        self.repo.set_events(self.match_id, events)
+        self.repo.set_analytics(self.match_id, analytics)
+        match.analysis_mode = "video_only"
+        match.analysis_confidence = "low"
+        match.event_capabilities = caps
+        match.status = "ready"
+        match.processing_progress = 100.0
+        self.repo.save_match(match)
+        stored_events = self.repo.get_events(self.match_id)
+        return {
+            "mode": "video_only", "match_id": self.match_id,
+            "events_ingested": len(events), "events_stored": len(stored_events),
+            "radar_frames_stored": 0, "physics_shots_detected": 0,
+            "highlights_extracted": 0, "capabilities_count": len(caps),
+            "analytics_provenance": "video_only",
+            "verified": len(stored_events) == len(events),
+            "input_artifacts": inputs,
+            "video_sha256": video_sha256,
+            "input_provenance_assurance": "producer-attested; not independently certified" if inputs else "no artifacts",
+            "geometry": "unavailable: no validated video-derived calibration",
+            "inference": "explicit artifact ingestion" if inputs else "not run: no explicit prediction artifacts",
+            "team_attribution": "unknown: no verified video-derived team mapping",
+            "evaluation_labels_used": False,
+        }
 
     def _run_demo_pipeline(self, match: Match) -> Dict[str, Any]:
         """Run the frozen demo fallback engine."""
@@ -465,11 +582,14 @@ class MatchPipeline:
 def main():
     parser = argparse.ArgumentParser(description="MatchPipeline DAG Runner")
     parser.add_argument("--match-id", required=True, help="Target match ID")
-    parser.add_argument("--mode", default="ml", choices=["ml", "demo"], help="Pipeline execution mode")
+    parser.add_argument("--mode", default="ml", choices=["ml", "demo", "video_only"],
+                        help="Pipeline mode; video_only is experimental CLI artifact ingestion and requires an isolated AIFP_DB_PATH")
     parser.add_argument("--artifacts", default=None, help="Path to mosaic artifacts directory")
     parser.add_argument("--calib", default=None, help="Path to .veo camera alignment file")
 
     args = parser.parse_args()
+    if args.mode == "video_only" and not os.environ.get("AIFP_DB_PATH", "").strip():
+        parser.error("experimental video_only requires an explicit isolated AIFP_DB_PATH and a fresh pilot match ID")
     artifacts_dir = Path(args.artifacts) if args.artifacts else None
     calib_file = Path(args.calib) if args.calib else None
 

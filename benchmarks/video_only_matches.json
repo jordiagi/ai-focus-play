@@ -1,0 +1,248 @@
+{
+  "$comment": "Input inventory only, NOT an inference input or scoring registry. Veo guidance is inventoried for scoring only. Whole-match splits are provisional; freeze before training. Archived URLs are pointers, not verified live access. No official acta used as video labels.",
+  "matches": [
+    {
+      "id": "skyline-20260913",
+      "label": "Arlington vs Skyline (2026-09-13, H)",
+      "video": "/home/ai/Downloads/arlington-sa-u16b-ecnl-26-27-vs-skyline-u16b-ecnl-2026-09-13-2026-09-13.mp4",
+      "video_duration_s": 6172.9,
+      "artifacts": "backend/.local/artifacts/mosaic",
+      "stats": "benchmarks/raw/veo_stats_live.json",
+      "events": "benchmarks/raw/veo_events_447.csv",
+      "calib": "benchmarks/raw/skyline_camera_alignment.veo",
+      "periods": [
+        [
+          562.3,
+          2879.3
+        ],
+        [
+          3674.4,
+          6132.1
+        ]
+      ],
+      "own_side_p1": "left",
+      "domain": "veo_arlington",
+      "evaluation_role": "development_existing_baseline",
+      "guidance_policy": "references_for_scoring_only"
+    },
+    {
+      "id": "fairfax-union-20260920",
+      "label": "Arlington vs Fairfax Union (2026-09-20, A)",
+      "video": "/home/ai/Downloads/arlington-sa-u16b-ecnl-26-27-vs-fairfax-union-2026-09-20.mp4",
+      "video_duration_s": 5876.5,
+      "artifacts": "backend/.local/artifacts/fairfax-union-20260920",
+      "stats": "benchmarks/raw/fairfax_union_stats.json",
+      "events": null,
+      "calib": "benchmarks/raw/fairfax_union_camera_alignment.veo",
+      "periods": [
+        [
+          241,
+          2806
+        ],
+        [
+          3433,
+          5843
+        ]
+      ],
+      "own_side_p1": "left",
+      "domain": "veo_arlington",
+      "evaluation_role": "development_existing_baseline",
+      "guidance_policy": "references_for_scoring_only"
+    },
+    {
+      "id": "baltimore-armor-20260906",
+      "label": "Arlington vs Baltimore Armor (2026-09-06, H)",
+      "video": "/home/ai/Downloads/arlington-sa-u16b-ecnl-26-27-vs-baltimore-armor-2026-09-06-2026-09-06.mp4",
+      "video_duration_s": 6988.0,
+      "artifacts": "backend/.local/artifacts/baltimore-armor-20260906",
+      "stats": "benchmarks/raw/baltimore_armor_stats.json",
+      "events": null,
+      "calib": "benchmarks/raw/baltimore_armor_camera_alignment.veo",
+      "periods": null,
+      "own_side_p1": null,
+      "domain": "veo_arlington",
+      "evaluation_role": "development_existing_baseline",
+      "guidance_policy": "references_for_scoring_only"
+    },
+    {
+      "id": "ncfc-20260926",
+      "label": "Arlington vs NCFC (2026-09-26, A)",
+      "video": "/home/ai/Downloads/arlington-sa-u16b-ecnl-26-27-vs-ncfc-2026-09-26.mp4",
+      "video_duration_s": 6440.4,
+      "artifacts": "backend/.local/artifacts/ncfc-20260926",
+      "stats": "benchmarks/raw/ncfc_stats.json",
+      "events": null,
+      "calib": "benchmarks/raw/ncfc_camera_alignment.veo",
+      "periods": [
+        [
+          252,
+          2764
+        ],
+        [
+          3535,
+          6328
+        ]
+      ],
+      "own_side_p1": "left",
+      "domain": "veo_arlington",
+      "evaluation_role": "development_existing_baseline",
+      "guidance_policy": "references_for_scoring_only"
+    },
+    {
+      "id": "horta-vs-turo-20260920",
+      "label": "Marc: Horta vs Turo (2026-09-20)",
+      "video": "/home/ai/Downloads/2026 09 20 Horta vs Turo Peira 26LEG1J01.mp4",
+      "artifacts": "backend/.local/artifacts/horta-vs-turo-20260920",
+      "video_duration_s": null,
+      "stats": null,
+      "events": null,
+      "calib": null,
+      "periods": null,
+      "own_side_p1": null,
+      "domain": "marc_fcf",
+      "evaluation_role": "development_pilot_not_locked_test",
+      "guidance_policy": "video_only",
+      "source_status": "local"
+    },
+    {
+      "id": "turo-vs-canvidalet-20260927",
+      "label": "Marc: Turo vs Can Vidalet (2026-09-27)",
+      "video": "/home/ai/Downloads/2026 09 27 Turo Peira vs Can Vidalet 26LEG1J02.mp4",
+      "artifacts": "backend/.local/artifacts/turo-vs-canvidalet-20260927",
+      "video_duration_s": null,
+      "stats": null,
+      "events": null,
+      "calib": null,
+      "periods": null,
+      "own_side_p1": null,
+      "domain": "marc_fcf",
+      "evaluation_role": "development_pilot_not_locked_test",
+      "guidance_policy": "video_only",
+      "source_status": "local"
+    },
+    {
+      "id": "bcc-20260908",
+      "label": "BCC vs Northwest (20260908)",
+      "video": "backend/.local/artifacts/video-only-pilot/bcc-source/bcc-northwest-900-hd-v2.mp4",
+      "artifacts": null,
+      "video_duration_s": 20,
+      "stats": null,
+      "events": null,
+      "calib": null,
+      "periods": null,
+      "own_side_p1": null,
+      "domain": "bcc_nfhs",
+      "evaluation_role": "development_pilot_not_locked_test",
+      "guidance_policy": "video_only",
+      "source_status": "local_segment_only",
+      "source_index": "../eric-soccer-bcc/videos.md",
+      "source_segment": {
+        "archive_start_s": 900,
+        "duration_s": 20,
+        "local_clock_start_s": 0
+      }
+    },
+    {
+      "id": "bcc-20260914",
+      "label": "BCC vs Wootton (20260914)",
+      "video": null,
+      "artifacts": null,
+      "video_duration_s": null,
+      "stats": null,
+      "events": null,
+      "calib": null,
+      "periods": null,
+      "own_side_p1": null,
+      "domain": "bcc_nfhs",
+      "evaluation_role": "unassigned_do_not_train_until_split_frozen",
+      "guidance_policy": "video_only",
+      "source_status": "archived_not_local",
+      "source_index": "../eric-soccer-bcc/videos.md"
+    },
+    {
+      "id": "bcc-20260916",
+      "label": "BCC vs Churchill (20260916)",
+      "video": null,
+      "artifacts": null,
+      "video_duration_s": null,
+      "stats": null,
+      "events": null,
+      "calib": null,
+      "periods": null,
+      "own_side_p1": null,
+      "domain": "bcc_nfhs",
+      "evaluation_role": "unassigned_do_not_train_until_split_frozen",
+      "guidance_policy": "video_only",
+      "source_status": "archived_not_local",
+      "source_index": "../eric-soccer-bcc/videos.md"
+    },
+    {
+      "id": "bcc-20260922",
+      "label": "BCC vs Quince Orchard (20260922)",
+      "video": null,
+      "artifacts": null,
+      "video_duration_s": null,
+      "stats": null,
+      "events": null,
+      "calib": null,
+      "periods": null,
+      "own_side_p1": null,
+      "domain": "bcc_nfhs",
+      "evaluation_role": "unassigned_do_not_train_until_split_frozen",
+      "guidance_policy": "video_only",
+      "source_status": "archived_not_local",
+      "source_index": "../eric-soccer-bcc/videos.md"
+    },
+    {
+      "id": "bcc-20260928",
+      "label": "BCC vs Walt Whitman (20260928)",
+      "video": null,
+      "artifacts": null,
+      "video_duration_s": null,
+      "stats": null,
+      "events": null,
+      "calib": null,
+      "periods": null,
+      "own_side_p1": null,
+      "domain": "bcc_nfhs",
+      "evaluation_role": "unassigned_do_not_train_until_split_frozen",
+      "guidance_policy": "video_only",
+      "source_status": "archived_not_local",
+      "source_index": "../eric-soccer-bcc/videos.md"
+    },
+    {
+      "id": "bcc-20261002",
+      "label": "BCC vs Walter Johnson (20261002)",
+      "video": null,
+      "artifacts": null,
+      "video_duration_s": null,
+      "stats": null,
+      "events": null,
+      "calib": null,
+      "periods": null,
+      "own_side_p1": null,
+      "domain": "bcc_nfhs",
+      "evaluation_role": "unassigned_do_not_train_until_split_frozen",
+      "guidance_policy": "video_only",
+      "source_status": "archived_not_local",
+      "source_index": "../eric-soccer-bcc/videos.md"
+    },
+    {
+      "id": "bcc-20261006",
+      "label": "BCC vs Watkins Mill (20261006)",
+      "video": null,
+      "artifacts": null,
+      "video_duration_s": null,
+      "stats": null,
+      "events": null,
+      "calib": null,
+      "periods": null,
+      "own_side_p1": null,
+      "domain": "bcc_nfhs",
+      "evaluation_role": "unassigned_do_not_train_until_split_frozen",
+      "guidance_policy": "video_only",
+      "source_status": "archived_not_local",
+      "source_index": "../eric-soccer-bcc/videos.md"
+    }
+  ]
+}

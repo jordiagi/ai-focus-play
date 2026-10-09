@@ -1,5 +1,17 @@
 # scripts/
 
+## Current video-only local workflow (2026-10-09)
+
+Use [the session handoff](../docs/video-only-session.md) for exact commands and output paths. This session is **local compute only**; the remote table below is historical infrastructure, not permission to use it.
+
+| Command | Does |
+| :-- | :-- |
+| `python scripts/local/audit-video-inputs.py --registry benchmarks/video_only_matches.json --out REPORT.json` | Inventories local video metadata, detection cadence and available guidance; never performs inference |
+| `python scripts/local/prepare-video-pilot.py --video VIDEO --start 900 --duration 20 --fps 10 --out NEW_DIR` | Creates a sampled CPU clip and source/clip hashes without labels |
+| `python scripts/local/detect-video-pilot.py --pilot PILOT_DIR --weights LOCAL.pt --out NEW_DIR` | CPU people/ball candidates, checkpoint/class/hash checks, frame integrity and throughput; no event or match stats |
+
+Pilot commands emit JSON report paths (or JSON to stdout for audit) and conventional success/error exit codes; they do not use the older remote-job three-line/exit-code contract below. Inference runtime is separate from backend: see `scripts/requirements-local-inference.lock.txt`. Media, models, environments and verbose detections remain under gitignored `backend/.local`.
+
 Recurrent steps, so nobody re-derives them. **Read this table, not the scripts.**
 
 Config lives in **`config.env` only** (`config.local.env` overrides it, gitignored).

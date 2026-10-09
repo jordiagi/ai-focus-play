@@ -1,5 +1,14 @@
 # STATE — Live Progress Tracker
 
+## 2026-10-09 — Video-only local pilot (current)
+
+- User authorized implementation, GitHub use, and agent orchestration; **local compute only, no remote GPU**.
+- Proposal: [docs/video-only-plan.md](docs/video-only-plan.md). Resume commands/evidence: [docs/video-only-session.md](docs/video-only-session.md). Work queue: [TASKS.md](TASKS.md). Read [AGENTS.md](AGENTS.md) before continuing.
+- Added an experimental CLI-only `video_only` ingestion boundary, explicit provenance checks, local input inventory, hashed clip preparation, and CPU object detection. This is not complete event inference or measured accuracy improvement.
+- Real Veo and Marc pilots: 20 seconds, 200 frames each at 10 fps; local YOLO11n throughput 9.52 and 10.44 fps. Ball candidates occur on 21/200 and 2/200 frames respectively; candidate presence is not recall. Ball detection is the next bottleneck.
+- Full backend suite: **192 passed**, two existing dependency deprecation warnings. The original sandbox API test stall disappeared with unrestricted local execution.
+- All videos/checkpoints/runtime environments remain gitignored. Earlier claims below are historical and do not prove raw-video-only generalization.
+
 **Purpose:** Live project status and verification contract. Update as you go. For in-depth post-mortems, mathematical derivations, and historical failure analysis, consult the companion document: [docs/postmortems/falsification_log.md](file:///home/ai/Projects/ai-focus-play/docs/postmortems/falsification_log.md).
 
 **Last updated:** 2026-09-27 · **MATCH 4 (NCFC - 2026-09-26) INGESTED, PROCESSED ON GPU-BOX & VALIDATED.**

@@ -1,0 +1,120 @@
+{
+  "compute": "local_cpu",
+  "evaluation_labels_used": false,
+  "clips": {
+    "marc-horta-900": {
+      "source_sha256": "488fe0d6026f8705c6c26d874c505ad76f9591e4a75d84430ec62fb160adf6f7",
+      "clip_sha256": "17ab4873797bcf00f5011906a600b4eb2d6c9cd5d44c02b6b600244719fcb4c0",
+      "actual_video": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "width": 1280,
+            "height": 720,
+            "avg_frame_rate": "10/1",
+            "nb_read_frames": "200"
+          }
+        ],
+        "format": {
+          "duration": "20.000000"
+        }
+      },
+      "start_s": 900.0,
+      "archive_offset_s": null,
+      "inference_performed": true,
+      "model_sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+      "versions": {
+        "ultralytics": "8.4.174",
+        "torch": "2.14.1+cpu"
+      },
+      "counts": {
+        "frames": 200,
+        "person_detections": 2799,
+        "ball_candidates": 2,
+        "frames_with_ball_candidate": 2
+      },
+      "performance": {
+        "predict_decode_wall_s": 19.155353754991665,
+        "frames_per_second": 10.440945260427899
+      },
+      "accuracy_measured": false
+    },
+    "skyline-900": {
+      "source_sha256": "ef7552326b0ab24e30377f3b272559ece5bb8133c91fceb34418f9839bd843c1",
+      "clip_sha256": "635b1902b6dfd7997903c7050e8f94e37adf4ba9499d3c6b4515ca254af8f9f6",
+      "actual_video": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "width": 1280,
+            "height": 720,
+            "avg_frame_rate": "10/1",
+            "nb_read_frames": "200"
+          }
+        ],
+        "format": {
+          "duration": "20.000000"
+        }
+      },
+      "start_s": 900.0,
+      "archive_offset_s": null,
+      "inference_performed": true,
+      "model_sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+      "versions": {
+        "ultralytics": "8.4.174",
+        "torch": "2.14.1+cpu"
+      },
+      "counts": {
+        "frames": 200,
+        "person_detections": 3230,
+        "ball_candidates": 21,
+        "frames_with_ball_candidate": 21
+      },
+      "performance": {
+        "predict_decode_wall_s": 21.012789956992492,
+        "frames_per_second": 9.518012620377684
+      },
+      "accuracy_measured": false
+    },
+    "bcc-northwest-hd-segment": {
+      "source_sha256": "aa3dedb234c74b7898065794fb3348e79a795bf71772d7d7e9556ee2450e916f",
+      "clip_sha256": "579b0fc736aae931b5a456a37f70d82710ee1765b6dc64e116d857dcd7fc3c0a",
+      "actual_video": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "width": 1280,
+            "height": 720,
+            "avg_frame_rate": "10/1",
+            "nb_read_frames": "200"
+          }
+        ],
+        "format": {
+          "duration": "20.000000"
+        }
+      },
+      "start_s": 0.0,
+      "archive_offset_s": 900,
+      "inference_performed": true,
+      "model_sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+      "versions": {
+        "ultralytics": "8.4.174",
+        "torch": "2.14.1+cpu"
+      },
+      "counts": {
+        "frames": 200,
+        "person_detections": 3085,
+        "ball_candidates": 0,
+        "frames_with_ball_candidate": 0
+      },
+      "performance": {
+        "predict_decode_wall_s": 28.233003010973334,
+        "frames_per_second": 7.0839081454518285
+      },
+      "accuracy_measured": false
+    }
+  }
+}
