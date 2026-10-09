@@ -82,3 +82,7 @@ The isolated event-ingestion CLI additionally needs a freshly seeded pilot match
 2. **T-005/006:** dynamic video-derived calibration and temporal tracking/control transitions, with explicit unknown states and coverage.
 3. **T-007/008:** gather more Veo event references, freeze whole-match/domain splits and independent Marc/BCC audit samples, then train temporal events and evaluate adaptation.
 4. **T-011:** represent score/stat provenance before adding API/UI mode support.
+
+## Final publication checkpoint
+
+The import-safety and resolution-experiment follow-up was pushed as `465e560` on the review branch. Final focused tests in `/tmp/aifp-github-review`: **62 passed, 1 skipped**. Full local implementation suite: **198 passed**. Both working trees were clean after publication. GitHub API authentication remains unavailable; PR creation is queued with a saved draft. No remote GPU jobs or background experiments remain running.

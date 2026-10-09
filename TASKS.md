@@ -4,7 +4,7 @@ Session constraint: local CPU/GPU only; no remote GPU. See `docs/video-only-sess
 
 ## Active
 
-- [T-010] Improve small-ball detection on the three-source CPU pilot. Resolution experiment completed:640→1280 increases candidate-bearing frames21→138 Veo and2→25 Marc, while BCC stays0; throughput ~4.6 fps. Next compare tiled proposals/soccer-specific model and independently audit precision/recall. Counts are not accuracy.
+- [T-010] Improve small-ball detection on the three-source CPU pilot. Resolution experiment completed: 640→1280 increases candidate-bearing frames 21→138 Veo and 2→25 Marc, while BCC stays 0; throughput ~4.6 fps. Next compare tiled proposals/soccer-specific model and independently audit precision/recall. Counts are not accuracy.
 
 ## Queued
 
