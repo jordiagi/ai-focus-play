@@ -1,6 +1,6 @@
 # ai-focus-play agent handoff
 
-Read `docs/video-only-plan.md`, `docs/video-only-session.md`, `TASKS.md`, and the newest entry in `STATE.md` before continuing accuracy work. Older status documents contain conflicting historical claims; executable evidence takes precedence.
+Read `docs/video-only-plan.md`, `docs/video-only-session.md`, `TASKS.md`, and the newest entry in `STATE.md` before continuing accuracy work. Also read `docs/ball-detection-session-20261010.md` for the latest tiled-ball experiment. Older status documents contain conflicting historical claims; executable evidence takes precedence.
 
 ## Current authorization and constraints
 

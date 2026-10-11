@@ -91,3 +91,18 @@ def test_cli_defaults_and_manifest_is_preparation_not_predictions(tmp_path, loca
     assert manifest["sampling"]["duration_s"] == 20
     assert manifest["artifact_type"] == "video_pilot_preparation"
     assert "events" not in manifest and "predictions" not in manifest
+
+
+def test_native_resolution_cap_is_explicit_in_provenance(tmp_path, local_source):
+    video, calls = local_source
+    path = pilot.prepare_pilot(video, 0, 20, 10, tmp_path / "native", max_width=1920)
+    assert json.loads(path.read_text())["sampling"]["max_width"] == 1920
+    assert "min(1920,iw)" in calls[1][calls[1].index("-vf") + 1]
+
+
+@pytest.mark.parametrize("width", [0, 1, True, 2.5])
+def test_invalid_width_rejected_before_encoding(tmp_path, local_source, width):
+    video, calls = local_source
+    with pytest.raises(ValueError, match="max_width"):
+        pilot.prepare_pilot(video, 0, 20, 10, tmp_path / "native", max_width=width)
+    assert not calls

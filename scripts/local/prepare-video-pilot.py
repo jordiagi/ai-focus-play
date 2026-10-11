@@ -49,12 +49,14 @@ def probe_source(path):
     return metadata, duration
 
 
-def prepare_pilot(video, start, duration, fps, out):
+def prepare_pilot(video, start, duration, fps, out, max_width=1280):
     source = source_path(video)
     if not all(math.isfinite(value) for value in (start, duration, fps)):
         raise ValueError("start, duration and fps must be finite")
     if start < 0 or duration <= 0 or fps <= 0:
         raise ValueError("start must be nonnegative; duration and fps must be positive")
+    if isinstance(max_width, bool) or not isinstance(max_width, int) or max_width < 2:
+        raise ValueError("max_width must be an integer of at least 2 pixels")
     output = Path(out).expanduser().absolute()
     if output.exists() or output.is_symlink():
         raise ValueError(f"refusing to overwrite existing output directory: {output}")
@@ -68,7 +70,7 @@ def prepare_pilot(video, start, duration, fps, out):
     output.mkdir(parents=True, exist_ok=False)
     clip = output / "clip.mp4"
     # Explicit software encoder and two CPU threads; no remote or GPU execution.
-    filters = f"scale=w='trunc(min(1280,iw)/2)*2':h=-2,fps={fps:g}"
+    filters = f"scale=w='trunc(min({max_width},iw)/2)*2':h=-2,fps={fps:g}"
     command = [executable, "-nostdin", "-n", "-v", "error", "-ss", f"{start:g}",
                "-protocol_whitelist", "file", "-i", str(source), "-t", f"{duration:g}",
                "-map", "0:v:0", "-an", "-vf", filters, "-c:v", "libx264", "-threads", "2",
@@ -84,7 +86,7 @@ def prepare_pilot(video, start, duration, fps, out):
         "input_provenance": {"mode": "video_only", "evaluation_labels_used": False,
                              "video_sha256": source_hash, "video_path": str(source)},
         "source_metadata": metadata,
-        "sampling": {"start_s": start, "duration_s": duration, "fps": fps, "max_width": 1280},
+        "sampling": {"start_s": start, "duration_s": duration, "fps": fps, "max_width": max_width},
         "compute": {"mode": "local_cpu", "encoder": "libx264", "threads": 2},
         "command": command,
         "clip": {"path": str(clip), "sha256": sha256_file(clip), "size_bytes": clip.stat().st_size},
@@ -101,10 +103,11 @@ def main(argv=None):
     parser.add_argument("--start", type=float, required=True)
     parser.add_argument("--duration", type=float, default=20)
     parser.add_argument("--fps", type=float, default=10)
+    parser.add_argument("--max-width", type=int, default=1280, help="retain up to this source width; never upscales")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
-        manifest_path = prepare_pilot(args.video, args.start, args.duration, args.fps, args.out)
+        manifest_path = prepare_pilot(args.video, args.start, args.duration, args.fps, args.out, args.max_width)
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         parser.exit(2, f"pilot preparation failed: {exc}\n")
     print(manifest_path)

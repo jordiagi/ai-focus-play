@@ -86,3 +86,7 @@ The isolated event-ingestion CLI additionally needs a freshly seeded pilot match
 ## Final publication checkpoint
 
 The import-safety and resolution-experiment follow-up was pushed as `465e560` on the review branch. Final focused tests in `/tmp/aifp-github-review`: **62 passed, 1 skipped**. Full local implementation suite: **198 passed**. Both working trees were clean after publication. GitHub API authentication remains unavailable; PR creation is queued with a saved draft. No remote GPU jobs or background experiments remain running.
+
+## 2026-10-10 continuation
+
+Claude Code implementation/review agents and agy review were used for a local CPU tiled-ball experiment and independent-audit scorer. Read [the continuation log](ball-detection-session-20261010.md) for current results, commands, limitations, artifact paths, and the next task; earlier publication checkpoints above describe the previous session.
