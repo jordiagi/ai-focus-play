@@ -1,6 +1,14 @@
 # STATE — Live Progress Tracker
 
-## 2026-10-09 — Video-only local pilot (current)
+## 2026-10-10 — Tiled ball detection and audit scorer (current)
+
+- User requested Claude Code agents and agy orchestration. Claude delegated implementation/review; agy performed independent read-only review. All video inference remained on local CPU; no remote GPU or private media/label uploads.
+- Implemented hashed full-frame plus tiled ball candidate CLI, evaluation-only scorer, and configurable clip width. Full runs cover 200/200 frames in Veo/Marc/BCC with passing integrity; candidate-bearing frames and exact limitations are in [the continuation log](docs/ball-detection-session-20261010.md) and [portable evidence](docs/ball-tiles-evidence-20261010.json).
+- Candidate presence is not accuracy. Independent audit is still unannotated; BCC detection remains the bottleneck. Next: annotate fixed samples independently and compare saved baseline/tiled predictions, then choose a ball-specific model using development data.
+- Full local backend tests: **301 passed**, two existing dependency warnings. Origin-based review worktree focused regression: **144 passed**. Implementation published as `b32b123`; follow-up evidence uses the same review branch. PR still queued because gh is unauthenticated.
+- Resume instructions: [AGENTS.md](AGENTS.md), [TASKS.md](TASKS.md), [video-only plan](docs/video-only-plan.md), [session](docs/video-only-session.md), and the continuation log. No experiments remain running; media, verbose candidates and agent logs remain gitignored.
+
+## 2026-10-09 — Video-only local pilot (previous)
 
 - User authorized implementation, GitHub use, and agent orchestration; **local compute only, no remote GPU**.
 - Proposal: [docs/video-only-plan.md](docs/video-only-plan.md). Resume commands/evidence: [docs/video-only-session.md](docs/video-only-session.md). Work queue: [TASKS.md](TASKS.md). Read [AGENTS.md](AGENTS.md) before continuing.

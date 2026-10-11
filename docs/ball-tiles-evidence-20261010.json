@@ -1,0 +1,387 @@
+{
+  "date": "2026-10-10",
+  "compute": "local CPU only",
+  "accuracy_status": "unknown; independent audit not yet annotated",
+  "checkpoint_sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+  "comparison_limitations": [
+    "Candidate presence is not recall or precision.",
+    "Development clips only; no held-out match evaluation.",
+    "Baseline full-frame1280 includes person/ball; tiled640 is ball-only; preprocessing equivalence not verified."
+  ],
+  "code_sha256": {
+    "scripts/local/detect-ball-tiles.py": "7e67959b34727782044c49c7c6a9e91c692a3108e7bf7f427be5835a35161513",
+    "scripts/local/score-ball-audit.py": "e1a9baa86b63dc88510b444e1560797644d562d6bf9726d9316b9a43ffbf44a5"
+  },
+  "full_runs": [
+    {
+      "pilot": "skyline-900",
+      "artifact_dir": "backend/.local/artifacts/video-only-pilot/skyline-900-tiles-full-20261010",
+      "clip_sha256": "635b1902b6dfd7997903c7050e8f94e37adf4ba9499d3c6b4515ca254af8f9f6",
+      "manifest_sha256": "d6f028388adb638ea85c54121d48886c17caba7d1efc3e9a470c53189118fe56",
+      "predictions_sha256": "3849e2626ab6eaa0b0007a7c247410e45d50fe8830c1ef7081ac036a9f00ea48",
+      "status": "complete",
+      "counts": {
+        "frames": 200,
+        "raw_candidates": 224,
+        "ball_candidates": 172,
+        "frames_with_ball_candidate": 118
+      },
+      "coverage": {
+        "frames_processed": 200,
+        "expected_frames": 200.0,
+        "stream_exhausted": true
+      },
+      "performance": {
+        "predict_decode_wall_s": 112.3253420300316,
+        "frames_per_second": 1.7805420966047667
+      },
+      "config": {
+        "device": "cpu",
+        "threads": 2,
+        "cv2_threads": 2,
+        "imgsz": 640,
+        "conf": 0.25,
+        "classes": [
+          32
+        ],
+        "verbose": false,
+        "tiles": {
+          "nx": 3,
+          "ny": 2,
+          "overlap": 0.15,
+          "grid": [
+            [
+              0,
+              0,
+              475,
+              390
+            ],
+            [
+              402,
+              0,
+              877,
+              390
+            ],
+            [
+              805,
+              0,
+              1280,
+              390
+            ],
+            [
+              0,
+              330,
+              475,
+              720
+            ],
+            [
+              402,
+              330,
+              877,
+              720
+            ],
+            [
+              805,
+              330,
+              1280,
+              720
+            ]
+          ],
+          "frame_width": 1280,
+          "frame_height": 720,
+          "includes_full_frame": true
+        },
+        "nms": {
+          "iou_threshold": 0.5,
+          "order": "conf desc, bbox, source",
+          "scope": "full+tiles"
+        },
+        "top_k_per_frame": 20,
+        "batch_size": 6,
+        "max_frames": null
+      },
+      "versions": {
+        "ultralytics": "8.4.174",
+        "torch": "2.14.1+cpu",
+        "opencv": "5.0.0",
+        "python": "3.12.14"
+      },
+      "baseline1280_frames_with_candidate": 138,
+      "smoke_first20_identical": true
+    },
+    {
+      "pilot": "marc-horta-900",
+      "artifact_dir": "backend/.local/artifacts/video-only-pilot/marc-horta-900-tiles-full-20261010",
+      "clip_sha256": "17ab4873797bcf00f5011906a600b4eb2d6c9cd5d44c02b6b600244719fcb4c0",
+      "manifest_sha256": "fa6cde5be9f028f2a2112659a547b3e0f96af55a015ee03f18ec845c2fac27b0",
+      "predictions_sha256": "4c38d08e27ee870edcafbbec8e78b14d64a41870942825bef618ee5647b2d851",
+      "status": "complete",
+      "counts": {
+        "frames": 200,
+        "raw_candidates": 160,
+        "ball_candidates": 147,
+        "frames_with_ball_candidate": 109
+      },
+      "coverage": {
+        "frames_processed": 200,
+        "expected_frames": 200.0,
+        "stream_exhausted": true
+      },
+      "performance": {
+        "predict_decode_wall_s": 101.15340907196514,
+        "frames_per_second": 1.9771948551700407
+      },
+      "config": {
+        "device": "cpu",
+        "threads": 2,
+        "cv2_threads": 2,
+        "imgsz": 640,
+        "conf": 0.25,
+        "classes": [
+          32
+        ],
+        "verbose": false,
+        "tiles": {
+          "nx": 3,
+          "ny": 2,
+          "overlap": 0.15,
+          "grid": [
+            [
+              0,
+              0,
+              475,
+              390
+            ],
+            [
+              402,
+              0,
+              877,
+              390
+            ],
+            [
+              805,
+              0,
+              1280,
+              390
+            ],
+            [
+              0,
+              330,
+              475,
+              720
+            ],
+            [
+              402,
+              330,
+              877,
+              720
+            ],
+            [
+              805,
+              330,
+              1280,
+              720
+            ]
+          ],
+          "frame_width": 1280,
+          "frame_height": 720,
+          "includes_full_frame": true
+        },
+        "nms": {
+          "iou_threshold": 0.5,
+          "order": "conf desc, bbox, source",
+          "scope": "full+tiles"
+        },
+        "top_k_per_frame": 20,
+        "batch_size": 6,
+        "max_frames": null
+      },
+      "versions": {
+        "ultralytics": "8.4.174",
+        "torch": "2.14.1+cpu",
+        "opencv": "5.0.0",
+        "python": "3.12.14"
+      },
+      "baseline1280_frames_with_candidate": 25,
+      "smoke_first20_identical": true
+    },
+    {
+      "pilot": "bcc-northwest-hd-segment",
+      "artifact_dir": "backend/.local/artifacts/video-only-pilot/bcc-northwest-hd-segment-tiles-full-20261010",
+      "clip_sha256": "579b0fc736aae931b5a456a37f70d82710ee1765b6dc64e116d857dcd7fc3c0a",
+      "manifest_sha256": "782c79a96125a183454b4114cdc9ff26deb937d4d1d8711c41e3e88e70216fb6",
+      "predictions_sha256": "d6a0c9b0580efea9ab3c174315716dc0bbaed2d7dbf49b78ee094fe2fbf356cd",
+      "status": "complete",
+      "counts": {
+        "frames": 200,
+        "raw_candidates": 6,
+        "ball_candidates": 6,
+        "frames_with_ball_candidate": 6
+      },
+      "coverage": {
+        "frames_processed": 200,
+        "expected_frames": 200.0,
+        "stream_exhausted": true
+      },
+      "performance": {
+        "predict_decode_wall_s": 100.20658039289992,
+        "frames_per_second": 1.9958769096382705
+      },
+      "config": {
+        "device": "cpu",
+        "threads": 2,
+        "cv2_threads": 2,
+        "imgsz": 640,
+        "conf": 0.25,
+        "classes": [
+          32
+        ],
+        "verbose": false,
+        "tiles": {
+          "nx": 3,
+          "ny": 2,
+          "overlap": 0.15,
+          "grid": [
+            [
+              0,
+              0,
+              475,
+              390
+            ],
+            [
+              402,
+              0,
+              877,
+              390
+            ],
+            [
+              805,
+              0,
+              1280,
+              390
+            ],
+            [
+              0,
+              330,
+              475,
+              720
+            ],
+            [
+              402,
+              330,
+              877,
+              720
+            ],
+            [
+              805,
+              330,
+              1280,
+              720
+            ]
+          ],
+          "frame_width": 1280,
+          "frame_height": 720,
+          "includes_full_frame": true
+        },
+        "nms": {
+          "iou_threshold": 0.5,
+          "order": "conf desc, bbox, source",
+          "scope": "full+tiles"
+        },
+        "top_k_per_frame": 20,
+        "batch_size": 6,
+        "max_frames": null
+      },
+      "versions": {
+        "ultralytics": "8.4.174",
+        "torch": "2.14.1+cpu",
+        "opencv": "5.0.0",
+        "python": "3.12.14"
+      },
+      "baseline1280_frames_with_candidate": 0,
+      "smoke_first20_identical": true
+    }
+  ],
+  "smoke_runs": [
+    {
+      "artifact_dir": "backend/.local/artifacts/video-only-pilot/bcc-native-20261010-tiles-smoke-20261010",
+      "clip_sha256": "fa796972616004415ff827d04b327e6ee5f1b2322dbe21d0257df638c854e59b",
+      "status": "partial",
+      "counts": {
+        "frames": 20,
+        "raw_candidates": 0,
+        "ball_candidates": 0,
+        "frames_with_ball_candidate": 0
+      },
+      "coverage": {
+        "frames_processed": 20,
+        "expected_frames": 200.0,
+        "stream_exhausted": false
+      },
+      "performance": {
+        "predict_decode_wall_s": 10.651144318981096,
+        "frames_per_second": 1.877732514088517
+      }
+    },
+    {
+      "artifact_dir": "backend/.local/artifacts/video-only-pilot/bcc-northwest-hd-segment-tiles-smoke-20261010",
+      "clip_sha256": "579b0fc736aae931b5a456a37f70d82710ee1765b6dc64e116d857dcd7fc3c0a",
+      "status": "partial",
+      "counts": {
+        "frames": 20,
+        "raw_candidates": 1,
+        "ball_candidates": 1,
+        "frames_with_ball_candidate": 1
+      },
+      "coverage": {
+        "frames_processed": 20,
+        "expected_frames": 200.0,
+        "stream_exhausted": false
+      },
+      "performance": {
+        "predict_decode_wall_s": 10.620523589896038,
+        "frames_per_second": 1.8831463280235297
+      }
+    },
+    {
+      "artifact_dir": "backend/.local/artifacts/video-only-pilot/marc-horta-900-tiles-smoke-20261010",
+      "clip_sha256": "17ab4873797bcf00f5011906a600b4eb2d6c9cd5d44c02b6b600244719fcb4c0",
+      "status": "partial",
+      "counts": {
+        "frames": 20,
+        "raw_candidates": 4,
+        "ball_candidates": 4,
+        "frames_with_ball_candidate": 4
+      },
+      "coverage": {
+        "frames_processed": 20,
+        "expected_frames": 200.0,
+        "stream_exhausted": false
+      },
+      "performance": {
+        "predict_decode_wall_s": 10.651538470992818,
+        "frames_per_second": 1.8776630300369954
+      }
+    },
+    {
+      "artifact_dir": "backend/.local/artifacts/video-only-pilot/skyline-900-tiles-smoke-20261010",
+      "clip_sha256": "635b1902b6dfd7997903c7050e8f94e37adf4ba9499d3c6b4515ca254af8f9f6",
+      "status": "partial",
+      "counts": {
+        "frames": 20,
+        "raw_candidates": 18,
+        "ball_candidates": 16,
+        "frames_with_ball_candidate": 12
+      },
+      "coverage": {
+        "frames_processed": 20,
+        "expected_frames": 200.0,
+        "stream_exhausted": false
+      },
+      "performance": {
+        "predict_decode_wall_s": 11.232776605058461,
+        "frames_per_second": 1.7805036727066565
+      }
+    }
+  ]
+}

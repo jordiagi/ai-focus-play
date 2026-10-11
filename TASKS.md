@@ -4,7 +4,7 @@ Session constraint: local CPU/GPU only; no remote GPU. See `docs/video-only-sess
 
 ## Active
 
-- [T-010] Improve small-ball detection on the three-source CPU pilot. Resolution experiment completed: 640→1280 increases candidate-bearing frames 21→138 Veo and 2→25 Marc, while BCC stays 0; throughput ~4.6 fps. Next compare tiled proposals/soccer-specific model and independently audit precision/recall. Counts are not accuracy.
+- [T-010] Audit ball detection and select a soccer-specific model. Local full-clip tiling completed: candidate-bearing frames 138→118 Veo, 25→109 Marc, 0→6 BCC (200 frames/domain); CPU 1.78–2.00 fps. Counts are not accuracy. Independent audit scorer and fixed unannotated sample plan are ready. See `docs/ball-detection-session-20261010.md`.
 
 ## Queued
 

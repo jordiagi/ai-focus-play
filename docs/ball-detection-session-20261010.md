@@ -100,3 +100,23 @@ timeout 600 claude -p \
 ```
 
 agy was invoked via an awaited Python subprocess with `['agy', '-p='+prompt, '--mode=plan', '--print-timeout=180s']`, timeout 200 seconds and file-backed stdout/stderr. Both CLIs exited 0. Normal agent model APIs were used for code/design work; all video processing ran locally on CPU.
+
+## Publication checkpoint
+
+Implementation commit: `847dabe` locally; cherry-picked as `b32b123` on `feat/video-only-local-pilot-review` based on origin/main. Review worktree focused regression suite: **144 passed** (ball audits, tiling, preparation, video-only boundary and input audit). No private media, event labels, source URLs or earlier unpublished local commits are part of the review branch. GitHub API authentication was checked and remains unavailable; PR creation is queued.
+
+A fixed development audit plan is saved privately at `backend/.local/artifacts/video-only-pilot/independent-audit-plan-20261010.json`: 20 evenly spaced frames per original clip (indices 0,10,…,190), clip hashes, 1280×720 coordinates and 6-pixel tolerance. It is **unannotated** and contains no ground truth. Annotate without inspecting predictions; this small sample is preliminary and does not establish held-out accuracy.
+
+## Completed full-clip results
+
+All three original clips consumed all 200 frames, passed frame integrity and retained the baseline clip hashes. Their first 20 frame records exactly match their smoke outputs. No jobs remain running.
+
+| Clip | Baseline 1280 candidate-bearing frames | Tiled 640 candidate-bearing frames | Raw → retained candidates | Tiled CPU fps |
+| :-- | --: | --: | --: | --: |
+| skyline-900 | 138/200 | 118/200 | 224 → 172 | 1.78 |
+| marc-horta-900 | 25/200 | 109/200 | 160 → 147 | 1.98 |
+| bcc-northwest-hd-segment | 0/200 | 6/200 | 6 → 6 | 2.00 |
+
+Aggregate portable evidence, detector/scorer hashes, manifest/prediction hashes, configs, versions, coverage and runtimes: [ball-tiles-evidence-20261010.json](ball-tiles-evidence-20261010.json). BCC remains inadequately observed; tiling alone is insufficient for trustworthy possession/pass analytics. These counts do not establish accuracy improvement.
+
+The implementation push succeeded as `b32b123` on the review branch. The completed evidence/handoff follow-up accompanies the implementation on that same review branch. PR authentication remains unavailable; no PR or merge was performed.
